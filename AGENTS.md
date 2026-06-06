@@ -34,19 +34,33 @@ Avoid over-locking undecided details. If a choice is not settled, mark it as `de
 - Verify factual claims against files or commands.
 - Do not push or otherwise touch remotes unless explicitly asked.
 
-## Unsettled Areas
+## Open Decisions
 
-Treat these as open unless a later doc says otherwise:
+Treat these as open until a later spec resolves them:
 
-- exact default search semantics
-- `--desc`, `--desc-only`, and `--name-only` final naming
-- `--top` versus `--limit`
-- exact column presets
-- cache update strategy defaults
-- trend score
-- semantic/vector search
-- future Rust/Go rewrite
+- Default search semantics: name-only by default versus name + description by default.
+- Description flags: whether `--desc` means include descriptions, whether `--desc-only` exists, and whether `--name-only` is the compatibility mode.
+- Result cap semantics: whether `--top N` is distinct from `--limit N`, and what each guarantees.
+- Column presets: exact columns for `compact`, `default`, `full`, and installed-list views.
+- Analytics metric defaults: whether 30-day installs remain default and 365-day installs stay behind `-y` / `--year`.
+- Cache matching strategy: whether normal search shells out to `brew search` for matching or searches directly in a local cache/index.
+- Cache refresh defaults: manual, stale-while-revalidate, blocking-when-missing, live fallback, or a measured hybrid.
+- Cold-cache behavior: how long first run may wait before falling back to live Homebrew data.
+- Grouping behavior: whether formulae and casks are mixed by relevance by default, with grouping deferred or exposed.
+- Status behavior: how deprecated and disabled packages affect display and ranking.
+- List analytics behavior: cache-only by default versus optional per-package fetch with `--fetch`.
+- First release packaging: Python-only release versus including the zsh prototype as unsupported legacy.
+- Post-replacement cleanup: when to update dotfiles, remove/archive `dot_scripts/executable_bsx`, and replace the old ccconfig guide with a pointer here.
+- Deferred discovery features: trend score, semantic/vector search, `info`, `--exact`, `--explain`, `--open`, and `list --leaves`.
+- Future rewrite: whether Rust/Go is justified after measuring Python bottlenecks.
 
 ## Tracker
 
-If beads is initialized here, use `bd ready` and `bd list --status=in_progress` for project status. If not initialized yet, do not assume tracker state from git or file timestamps.
+Use local beads for project status:
+
+- `bd ready`
+- `bd list --status=in_progress`
+
+Transferred tracker item:
+
+- `brewq-d9n`: `Implement brewq Python CLI from transferred bsx scope`

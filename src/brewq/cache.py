@@ -3,7 +3,6 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -11,8 +10,7 @@ from typing import Any
 from brewq import analytics as analytics_mod
 from brewq import brew as brew_mod
 from brewq import config as config_mod
-from brewq.model import Package, from_formula, from_cask
-
+from brewq.model import Package, from_cask, from_formula
 
 _CACHE_FILE = "brew-all.json"
 _LOCK_FILE = "refresh.lock"

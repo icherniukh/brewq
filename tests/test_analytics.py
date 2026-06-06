@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from brewq.analytics import merge_into_brew_data, _parse_count
+from brewq.analytics import _parse_count, merge_into_brew_data
 
 FIXTURES = Path(__file__).parent
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from brewq.model import Package, from_formula, from_cask
+from brewq.model import Package, from_cask, from_formula
 
 FIXTURES = Path(__file__).parent
 

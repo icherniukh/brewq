@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import pytest
-
 from brewq.model import Package
-from brewq.options import rank, SearchOptions, rank_installed, ListOptions
+from brewq.options import ListOptions, SearchOptions, rank, rank_installed
 
 
 def _pkg(name: str, type_: str = "formula", installs_30d: int = -1,

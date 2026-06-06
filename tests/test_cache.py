@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
 from brewq import cache as cache_mod
-from brewq.model import Package
 
 
 @pytest.fixture(autouse=True)

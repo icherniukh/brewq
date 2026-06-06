@@ -7,12 +7,12 @@ from brewq.model import Package
 
 
 def _pkg(**kw) -> Package:
-    defaults = dict(
-        name="test", type="formula", description="A tool",
-        url="https://example.com", version="1.0",
-        installs_30d=1_234, installs_365d=15_000,
-        installed=False, deprecated=False, disabled=False,
-    )
+    defaults = {
+        "name": "test", "type": "formula", "description": "A tool",
+        "url": "https://example.com", "version": "1.0",
+        "installs_30d": 1_234, "installs_365d": 15_000,
+        "installed": False, "deprecated": False, "disabled": False,
+    }
     defaults.update(kw)
     return Package(**defaults)
 

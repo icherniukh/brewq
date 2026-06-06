@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -13,7 +12,7 @@ class SearchOptions:
     pkg_type: str = "all"       # "formula" | "cask" | "all"
     sort: str = "popularity"    # "popularity" | "name"
     metric: str = "installs-30d"
-    include_desc: bool = False  # search description field too
+    include_desc: bool = True   # name+description by default (canonical spec)
     columns_spec: str = "default"
     limit: int = 0
     json_output: bool = False
@@ -32,14 +31,20 @@ class ListOptions:
 def build_search_options(args: Any, cfg: dict) -> SearchOptions:
     metric = "installs-365d" if getattr(args, "year", False) else cfg["search"]["metric"]
     sort = "name" if getattr(args, "name", False) else cfg["search"]["sort"]
+    # --top N implies popularity sort and sets the limit
+    top = getattr(args, "top", None)
+    limit = top or getattr(args, "limit", None) or cfg["output"]["limit"]
+    if top:
+        sort = "popularity"
     return SearchOptions(
         query=list(args.query) if args.query else [],
         pkg_type=getattr(args, "type", cfg["search"]["type"]) or cfg["search"]["type"],
         sort=sort,
         metric=metric,
-        include_desc=getattr(args, "desc", False),
+        # --name-only disables description search; --desc is a compat no-op
+        include_desc=not getattr(args, "name_only", False),
         columns_spec=getattr(args, "columns", None) or "default",
-        limit=getattr(args, "limit", None) or cfg["output"]["limit"],
+        limit=limit,
         json_output=getattr(args, "json", False),
     )
 

@@ -10,7 +10,6 @@ from typing import TextIO
 from brewq.columns import ColumnDef
 from brewq.model import Package
 
-
 # ANSI escape sequences
 _BOLD = "\033[1m"
 _DIM = "\033[2m"
@@ -78,7 +77,7 @@ def render_table(
 
     # Header
     header_parts = []
-    for i, (col, w) in enumerate(zip(columns, widths)):
+    for i, (col, w) in enumerate(zip(columns, widths, strict=False)):
         if i == desc_idx or col.align == "left":
             header_parts.append(f"{col.header:<{w}}")
         else:
@@ -94,14 +93,11 @@ def render_table(
 
     # Rows
     name_idx = next((i for i, c in enumerate(columns) if c.key == "name"), None)
-    type_idx = next((i for i, c in enumerate(columns) if c.key == "type"), None)
-    installed_idx = next((i for i, c in enumerate(columns) if c.key == "installed"), None)
     status_idx = next((i for i, c in enumerate(columns) if c.key == "status"), None)
 
-    for pkg, row in zip(packages, rows):
+    for pkg, row in zip(packages, rows, strict=False):
         pkg_type = pkg.type
         is_installed = pkg.installed
-        pkg_status = pkg.status
 
         # Wrap description
         if desc_idx is not None:
@@ -113,7 +109,7 @@ def render_table(
 
         for line_no in range(n_lines):
             parts = []
-            for i, (col, w) in enumerate(zip(columns, widths)):
+            for i, (col, w) in enumerate(zip(columns, widths, strict=False)):
                 cell = row[i]
                 if i == desc_idx:
                     cell = desc_lines[line_no] if line_no < len(desc_lines) else ""

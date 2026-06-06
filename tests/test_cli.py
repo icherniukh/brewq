@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -95,7 +94,7 @@ def test_main_update_cache_alias(capsys):
          patch("brewq.cache.status", return_value={
              "formula_count": 1, "cask_count": 0
          }):
-        rc = main(["update-cache"])
+        main(["update-cache"])
     mock_refresh.assert_called_once()
 
 

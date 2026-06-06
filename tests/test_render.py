@@ -5,7 +5,7 @@ import json
 
 from brewq.columns import resolve
 from brewq.model import Package
-from brewq.render import render_table, render_json
+from brewq.render import render_json, render_table
 
 
 def _pkg(name: str = "ripgrep", type_: str = "formula", installs_30d: int = 80_000,

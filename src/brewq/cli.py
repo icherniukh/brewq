@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
 import shutil
+import subprocess
 import sys
 from collections.abc import Sequence
 
@@ -11,7 +11,6 @@ from brewq import columns as columns_mod
 from brewq import config as config_mod
 from brewq import options as options_mod
 from brewq import render as render_mod
-
 
 _COMMANDS = frozenset({"list", "cache", "config"})
 
@@ -25,8 +24,10 @@ def _build_search_parser() -> argparse.ArgumentParser:
     parser.add_argument("query", nargs="*", help="Search terms")
     parser.add_argument("--type", choices=["formula", "cask", "all"], default=None,
                         help="Limit to formula, cask, or all (default: all)")
+    parser.add_argument("--name-only", action="store_true",
+                        help="Match package names/tokens only (description search is default)")
     parser.add_argument("--desc", action="store_true",
-                        help="Also search package descriptions")
+                        help="(no-op, kept for compatibility; description search is on by default)")
     parser.add_argument("-n", "--name", action="store_true",
                         help="Sort results by name instead of popularity")
     parser.add_argument("-y", "--year", action="store_true",
@@ -35,6 +36,8 @@ def _build_search_parser() -> argparse.ArgumentParser:
                         help="Column spec: profile name (compact/full) or comma-joined keys")
     parser.add_argument("--limit", type=int, metavar="N",
                         help="Cap results at N rows")
+    parser.add_argument("--top", type=int, metavar="N",
+                        help="Show top N results ranked by analytics (alias for sorted --limit N)")
     parser.add_argument("--json", action="store_true",
                         help="Output JSON instead of a table")
     return parser
@@ -105,7 +108,7 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
         print(f"brewq: failed to query installed packages: {exc}", file=sys.stderr)
         return 1
 
-    from brewq.model import from_formula, from_cask
+    from brewq.model import from_cask, from_formula
     packages = []
     for f in raw.get("formulae", []):
         packages.append(from_formula(f))
@@ -228,7 +231,7 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
 def _live_search(opts: options_mod.SearchOptions) -> list:
     try:
         from brewq import brew as brew_mod
-        from brewq.model import from_formula, from_cask
+        from brewq.model import from_cask, from_formula
         brew = shutil.which("brew")
         if not brew:
             return []
