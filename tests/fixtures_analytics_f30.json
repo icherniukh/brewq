@@ -1,0 +1,29 @@
+{
+  "category": "formula_install",
+  "items": [
+    {
+      "number": 86,
+      "formula": "ripgrep",
+      "count": "71,967",
+      "percent": "0.29"
+    },
+    {
+      "number": 103,
+      "formula": "fzf",
+      "count": "64,492",
+      "percent": "0.26"
+    },
+    {
+      "number": 267,
+      "formula": "fd",
+      "count": "17,347",
+      "percent": "0.07"
+    },
+    {
+      "number": 288,
+      "formula": "bat",
+      "count": "15,360",
+      "percent": "0.06"
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "formulae": [
+    {
+      "name": "ripgrep",
+      "full_name": "ripgrep",
+      "desc": "Search tool like grep and The Silver Searcher",
+      "homepage": "https://github.com/BurntSushi/ripgrep",
+      "versions": {
+        "stable": "15.1.0",
+        "head": "HEAD",
+        "bottle": true
+      },
+      "installed": [
+        {
+          "version": "15.1.0",
+          "used_options": [],
+          "built_as_bottle": true,
+          "poured_from_bottle": true,
+          "time": 1761422208,
+          "runtime_dependencies": [
+            {
+              "full_name": "pcre2",
+              "version": "10.47",
+              "revision": 0,
+              "bottle_rebuild": 0,
+              "pkg_version": "10.47",
+              "declared_directly": true
+            }
+          ],
+          "installed_on_request": true
+        }
+      ],
+      "deprecated": false,
+      "disabled": false,
+      "aliases": [
+        "rg"
+      ]
+    },
+    {
+      "name": "bat",
+      "full_name": "bat",
+      "desc": "Clone of cat(1) with syntax highlighting and Git integration",
+      "homepage": "https://github.com/sharkdp/bat",
+      "versions": {
+        "stable": "0.26.1",
+        "head": "HEAD",
+        "bottle": true
+      },
+      "installed": [
+        {
+          "version": "0.26.1",
+          "used_options": [],
+          "built_as_bottle": true,
+          "poured_from_bottle": true,
+          "time": 1764772928,
+          "runtime_dependencies": [
+            {
+              "full_name": "ca-certificates",
+              "version": "2025-12-02",
+              "revision": 0,
+              "bottle_rebuild": 0,
+              "pkg_version": "2025-12-02",
+              "declared_directly": false
+            },
+            {
+              "full_name": "openssl@3",
+              "version": "3.6.0",
+              "revision": 0,
+              "bottle_rebuild": 0,
+              "pkg_version": "3.6.0",
+              "declared_directly": false
+            },
+            {
+              "full_name": "libssh2",
+              "version": "1.11.1",
+              "revision": 0,
+              "bottle_rebuild": 0,
+              "pkg_version": "1.11.1",
+              "declared_directly": false
+            },
+            {
+              "full_name": "libgit2",
+              "version": "1.9.1",
+              "revision": 0,
+              "bottle_rebuild": 0,
+              "pkg_version": "1.9.1",
+              "declared_directly": true
+            },
+            {
+              "full_name": "oniguruma",
+              "version": "6.9.10",
+              "revision": 0,
+              "bottle_rebuild": 0,
+              "pkg_version": "6.9.10",
+              "declared_directly": true
+            }
+          ],
+          "installed_on_request": true
+        }
+      ],
+      "deprecated": false,
+      "disabled": false,
+      "aliases": []
+    },
+    {
+      "name": "fd",
+      "full_name": "fd",
+      "desc": "Simple, fast and user-friendly alternative to find",
+      "homepage": "https://github.com/sharkdp/fd",
+      "versions": {
+        "stable": "10.4.2",
+        "head": "HEAD",
+        "bottle": true
+      },
+      "installed": [
+        {
+          "version": "10.4.2",
+          "used_options": [],
+          "built_as_bottle": true,
+          "poured_from_bottle": true,
+          "time": 1773147668,
+          "runtime_dependencies": [],
+          "installed_on_request": true
+        }
+      ],
+      "deprecated": false,
+      "disabled": false,
+      "aliases": []
+    },
+    {
+      "name": "fzf",
+      "full_name": "fzf",
+      "desc": "Command-line fuzzy finder written in Go",
+      "homepage": "https://github.com/junegunn/fzf",
+      "versions": {
+        "stable": "0.73.1",
+        "head": "HEAD",
+        "bottle": true
+      },
+      "installed": [
+        {
+          "version": "0.73.1",
+          "used_options": [],
+          "built_as_bottle": true,
+          "poured_from_bottle": true,
+          "time": 1779838033,
+          "runtime_dependencies": [],
+          "installed_on_request": true
+        }
+      ],
+      "deprecated": false,
+      "disabled": false,
+      "aliases": []
+    }
+  ],
+  "casks": []
+}

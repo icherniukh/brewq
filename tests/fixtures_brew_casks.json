@@ -1,0 +1,41 @@
+{
+  "formulae": [],
+  "casks": [
+    {
+      "token": "raycast",
+      "name": [
+        "Raycast"
+      ],
+      "desc": "Control your tools with a few keystrokes",
+      "homepage": "https://raycast.com/",
+      "version": "1.104.19",
+      "installed": "1.104.17",
+      "deprecated": false,
+      "disabled": false
+    },
+    {
+      "token": "warp",
+      "name": [
+        "Warp"
+      ],
+      "desc": "Rust-based terminal",
+      "homepage": "https://www.warp.dev/",
+      "version": "0.2026.06.03.09.49.stable_01",
+      "installed": "0.2026.05.13.09.15.stable_03",
+      "deprecated": false,
+      "disabled": false
+    },
+    {
+      "token": "iterm2",
+      "name": [
+        "iTerm2"
+      ],
+      "desc": "Terminal emulator as alternative to Apple's Terminal app",
+      "homepage": "https://iterm2.com/",
+      "version": "3.6.11",
+      "installed": null,
+      "deprecated": false,
+      "disabled": false
+    }
+  ]
+}
