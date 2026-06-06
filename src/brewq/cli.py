@@ -115,7 +115,14 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     for c in raw.get("casks", []):
         packages.append(from_cask(c))
 
-    if opts.with_analytics or opts.fetch_analytics:
+    if opts.fetch_analytics:
+        try:
+            print("Fetching analytics…", file=sys.stderr)
+            cache_mod.refresh(force=False)
+        except Exception as exc:
+            print(f"brewq: analytics fetch failed: {exc}", file=sys.stderr)
+        _merge_cached_analytics(packages)
+    elif opts.with_analytics:
         _merge_cached_analytics(packages)
 
     packages = options_mod.rank_installed(packages, opts)

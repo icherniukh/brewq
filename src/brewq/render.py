@@ -157,7 +157,12 @@ def render_json(
         out = sys.stdout
     records = []
     for pkg in packages:
-        record = {col.key: col.getter(pkg, metric) for col in columns}
+        record = {}
+        for col in columns:
+            if col.raw_getter is not None:
+                record[col.key] = col.raw_getter(pkg, metric)
+            else:
+                record[col.key] = col.getter(pkg, metric)
         records.append(record)
     json.dump(records, out, indent=2)
     out.write("\n")

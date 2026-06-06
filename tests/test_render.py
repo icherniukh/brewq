@@ -61,13 +61,20 @@ def test_render_json_valid():
     assert records[0]["type"] == "formula"
 
 
-def test_render_json_installs_as_string():
+def test_render_json_installs_as_int():
     out = io.StringIO()
     cols = resolve("installs", [])
     render_json([_pkg(installs_30d=80_000)], cols, out=out)
     records = json.loads(out.getvalue())
-    # JSON output is display string (formatted), not raw int
-    assert records[0]["installs"] == "80,000"
+    assert records[0]["installs"] == 80000
+
+
+def test_render_json_installed_as_bool():
+    out = io.StringIO()
+    cols = resolve("installed", [])
+    render_json([_pkg(installed=True)], cols, out=out)
+    records = json.loads(out.getvalue())
+    assert records[0]["installed"] is True
 
 
 def test_render_table_multiple_packages():
