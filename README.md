@@ -23,11 +23,14 @@ PYTHONPATH=src python -m brewq.cli ripgrep
 
 The planned CLI shape is documented before the implementation is filled in.
 
+For a visual project snapshot, open `docs/status-dashboard.html`.
+
 ## Documentation
 
 - `docs/vision.md` - product goals and non-goals.
 - `docs/product-spec.md` - requirements and first-release scope.
 - `docs/cli-design.md` - command surface, options, columns, and config model.
+- `docs/status-dashboard.html` - static project status dashboard.
 - `docs/local-workflows.md` - dotfiles aliases/functions this tool should absorb.
 - `docs/stack.md` - stack decision and implementation shape.
 - `docs/roadmap.md` - implementation and release plan.

@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>brewq Project Status</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101114;
+      --panel: #191b20;
+      --panel-2: #20232a;
+      --text: #eef0f4;
+      --muted: #a7adba;
+      --line: #30343d;
+      --good: #87d7af;
+      --work: #d7afff;
+      --ready: #87afff;
+      --risk: #ffaf5f;
+      --quiet: #5f6571;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1.25fr 0.75fr;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 20px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(32px, 5vw, 58px);
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    h3 {
+      font-size: 15px;
+      margin-bottom: 3px;
+    }
+
+    .subhead {
+      margin-top: 12px;
+      max-width: 660px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .snapshot {
+      justify-self: end;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .snapshot strong {
+      color: var(--text);
+      display: block;
+      font-size: 16px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid.metrics {
+      grid-template-columns: 1.1fr repeat(4, 1fr);
+      margin-bottom: 16px;
+    }
+
+    .grid.two {
+      grid-template-columns: 1fr 1fr;
+      margin-bottom: 16px;
+    }
+
+    .grid.three {
+      grid-template-columns: 1fr 1fr 1fr;
+      margin-bottom: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      min-width: 0;
+    }
+
+    .panel.compact {
+      padding: 16px;
+    }
+
+    .metric {
+      display: flex;
+      min-height: 144px;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .metric .value {
+      font-size: 38px;
+      font-weight: 750;
+      line-height: 1;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      margin-top: 5px;
+    }
+
+    .metric.good .value {
+      color: var(--good);
+    }
+
+    .metric.work .value {
+      color: var(--work);
+    }
+
+    .metric.ready .value {
+      color: var(--ready);
+    }
+
+    .metric.risk .value {
+      color: var(--risk);
+    }
+
+    .donut-wrap {
+      display: grid;
+      grid-template-columns: 138px 1fr;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .donut {
+      width: 138px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: conic-gradient(var(--good) 0 44%, var(--work) 44% 50%, var(--ready) 50% 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+    }
+
+    .donut::before {
+      content: "44%";
+      width: 92px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 27px;
+      font-weight: 750;
+      box-shadow: 0 0 0 1px var(--line);
+    }
+
+    .legend {
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+    }
+
+    .legend span {
+      display: inline-grid;
+      grid-template-columns: 12px 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+
+    .swatch.good {
+      background: var(--good);
+    }
+
+    .swatch.work {
+      background: var(--work);
+    }
+
+    .swatch.ready {
+      background: var(--ready);
+    }
+
+    .bar-list {
+      display: grid;
+      gap: 13px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 142px 1fr 32px;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .bar-row .name {
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bar-row .track {
+      height: 13px;
+      border-radius: 99px;
+      background: var(--panel-2);
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+
+    .bar-row .fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--ready), var(--work));
+    }
+
+    .bar-row .count {
+      color: var(--muted);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .issue-list,
+    .commit-list,
+    .signal-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .issue,
+    .commit,
+    .signal {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 11px 12px;
+    }
+
+    .issue {
+      display: grid;
+      grid-template-columns: 86px 1fr auto;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .id,
+    code {
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--ready);
+    }
+
+    .tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .tag {
+      border: 1px solid var(--line);
+      color: var(--muted);
+      border-radius: 99px;
+      padding: 2px 7px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .commit {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 12px;
+    }
+
+    .commit .sha {
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--good);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .signal strong {
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    .signal.good {
+      border-color: rgba(135,215,175,0.42);
+    }
+
+    .signal.warn {
+      border-color: rgba(255,175,95,0.46);
+    }
+
+    footer {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+    }
+
+    @media (max-width: 900px) {
+      header,
+      .grid.metrics,
+      .grid.two,
+      .grid.three {
+        grid-template-columns: 1fr;
+      }
+
+      .snapshot {
+        justify-self: start;
+        text-align: left;
+      }
+
+      .donut-wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .issue {
+        grid-template-columns: 1fr;
+      }
+
+      .tags {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>brewq status</h1>
+        <p class="subhead">Read-only Homebrew query and analytics tool. Current work is focused on output polish, metadata signals, performance visibility, and a stronger public README.</p>
+      </div>
+      <div class="snapshot">
+        <strong>Snapshot: June 7, 2026</strong>
+        Source: local beads tracker and git history<br>
+        Active issue: <code>brewq-g1p</code>
+      </div>
+    </header>
+
+    <section class="grid metrics" aria-label="Project metrics">
+      <article class="panel donut-wrap">
+        <div class="donut" aria-label="44 percent of tracked issues closed"></div>
+        <div>
+          <h2>Tracker Shape</h2>
+          <p><strong>7 of 16</strong> tracked issues are closed. One dashboard task is in progress; all remaining open work is ready and unblocked.</p>
+          <div class="legend" aria-label="Donut legend">
+            <span><i class="swatch good"></i>Closed: 7</span>
+            <span><i class="swatch work"></i>In progress: 1</span>
+            <span><i class="swatch ready"></i>Ready: 8</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel metric ready">
+        <div>
+          <div class="value">8</div>
+          <div class="label">ready issues</div>
+        </div>
+        <p class="muted">No blockers in the current tracker view.</p>
+      </article>
+
+      <article class="panel metric work">
+        <div>
+          <div class="value">1</div>
+          <div class="label">in progress</div>
+        </div>
+        <p class="muted">Static project dashboard.</p>
+      </article>
+
+      <article class="panel metric good">
+        <div>
+          <div class="value">85</div>
+          <div class="label">tests passing</div>
+        </div>
+        <p class="muted"><code>PYTHONPATH=src uv run pytest</code></p>
+      </article>
+
+      <article class="panel metric risk">
+        <div>
+          <div class="value">0</div>
+          <div class="label">blocked</div>
+        </div>
+        <p class="muted">Next risk is decision drift, not dependency blockage.</p>
+      </article>
+    </section>
+
+    <section class="grid two">
+      <article class="panel">
+        <h2>Workstream Load</h2>
+        <div class="bar-list">
+          <div class="bar-row">
+            <div class="name">CLI and output</div>
+            <div class="track"><div class="fill" style="width: 100%"></div></div>
+            <div class="count">3</div>
+          </div>
+          <div class="bar-row">
+            <div class="name">Analytics metadata</div>
+            <div class="track"><div class="fill" style="width: 67%"></div></div>
+            <div class="count">2</div>
+          </div>
+          <div class="bar-row">
+            <div class="name">Docs and README</div>
+            <div class="track"><div class="fill" style="width: 67%"></div></div>
+            <div class="count">2</div>
+          </div>
+          <div class="bar-row">
+            <div class="name">Performance</div>
+            <div class="track"><div class="fill" style="width: 33%"></div></div>
+            <div class="count">1</div>
+          </div>
+          <div class="bar-row">
+            <div class="name">Feedback research</div>
+            <div class="track"><div class="fill" style="width: 33%"></div></div>
+            <div class="count">1</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Status Signals</h2>
+        <div class="signal-list">
+          <div class="signal good">
+            <strong>Search correctness improved</strong>
+            <span class="muted">Tapped formulae are included from live Homebrew search, and loose fuzzy matches no longer surface misleading results like <code>unshield</code> for <code>sunshine</code>.</span>
+          </div>
+          <div class="signal good">
+            <strong>Output foundation is usable</strong>
+            <span class="muted">Current defaults include name, version, installs, and description; table rendering handles status prefixes, wrapping, metric headers, and color policy.</span>
+          </div>
+          <div class="signal warn">
+            <strong>Preset decisions are not locked</strong>
+            <span class="muted">Column presets, help layout, color pairing, CSV shape, and trend/updated metadata are active decision points.</span>
+          </div>
+          <div class="signal warn">
+            <strong>Repo hygiene note</strong>
+            <span class="muted"><code>uv.lock</code> was generated during verification and is intentionally uncommitted until lockfile policy is decided.</span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid two">
+      <article class="panel">
+        <h2>Ready Work</h2>
+        <div class="issue-list">
+          <div class="issue">
+            <div class="id">brewq-2w4</div>
+            <div><h3>Create an unbeatable README</h3><p class="muted">Pitch, screenshot or gif, cache explanation, and a three-line philosophy.</p></div>
+            <div class="tags"><span class="tag">docs</span><span class="tag">readme</span></div>
+          </div>
+          <div class="issue">
+            <div class="id">brewq-npo</div>
+            <div><h3>Calibrate and lock column presets</h3><p class="muted">Validate compact/default/full across search and list output.</p></div>
+            <div class="tags"><span class="tag">cli</span><span class="tag">output</span></div>
+          </div>
+          <div class="issue">
+            <div class="id">brewq-g54</div>
+            <div><h3>Run CLI output aesthetic review</h3><p class="muted">Help, color, wrapping, terminal widths, and script-friendly behavior.</p></div>
+            <div class="tags"><span class="tag">cli</span><span class="tag">output</span></div>
+          </div>
+          <div class="issue">
+            <div class="id">brewq-9mo</div>
+            <div><h3>Add performance metrics and benchmarks</h3><p class="muted">Cache load, ranking, rendering, JSON, and representative result sizes.</p></div>
+            <div class="tags"><span class="tag">performance</span><span class="tag">testing</span></div>
+          </div>
+          <div class="issue">
+            <div class="id">brewq-9nb</div>
+            <div><h3>Run informal dev-agent feedback pass</h3><p class="muted">Candid outside feedback on missing features and annoying nuances.</p></div>
+            <div class="tags"><span class="tag">research</span><span class="tag">feedback</span></div>
+          </div>
+          <div class="issue">
+            <div class="id">brewq-rhy</div>
+            <div><h3>Investigate optional trend analytics column</h3><p class="muted">Trend semantics from 30d, 90d, and 365d install windows.</p></div>
+            <div class="tags"><span class="tag">analytics</span><span class="tag">output</span></div>
+          </div>
+          <div class="issue">
+            <div class="id">brewq-kj3</div>
+            <div><h3>Investigate package last-updated metadata</h3><p class="muted">Find reliable update source data and a compact display shape.</p></div>
+            <div class="tags"><span class="tag">analytics</span><span class="tag">output</span></div>
+          </div>
+          <div class="issue">
+            <div class="id">brewq-fey</div>
+            <div><h3>Research CSV output and parameter structure</h3><p class="muted">Decide whether CSV belongs beside table and JSON.</p></div>
+            <div class="tags"><span class="tag">cli</span><span class="tag">output</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Recent Commits</h2>
+        <div class="commit-list">
+          <div class="commit"><div class="sha">eb384b7</div><div>chore(beads): record search bug closure</div></div>
+          <div class="commit"><div class="sha">56ca830</div><div>fix(search): include tapped live results</div></div>
+          <div class="commit"><div class="sha">d2b0db6</div><div>fix(search): reject loose fuzzy matches</div></div>
+          <div class="commit"><div class="sha">de2dce1</div><div>chore(cli): add color palette preview</div></div>
+          <div class="commit"><div class="sha">cfedc41</div><div>feat(cli): refine search and output defaults</div></div>
+          <div class="commit"><div class="sha">c89b84a</div><div>fix: render_json emits typed values; --fetch triggers cache refresh</div></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid three">
+      <article class="panel compact">
+        <h2>Product Boundary</h2>
+        <p>Read-only query and analytics. No install, uninstall, upgrade, services, Brewfile, TUI, GUI, or multi-package-manager behavior.</p>
+      </article>
+      <article class="panel compact">
+        <h2>Current Center</h2>
+        <p>Make the terminal output trustworthy, compact, and explainable before expanding optional analytics columns.</p>
+      </article>
+      <article class="panel compact">
+        <h2>Next Best Move</h2>
+        <p>Lock column presets and help text, then turn the README into a public first impression with real output capture.</p>
+      </article>
+    </section>
+
+    <footer>
+      Static snapshot. Refresh manually with <code>bd stats</code>, <code>bd ready</code>, and <code>git log --oneline</code>.
+    </footer>
+  </main>
+</body>
+</html>
