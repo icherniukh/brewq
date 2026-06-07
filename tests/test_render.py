@@ -8,6 +8,11 @@ from brewq.model import Package
 from brewq.render import render_json, render_table
 
 
+class TtyStringIO(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
 def _pkg(name: str = "ripgrep", type_: str = "formula", installs_30d: int = 80_000,
          desc: str = "Search tool like grep and The Silver Searcher",
          installed: bool = False, status: str = "") -> Package:
@@ -34,7 +39,14 @@ def test_render_table_contains_header():
     render_table([_pkg()], cols, out=out)
     text = out.getvalue()
     assert "NAME" in text
-    assert "INSTALLS" in text
+    assert "INSTALLS(30d)" in text
+
+
+def test_render_table_installs_header_uses_selected_metric():
+    out = io.StringIO()
+    cols = resolve("installs", [])
+    render_table([_pkg()], cols, metric="installs-365d", out=out)
+    assert "INSTALLS(365d)" in out.getvalue()
 
 
 def test_render_table_formats_installs_with_comma():
@@ -95,3 +107,55 @@ def test_render_table_no_color_when_no_color_env(monkeypatch):
     render_table([_pkg()], cols, out=out)
     # Should not contain ANSI escape codes
     assert "\033[" not in out.getvalue()
+
+
+def test_render_table_colors_formulae_and_casks_differently(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    out = TtyStringIO()
+    cols = resolve("name,installs", [])
+    render_table([
+        _pkg("ripgrep", type_="formula"),
+        _pkg("google-chrome", type_="cask"),
+    ], cols, out=out)
+    text = out.getvalue()
+    assert "\033[38;5;183mripgrep" in text
+    assert "\033[38;5;115mgoogle-chrome" in text
+
+
+def test_render_table_marks_deprecated_in_default_description():
+    out = io.StringIO()
+    cols = resolve("name,version,installs,description", [])
+    render_table([_pkg(status="deprecated")], cols, out=out)
+    assert "(deprecated) Search tool" in out.getvalue()
+
+
+def test_render_table_marks_disabled_in_default_description():
+    out = io.StringIO()
+    cols = resolve("name,version,installs,description", [])
+    render_table([_pkg(status="disabled")], cols, out=out)
+    assert "(disabled) Search tool" in out.getvalue()
+
+
+def test_render_table_status_prefix_wraps_inside_description_column(monkeypatch):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 80)
+    out = io.StringIO()
+    cols = resolve("name,version,installs,description", [])
+    pkg = _pkg(
+        name="zenmap",
+        desc="Multi-platform graphical interface for official Nmap Security Scanner",
+        status="deprecated",
+    )
+    render_table([pkg], cols, out=out)
+    lines = [line for line in out.getvalue().splitlines() if line]
+    assert all(len(line) <= 80 for line in lines)
+    assert "(deprecated) Multi-platform" in out.getvalue()
+    assert "Security Scanner" in out.getvalue()
+
+
+def test_render_table_separator_stays_within_terminal_width(monkeypatch):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 80)
+    out = io.StringIO()
+    cols = resolve("name,version,installs,description", [])
+    render_table([_pkg()], cols, out=out)
+    separator = next(line for line in out.getvalue().splitlines() if line.startswith("─"))
+    assert len(separator) <= 80

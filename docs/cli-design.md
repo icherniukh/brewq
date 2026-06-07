@@ -30,32 +30,32 @@ brewq --type cask chrome
 brewq --desc terminal multiplexer
 brewq -n ripgrep
 brewq --json ripgrep
+brewq -c name,version,installs ripgrep
 brewq --columns name,type,installs,description,url ripgrep
 ```
 
 Options:
 
 - `--type formula|cask|all`
-- `--desc`: search descriptions too, replacing the shell `brew-discover`/`bsd` workflow
+- `--desc`: search names and descriptions, replacing the shell `brew-discover`/`bsd` workflow
 - `-n`, `--name`: sort by name instead of popularity
 - `-y`, `--year`: show 365-day installs instead of 30-day installs
 - `--json`: machine-readable output
-- `--columns LIST_OR_PROFILE`
+- `-c`, `--columns LIST_OR_PROFILE`
 - `--limit N`
 
 Default:
 
 - `--type all`
-- name search
+- name/token search, matching Homebrew default search scope
 - popularity sort
 - 30-day installs
 - table output
-- columns from config
+- columns from config; the built-in default includes `version` and omits `type` because terminal output differentiates formulae and casks by entry color
 
 Defer:
 
 - installed-only filters
-- status filters
 - grouping controls
 - custom color controls
 
@@ -88,20 +88,20 @@ Column profiles:
 
 - `default`: loaded from config
 - `compact`: `name,installs,description`
-- `full`: `name,type,installs,installed,status,url,description`
+- `full`: `name,type,version,installs,installed,status,url,description`
 
 CLI behavior:
 
 ```bash
 brewq ripgrep
-brewq --columns compact ripgrep
+brewq -c compact ripgrep
 brewq --columns name,installs,url ripgrep
 ```
 
 Rules:
 
 - Config owns the default column list.
-- `--columns` overrides config for one invocation.
+- `-c` / `--columns` overrides config for one invocation.
 - Unknown columns are a clear user error.
 - Table output renders only selected columns.
 - JSON output includes selected columns by default, with a later option possible for full records if needed.
@@ -134,7 +134,7 @@ brewq list
 brewq list --type formula
 brewq list --analytics
 brewq list --analytics --fetch
-brewq list --columns name,type,version,description
+brewq list -c name,type,version,description
 brewq list --json
 ```
 
@@ -143,7 +143,7 @@ Options:
 - `--type formula|cask|all`
 - `--analytics`: include analytics columns if cached
 - `--fetch`: fetch missing per-package analytics
-- `--columns LIST_OR_PROFILE`
+- `-c`, `--columns LIST_OR_PROFILE`
 - `--limit N`
 - `--json`
 
@@ -195,11 +195,11 @@ metric = "installs-30d"
 
 [output]
 format = "table"
-columns = ["name", "type", "installs", "description"]
+columns = ["name", "version", "installs", "description"]
 limit = 0
 
 [list]
-columns = ["name", "type", "version", "description"]
+columns = ["name", "version", "description"]
 analytics = false
 
 [cache]

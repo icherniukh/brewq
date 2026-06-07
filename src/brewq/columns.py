@@ -26,10 +26,20 @@ def _installs_raw(pkg: Package, metric: str) -> int:
     return pkg.installs_365d if metric == "installs-365d" else pkg.installs_30d
 
 
+def _short_version(pkg: Package, _: str) -> str:
+    version = pkg.version or "-"
+    max_len = 20
+    if len(version) <= max_len:
+        return version
+    prefix_len = 10
+    suffix_len = 8
+    return f"{version[:prefix_len]}…{version[-suffix_len:]}"
+
+
 _COLUMN_REGISTRY: dict[str, ColumnDef] = {
     "name": ColumnDef("name", "NAME", "left", lambda p, _: p.name),
     "type": ColumnDef("type", "TYPE", "left", lambda p, _: p.type),
-    "version": ColumnDef("version", "VERSION", "left", lambda p, _: p.version or "-"),
+    "version": ColumnDef("version", "VERSION", "left", _short_version, lambda p, _: p.version or ""),
     "installs": ColumnDef("installs", "INSTALLS", "right", _installs_str, _installs_raw),
     "installs_30d": ColumnDef("installs_30d", "30D", "right",
                               lambda p, _: f"{p.installs_30d:,}" if p.installs_30d >= 0 else "-",
@@ -55,7 +65,7 @@ _ALIASES: dict[str, str] = {
 # Named profiles
 _PROFILES: dict[str, list[str]] = {
     "compact": ["name", "installs", "description"],
-    "full": ["name", "type", "installs", "installed", "status", "url", "description"],
+    "full": ["name", "type", "version", "installs", "installed", "status", "url", "description"],
 }
 # "default" is driven by config, not hardcoded here
 

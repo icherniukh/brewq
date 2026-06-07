@@ -21,6 +21,14 @@ _COLOR_DEPRECATED = "\033[38;5;208m"  # orange
 _COLOR_DISABLED = "\033[38;5;167m"    # red
 
 
+def _plain_status_prefix(pkg: Package) -> str:
+    if pkg.disabled:
+        return "(disabled) "
+    if pkg.deprecated:
+        return "(deprecated) "
+    return ""
+
+
 def _use_color(out: TextIO) -> bool:
     if os.environ.get("NO_COLOR"):
         return False
@@ -35,6 +43,23 @@ def _wrap(text: str, width: int) -> list[str]:
     if not text or width <= 0:
         return [text or ""]
     return textwrap.wrap(text, width) or [""]
+
+
+def _header(col: ColumnDef, metric: str) -> str:
+    if col.key == "installs":
+        return "INSTALLS(365d)" if metric == "installs-365d" else "INSTALLS(30d)"
+    return col.header
+
+
+def _status_prefix(pkg: Package, color: bool) -> str:
+    text = _plain_status_prefix(pkg)
+    if not text or not color:
+        return text
+    if pkg.disabled:
+        return f"{_COLOR_DISABLED}{text}{_RESET}"
+    if pkg.deprecated:
+        return f"{_COLOR_DEPRECATED}{text}{_RESET}"
+    return ""
 
 
 def render_table(
@@ -53,7 +78,7 @@ def render_table(
         [col.getter(pkg, metric) for col in columns]
         for pkg in packages
     ]
-    headers = [col.header for col in columns]
+    headers = [_header(col, metric) for col in columns]
 
     # Find description column index (wrappable)
     desc_idx = next(
@@ -70,7 +95,7 @@ def render_table(
 
     # Cap description width to fill terminal
     fixed_width = sum(widths[i] for i in range(len(columns)) if i != desc_idx)
-    gaps = 2 * len(columns)  # 2-space padding between columns
+    gaps = 2 * max(0, len(columns) - 1)  # 2-space padding between columns
     if desc_idx is not None:
         desc_width = max(20, term_width - fixed_width - gaps)
         widths[desc_idx] = desc_width
@@ -79,9 +104,9 @@ def render_table(
     header_parts = []
     for i, (col, w) in enumerate(zip(columns, widths, strict=False)):
         if i == desc_idx or col.align == "left":
-            header_parts.append(f"{col.header:<{w}}")
+            header_parts.append(f"{headers[i]:<{w}}")
         else:
-            header_parts.append(f"{col.header:>{w}}")
+            header_parts.append(f"{headers[i]:>{w}}")
     separator = "─" * (sum(widths) + gaps)
 
     out.write("\n")
@@ -93,15 +118,18 @@ def render_table(
 
     # Rows
     name_idx = next((i for i, c in enumerate(columns) if c.key == "name"), None)
+    desc_idx_for_status = next((i for i, c in enumerate(columns) if c.key == "description"), None)
     status_idx = next((i for i, c in enumerate(columns) if c.key == "status"), None)
 
     for pkg, row in zip(packages, rows, strict=False):
         pkg_type = pkg.type
         is_installed = pkg.installed
 
-        # Wrap description
+        # Wrap description. Status prefixes are part of the visible description
+        # cell, so include them before wrapping instead of prepending afterward.
         if desc_idx is not None:
-            desc_lines = _wrap(row[desc_idx], widths[desc_idx])
+            desc_text = _plain_status_prefix(pkg) + row[desc_idx]
+            desc_lines = _wrap(desc_text, widths[desc_idx])
         else:
             desc_lines = None
 
@@ -113,6 +141,10 @@ def render_table(
                 cell = row[i]
                 if i == desc_idx:
                     cell = desc_lines[line_no] if line_no < len(desc_lines) else ""
+                    if line_no == 0 and i == desc_idx_for_status:
+                        plain_prefix = _plain_status_prefix(pkg)
+                        if plain_prefix and cell.startswith(plain_prefix):
+                            cell = _status_prefix(pkg, color) + cell[len(plain_prefix):]
 
                 if line_no > 0 and i != desc_idx:
                     # continuation lines: only desc column has content

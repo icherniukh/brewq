@@ -5,11 +5,13 @@ from brewq.options import ListOptions, SearchOptions, rank, rank_installed
 
 
 def _pkg(name: str, type_: str = "formula", installs_30d: int = -1,
-         desc: str = "", deprecated: bool = False, disabled: bool = False) -> Package:
+         desc: str = "", deprecated: bool = False, disabled: bool = False,
+         aliases: list[str] | None = None) -> Package:
     return Package(
         name=name, type=type_, description=desc, url="",
         version="1.0", installs_30d=installs_30d, installs_365d=-1,
         installed=False, deprecated=deprecated, disabled=disabled,
+        aliases=aliases or [],
     )
 
 
@@ -28,6 +30,17 @@ def test_rank_by_popularity_default():
     assert result[0].name == "ripgrep"
 
 
+def test_rank_by_popularity_uses_selected_installs_metric():
+    local = [
+        _pkg("rare-json", installs_30d=100, desc="json tool"),
+        _pkg("popular-parser", installs_30d=900_000, desc="json parser"),
+        _pkg("medium-json", installs_30d=50_000, desc="json name match"),
+    ]
+    opts = SearchOptions(query=["json"], sort="popularity", search_scope="all")
+    result = rank(local, opts)
+    assert [p.name for p in result] == ["popular-parser", "medium-json", "rare-json"]
+
+
 def test_rank_by_name():
     opts = SearchOptions(query=["ripgrep"], sort="name")
     result = rank(list(pkgs), opts)
@@ -42,15 +55,47 @@ def test_rank_type_filter():
 
 
 def test_rank_name_only_no_desc():
-    opts = SearchOptions(query=["Search tool"], include_desc=False)
+    opts = SearchOptions(query=["Search tool"], search_scope="name")
     result = rank(list(pkgs), opts)
     assert result == []  # "search tool" not in any name
 
 
 def test_rank_with_desc():
-    opts = SearchOptions(query=["search"], include_desc=True)
+    opts = SearchOptions(query=["search"], search_scope="all")
     result = rank(list(pkgs), opts)
     assert any(p.name == "ripgrep" for p in result)
+
+
+def test_rank_name_search_uses_formula_aliases():
+    local = [_pkg("ripgrep", aliases=["rg"])]
+    opts = SearchOptions(query=["rg"], search_scope="name")
+    result = rank(local, opts)
+    assert [p.name for p in result] == ["ripgrep"]
+
+
+def test_rank_name_search_simplifies_like_brew():
+    local = [_pkg("with-dashes")]
+    opts = SearchOptions(query=["with dashes"], search_scope="name")
+    result = rank(local, opts)
+    assert [p.name for p in result] == ["with-dashes"]
+
+
+def test_rank_name_search_includes_formula_fuzzy_matches():
+    local = [
+        _pkg("zmap", installs_30d=100),
+        _pkg("nmap", installs_30d=200),
+        _pkg("zenmap", type_="cask", installs_30d=10),
+    ]
+    opts = SearchOptions(query=["zenmap"], search_scope="name")
+    result = rank(local, opts)
+    assert {p.name for p in result} == {"zmap", "nmap", "zenmap"}
+
+
+def test_rank_name_search_does_not_fuzzy_match_casks():
+    local = [_pkg("zenmap", type_="cask")]
+    opts = SearchOptions(query=["zmap"], search_scope="name")
+    result = rank(local, opts)
+    assert result == []
 
 
 def test_rank_deprecated_last():

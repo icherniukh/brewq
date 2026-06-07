@@ -18,11 +18,11 @@ DEFAULTS: dict[str, Any] = {
     },
     "output": {
         "format": "table",
-        "columns": ["name", "type", "installs", "description"],
+        "columns": ["name", "version", "installs", "description"],
         "limit": 0,
     },
     "list": {
-        "columns": ["name", "type", "version", "description"],
+        "columns": ["name", "version", "description"],
         "analytics": False,
     },
     "cache": {

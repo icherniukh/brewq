@@ -24,15 +24,13 @@ def _build_search_parser() -> argparse.ArgumentParser:
     parser.add_argument("query", nargs="*", help="Search terms")
     parser.add_argument("--type", choices=["formula", "cask", "all"], default=None,
                         help="Limit to formula, cask, or all (default: all)")
-    parser.add_argument("--name-only", action="store_true",
-                        help="Match package names/tokens only (description search is default)")
     parser.add_argument("--desc", action="store_true",
-                        help="(no-op, kept for compatibility; description search is on by default)")
+                        help="Search package names and descriptions")
     parser.add_argument("-n", "--name", action="store_true",
                         help="Sort results by name instead of popularity")
     parser.add_argument("-y", "--year", action="store_true",
                         help="Show 365-day installs instead of 30-day")
-    parser.add_argument("--columns", metavar="SPEC",
+    parser.add_argument("-c", "--columns", metavar="SPEC",
                         help="Column spec: profile name (compact/full) or comma-joined keys")
     parser.add_argument("--limit", type=int, metavar="N",
                         help="Cap results at N rows")
@@ -54,7 +52,7 @@ def _build_command_parser() -> argparse.ArgumentParser:
                      help="Include analytics columns (cache-backed)")
     lst.add_argument("--fetch", action="store_true",
                      help="Fetch missing per-package analytics (implies --analytics)")
-    lst.add_argument("--columns", metavar="SPEC")
+    lst.add_argument("-c", "--columns", metavar="SPEC")
     lst.add_argument("--limit", type=int, metavar="N")
     lst.add_argument("--json", action="store_true")
 
@@ -242,14 +240,15 @@ def _live_search(opts: options_mod.SearchOptions) -> list:
         brew = shutil.which("brew")
         if not brew:
             return []
-        result = subprocess.run(
-            [brew, "search", "--", *opts.query],
-            capture_output=True, text=True,
-        )
+        command = [brew, "search"]
+        if opts.search_scope == "all":
+            command.append("--desc")
+        command.extend(["--", *opts.query])
+        result = subprocess.run(command, capture_output=True, text=True)
         names = [
-            line.strip()
+            line.split(":", 1)[0].strip()
             for line in result.stdout.splitlines()
-            if line.strip() and not line.startswith("==>")
+            if line.strip() and not line.startswith(("==>", "Warning:"))
         ]
         if not names:
             return []

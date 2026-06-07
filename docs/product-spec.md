@@ -23,15 +23,14 @@ Default query should be useful for product discovery and analytics-backed compar
 
 ```bash
 brewq ripgrep
-brewq terminal multiplexer
+brewq --desc terminal multiplexer
 brewq --top 10 json
-brewq --name-only ripgrep
 ```
 
 Expected behavior:
 
-- Search across package names and descriptions by default, unless implementation evidence shows this is too noisy.
-- Keep a name-only mode for Homebrew-like matching.
+- Search package names and cask tokens by default, matching Homebrew's default search scope.
+- Keep `--desc` as the explicit name+description discovery mode.
 - Rank with install analytics as a major signal.
 - Mark installed, deprecated, and disabled packages when known.
 - Support formula/cask filtering.
@@ -143,7 +142,7 @@ Possible alias layer:
 
 ```bash
 brew alias "q=!brewq"
-brew alias "qd=!brewq --desc-only"
+brew alias "qd=!brewq --desc"
 brew alias "ql=!brewq list"
 ```
 

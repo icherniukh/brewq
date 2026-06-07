@@ -20,9 +20,8 @@ The daily interface should feel compact:
 
 ```bash
 brewq ripgrep
-brewq terminal multiplexer
+brewq --desc terminal multiplexer
 brewq --top 10 json
-brewq --name-only ripgrep
 brewq list
 brewq list --analytics
 brewq --columns compact rust
@@ -48,24 +47,20 @@ Homebrew default behavior, verified from `brew search --help`, is:
 
 `brewq` should be query-and-analytics-first, not a byte-for-byte clone of `brew search`.
 
-Default `brewq QUERY` should search both names and descriptions, then rank results so name/token matches remain more prominent than description-only matches. This supports both direct lookup and product discovery when the user remembers the category, problem, or capability rather than the exact package name.
+Default `brewq QUERY` should match Homebrew's default search scope: cask tokens and formula names. Description search should stay one explicit flag away via `--desc`, because it is useful but can be noisy.
 
 Compatibility should still be available:
 
 ```bash
-brewq --name-only ripgrep
-brewq --desc-only multiplexer
+brewq ripgrep
+brewq --desc multiplexer
 ```
 
 Search ranking should combine:
 
-- match source: exact/name/token matches above description-only matches
+- match source: exact/name/token matches above weaker matches
 - install popularity: default 30-day installs
 - package state: disabled/deprecated packages should be visibly marked and probably ranked lower
-
-Open question for implementation:
-
-- whether `--desc` remains as a compatibility alias for "include descriptions" even if default search already includes descriptions. If default includes descriptions, `--desc` can either become a no-op alias or be replaced by `--desc-only`.
 
 ## Popularity And Top-N
 
@@ -113,7 +108,7 @@ The exact default columns belong in config:
 
 ```toml
 [output]
-columns = ["name", "type", "installs", "description"]
+columns = ["name", "version", "installs", "description"]
 ```
 
 Script-friendly output is first-class:

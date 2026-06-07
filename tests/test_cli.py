@@ -5,8 +5,9 @@ from unittest.mock import patch
 
 import pytest
 
-from brewq.cli import main
+from brewq.cli import _live_search, main
 from brewq.model import Package
+from brewq.options import SearchOptions
 
 
 def _pkg(name: str, type_: str = "formula", installs_30d: int = 10_000) -> Package:
@@ -47,6 +48,92 @@ def test_main_search_from_cache(capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "ripgrep" in out
+
+
+def test_main_search_default_columns_omit_type(capsys):
+    pkgs = [_pkg("ripgrep", installs_30d=80_000)]
+    with patch("brewq.cache.load_packages", return_value=pkgs), \
+         patch("brewq.cache.refresh_background"):
+        rc = main(["ripgrep"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "TYPE" not in out
+    assert "VERSION" in out
+    assert "INSTALLS(30d)" in out
+
+
+def test_main_search_columns_short_alias(capsys):
+    pkgs = [_pkg("ripgrep", installs_30d=80_000)]
+    with patch("brewq.cache.load_packages", return_value=pkgs), \
+         patch("brewq.cache.refresh_background"):
+        rc = main(["ripgrep", "-c", "name,installs"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "ripgrep" in out
+    assert "DESCRIPTION" not in out
+
+
+def test_main_list_columns_short_alias(capsys):
+    with patch("brewq.brew.info_installed", return_value={
+        "formulae": [{
+            "name": "ripgrep",
+            "full_name": "ripgrep",
+            "desc": "Search tool",
+            "homepage": "https://example.com",
+            "versions": {"stable": "1.0"},
+        }],
+        "casks": [],
+    }):
+        rc = main(["list", "-c", "name,version"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "ripgrep" in out
+    assert "DESCRIPTION" not in out
+
+
+def test_main_search_desc_flag_searches_descriptions(capsys):
+    pkgs = [_pkg("tmux", installs_30d=80_000)]
+    with patch("brewq.cache.load_packages", return_value=pkgs), \
+         patch("brewq.cache.refresh_background"):
+        rc = main(["--desc", "Description"])
+    assert rc == 0
+    assert "tmux" in capsys.readouterr().out
+
+
+def test_main_search_default_excludes_descriptions(capsys):
+    pkgs = [_pkg("tmux", installs_30d=80_000)]
+    with patch("brewq.cache.load_packages", return_value=pkgs), \
+         patch("brewq.cache.refresh_background"):
+        rc = main(["Description"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "No results" in captured.err
+
+
+def test_live_search_matches_brew_default_scope():
+    class Result:
+        stdout = "==> Formulae\nripgrep\n"
+
+    with patch("brewq.cli.shutil.which", return_value="/opt/homebrew/bin/brew"), \
+         patch("brewq.cli.subprocess.run", return_value=Result()) as run, \
+         patch("brewq.brew.info_packages", return_value={"formulae": [], "casks": []}) as info:
+        _live_search(SearchOptions(query=["grep"], search_scope="name"))
+
+    assert run.call_args.args[0] == ["/opt/homebrew/bin/brew", "search", "--", "grep"]
+    assert info.call_args.args[0] == ["ripgrep"]
+
+
+def test_live_search_uses_brew_desc_when_requested():
+    class Result:
+        stdout = "Warning: ignored\n==> Formulae\nripgrep: Search tool like grep\n"
+
+    with patch("brewq.cli.shutil.which", return_value="/opt/homebrew/bin/brew"), \
+         patch("brewq.cli.subprocess.run", return_value=Result()) as run, \
+         patch("brewq.brew.info_packages", return_value={"formulae": [], "casks": []}) as info:
+        _live_search(SearchOptions(query=["grep"], search_scope="all"))
+
+    assert run.call_args.args[0] == ["/opt/homebrew/bin/brew", "search", "--desc", "--", "grep"]
+    assert info.call_args.args[0] == ["ripgrep"]
 
 
 def test_main_search_json(capsys):
