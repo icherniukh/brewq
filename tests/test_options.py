@@ -91,6 +91,26 @@ def test_rank_name_search_includes_formula_fuzzy_matches():
     assert {p.name for p in result} == {"zmap", "nmap", "zenmap"}
 
 
+def test_rank_name_search_avoids_loose_formula_fuzzy_matches():
+    local = [
+        _pkg("unshield", installs_30d=117),
+        _pkg("font-sunshiney", type_="cask", installs_30d=60),
+    ]
+    opts = SearchOptions(query=["sunshine"], search_scope="name")
+    result = rank(local, opts)
+    assert [p.name for p in result] == ["font-sunshiney"]
+
+
+def test_rank_name_search_orders_name_matches_before_fuzzy_popularity():
+    local = [
+        _pkg("zmap", installs_30d=100_000),
+        _pkg("zenmap", type_="cask", installs_30d=10),
+    ]
+    opts = SearchOptions(query=["zenmap"], search_scope="name")
+    result = rank(local, opts)
+    assert [p.name for p in result] == ["zenmap", "zmap"]
+
+
 def test_rank_name_search_does_not_fuzzy_match_casks():
     local = [_pkg("zenmap", type_="cask")]
     opts = SearchOptions(query=["zmap"], search_scope="name")

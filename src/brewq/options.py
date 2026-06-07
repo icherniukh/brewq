@@ -106,7 +106,17 @@ def _formula_fuzzy_names(packages: list[Package], query_terms: list[str], search
         if pkg.type == "formula"
     }
     close = get_close_matches(query, list(by_simplified), n=3, cutoff=0.75)
-    return {by_simplified[name] for name in close if name != query}
+    return {
+        by_simplified[name]
+        for name in close
+        if name != query and _is_subsequence(name, query)
+    }
+
+
+def _is_subsequence(candidate: str, query: str) -> bool:
+    """Allow Homebrew-like deletion matches without broad anagram-ish drift."""
+    query_chars = iter(query)
+    return all(ch in query_chars for ch in candidate)
 
 
 def _match_score(pkg: Package, query_terms: list[str]) -> int:
@@ -158,6 +168,8 @@ def rank(
 
         def sort_key(p: Package) -> tuple[int, int, str]:
             installs = max(installs_key(p), -1)
+            if opts.search_scope == "name":
+                return (-_match_score(p, query_terms), -installs, p.name.lower())
             return (-installs, -_match_score(p, query_terms), p.name.lower())
 
         normal.sort(key=sort_key)
