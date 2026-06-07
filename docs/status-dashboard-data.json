@@ -1,0 +1,216 @@
+{
+  "generated_at": "2026-06-07 16:13 EDT",
+  "summary_text": "Read-only Homebrew query and analytics tool. Current work is focused on output polish, metadata signals, performance visibility, script-friendly behavior, and a stronger public README.",
+  "stats": {
+    "average_lead_time_hours": 0,
+    "blocked_issues": 0,
+    "closed_issues": 11,
+    "deferred_issues": 0,
+    "epics_eligible_for_closure": 0,
+    "in_progress_issues": 0,
+    "open_issues": 9,
+    "pinned_issues": 0,
+    "ready_issues": 9,
+    "total_issues": 20
+  },
+  "completion_percent": 55,
+  "tests": {
+    "passed": 85,
+    "command": "PYTHONPATH=src uv run pytest"
+  },
+  "ready": [
+    {
+      "id": "brewq-cbr",
+      "title": "Make --help compact, structured, and useful",
+      "summary": "Design and implement a small, polished help surface for brewq. Cover default search, list/cache/config commands,...",
+      "labels": [
+        "cli",
+        "help",
+        "output"
+      ],
+      "priority": 2
+    },
+    {
+      "id": "brewq-jnt",
+      "title": "Define script-friendly output mode",
+      "summary": "Decide and implement the script-friendly output model for brewq. Cover whether output should become --format tabl...",
+      "labels": [
+        "cli",
+        "output",
+        "scripts"
+      ],
+      "priority": 2
+    },
+    {
+      "id": "brewq-npo",
+      "title": "Calibrate and lock column presets",
+      "summary": "Decide and document the compact/default/full column presets for search and list. Validate against real terminal o...",
+      "labels": [
+        "cli",
+        "output"
+      ],
+      "priority": 2
+    },
+    {
+      "id": "brewq-2w4",
+      "title": "Create an unbeatable README",
+      "summary": "Rewrite the README into a strong first impression: 1) effortless short project pitch with a screenshot or gif of...",
+      "labels": [
+        "docs",
+        "readme"
+      ],
+      "priority": 2
+    },
+    {
+      "id": "brewq-9mo",
+      "title": "Add performance metrics and benchmarks",
+      "summary": "Add a lightweight benchmark/metrics harness for brewq's important paths: cache load, ranking/filtering, table ren...",
+      "labels": [
+        "performance",
+        "testing"
+      ],
+      "priority": 2
+    },
+    {
+      "id": "brewq-9nb",
+      "title": "Run informal dev-agent feedback pass",
+      "summary": "Spawn a small set of research/dev agents, show them the current brewq tool and docs casually, and ask for candid...",
+      "labels": [
+        "feedback",
+        "research"
+      ],
+      "priority": 2
+    },
+    {
+      "id": "brewq-kj3",
+      "title": "Investigate package last-updated metadata column",
+      "summary": "Add a design/implementation path for showing when a package was last updated, preferably from tap/formula/cask me...",
+      "labels": [
+        "analytics",
+        "output"
+      ],
+      "priority": 2
+    },
+    {
+      "id": "brewq-rhy",
+      "title": "Investigate optional trend analytics column",
+      "summary": "Design an optional trend signal derived from Homebrew install analytics. Explore ratios between 30d/90d and 90d/3...",
+      "labels": [
+        "analytics",
+        "output"
+      ],
+      "priority": 2
+    },
+    {
+      "id": "brewq-g54",
+      "title": "Run thorough CLI output aesthetic review",
+      "summary": "Review brewq table/help/list/json output as an end-user CLI. Cover spacing, wrapping, long package names, long ca...",
+      "labels": [
+        "cli",
+        "output"
+      ],
+      "priority": 2
+    }
+  ],
+  "active": [],
+  "workstreams": [
+    {
+      "name": "CLI and output",
+      "count": 6
+    },
+    {
+      "name": "Analytics metadata",
+      "count": 2
+    },
+    {
+      "name": "Docs and README",
+      "count": 1
+    },
+    {
+      "name": "Feedback research",
+      "count": 1
+    },
+    {
+      "name": "Help and CLI UX",
+      "count": 1
+    },
+    {
+      "name": "Performance",
+      "count": 1
+    },
+    {
+      "name": "Script-friendly output",
+      "count": 1
+    }
+  ],
+  "commits": [
+    {
+      "sha": "e7828ab",
+      "subject": "chore(beads): record output task split"
+    },
+    {
+      "sha": "4aed7b6",
+      "subject": "chore(beads): record dashboard task closure"
+    },
+    {
+      "sha": "218c467",
+      "subject": "docs: add project status dashboard"
+    },
+    {
+      "sha": "eb384b7",
+      "subject": "chore(beads): record search bug closure"
+    },
+    {
+      "sha": "56ca830",
+      "subject": "fix(search): include tapped live results"
+    },
+    {
+      "sha": "d2b0db6",
+      "subject": "fix(search): reject loose fuzzy matches"
+    },
+    {
+      "sha": "71797b1",
+      "subject": "chore(beads): record closed issue interactions"
+    },
+    {
+      "sha": "de2dce1",
+      "subject": "chore(cli): add color palette preview"
+    }
+  ],
+  "signals": [
+    {
+      "kind": "good",
+      "title": "Recent win: search correctness",
+      "body": "Tapped formulae are included from live Homebrew search, and loose fuzzy formula matches no longer surface misleading results."
+    },
+    {
+      "kind": "warn",
+      "title": "Open decision: user-facing output",
+      "body": "Help shape, script-friendly mode, column presets, and color meaning need to lock before the README should become public-facing."
+    },
+    {
+      "kind": "warn",
+      "title": "Freshness caveat",
+      "body": "Tracker and git data refresh live; test count is a recorded verification value, not rerun by the dashboard refresh."
+    },
+    {
+      "kind": "warn",
+      "title": "Repo hygiene note",
+      "body": "uv.lock is untracked and intentionally left out until lockfile policy is decided."
+    }
+  ],
+  "notes": [
+    {
+      "title": "Product Boundary",
+      "body": "Read-only query and analytics. No install, uninstall, upgrade, services, Brewfile, TUI, GUI, or multi-package-manager behavior."
+    },
+    {
+      "title": "Current Center",
+      "body": "Make terminal output trustworthy, compact, explainable, and script-friendly before expanding optional analytics columns."
+    },
+    {
+      "title": "Next Best Move",
+      "body": "Lock column presets and help text, then turn the README into a public first impression with real output capture."
+    }
+  ]
+}

@@ -23,7 +23,17 @@ PYTHONPATH=src python -m brewq.cli ripgrep
 
 The planned CLI shape is documented before the implementation is filled in.
 
-For a visual project snapshot, open `docs/status-dashboard.html`.
+For a visual project snapshot, open `docs/status-dashboard.html`. For fresh data every time the page loads, run:
+
+```bash
+python3 scripts/serve-status-dashboard.py
+```
+
+Then open `http://127.0.0.1:8765/`. To refresh the embedded static fallback, run:
+
+```bash
+python3 scripts/update-status-dashboard.py
+```
 
 ## Documentation
 
