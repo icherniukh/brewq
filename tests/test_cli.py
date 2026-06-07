@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from brewq.cli import _live_search, main
+from brewq.cli import _augment_with_live_search, _live_search, main
 from brewq.model import Package
 from brewq.options import SearchOptions
 
@@ -43,7 +43,8 @@ def test_main_search_no_cache_no_brew(capsys):
 def test_main_search_from_cache(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000), _pkg("bat", installs_30d=50_000)]
     with patch("brewq.cache.load_packages", return_value=pkgs), \
-         patch("brewq.cache.refresh_background"):
+         patch("brewq.cache.refresh_background"), \
+         patch("brewq.cli._augment_with_live_search", side_effect=lambda packages, _: packages):
         rc = main(["ripgrep"])
     assert rc == 0
     out = capsys.readouterr().out
@@ -53,7 +54,8 @@ def test_main_search_from_cache(capsys):
 def test_main_search_default_columns_omit_type(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load_packages", return_value=pkgs), \
-         patch("brewq.cache.refresh_background"):
+         patch("brewq.cache.refresh_background"), \
+         patch("brewq.cli._augment_with_live_search", side_effect=lambda packages, _: packages):
         rc = main(["ripgrep"])
     assert rc == 0
     out = capsys.readouterr().out
@@ -65,7 +67,8 @@ def test_main_search_default_columns_omit_type(capsys):
 def test_main_search_columns_short_alias(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load_packages", return_value=pkgs), \
-         patch("brewq.cache.refresh_background"):
+         patch("brewq.cache.refresh_background"), \
+         patch("brewq.cli._augment_with_live_search", side_effect=lambda packages, _: packages):
         rc = main(["ripgrep", "-c", "name,installs"])
     assert rc == 0
     out = capsys.readouterr().out
@@ -94,7 +97,8 @@ def test_main_list_columns_short_alias(capsys):
 def test_main_search_desc_flag_searches_descriptions(capsys):
     pkgs = [_pkg("tmux", installs_30d=80_000)]
     with patch("brewq.cache.load_packages", return_value=pkgs), \
-         patch("brewq.cache.refresh_background"):
+         patch("brewq.cache.refresh_background"), \
+         patch("brewq.cli._augment_with_live_search", side_effect=lambda packages, _: packages):
         rc = main(["--desc", "Description"])
     assert rc == 0
     assert "tmux" in capsys.readouterr().out
@@ -103,7 +107,8 @@ def test_main_search_desc_flag_searches_descriptions(capsys):
 def test_main_search_default_excludes_descriptions(capsys):
     pkgs = [_pkg("tmux", installs_30d=80_000)]
     with patch("brewq.cache.load_packages", return_value=pkgs), \
-         patch("brewq.cache.refresh_background"):
+         patch("brewq.cache.refresh_background"), \
+         patch("brewq.cli._augment_with_live_search", side_effect=lambda packages, _: packages):
         rc = main(["Description"])
     assert rc == 0
     captured = capsys.readouterr()
@@ -136,10 +141,76 @@ def test_live_search_uses_brew_desc_when_requested():
     assert info.call_args.args[0] == ["ripgrep"]
 
 
+def test_live_search_fetches_all_large_result_sets():
+    names = [f"tool-{i}" for i in range(135)]
+
+    def info_packages(batch):
+        return {
+            "formulae": [
+                {
+                    "name": name,
+                    "full_name": name,
+                    "desc": f"Description of {name}",
+                    "homepage": "https://example.com",
+                    "versions": {"stable": "1.0"},
+                }
+                for name in batch
+            ],
+            "casks": [],
+        }
+
+    with patch("brewq.cli._brew_search_names", return_value=names), \
+         patch("brewq.brew.info_packages", side_effect=info_packages) as info:
+        packages = _live_search(SearchOptions(query=["tool"]))
+
+    assert len(packages) == len(names)
+    assert [len(call.args[0]) for call in info.call_args_list] == [100, 35]
+
+
+def test_augment_with_live_search_fetches_tapped_cache_misses():
+    cached = [_pkg("font-sunshiney", type_="cask", installs_30d=60)]
+    with patch(
+        "brewq.cli._brew_search_names",
+        return_value=["lizardbyte/homebrew/sunshine", "font-sunshiney"],
+    ), patch(
+        "brewq.brew.info_packages",
+        return_value={
+            "formulae": [{
+                "name": "sunshine",
+                "full_name": "lizardbyte/homebrew/sunshine",
+                "desc": "Self-hosted game stream host",
+                "homepage": "https://app.lizardbyte.dev/Sunshine/",
+                "versions": {"stable": "2025.122.141614"},
+            }],
+            "casks": [],
+        },
+    ) as info:
+        packages = _augment_with_live_search(cached, SearchOptions(query=["sunshine"]))
+
+    assert [p.name for p in packages] == ["font-sunshiney", "lizardbyte/homebrew/sunshine"]
+    assert info.call_args.args[0] == ["lizardbyte/homebrew/sunshine"]
+
+
+def test_main_search_includes_tapped_live_cache_miss(capsys):
+    cached = [_pkg("font-sunshiney", type_="cask", installs_30d=60)]
+    tapped = _pkg("lizardbyte/homebrew/sunshine", installs_30d=-1)
+    with patch("brewq.cache.load_packages", return_value=cached), \
+         patch("brewq.cache.refresh_background"), \
+         patch("brewq.cli._augment_with_live_search", return_value=[*cached, tapped]):
+        rc = main(["sunshine"])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "font-sunshiney" in out
+    assert "lizardbyte/homebrew/sunshine" in out
+    assert "unshield" not in out
+
+
 def test_main_search_json(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load_packages", return_value=pkgs), \
-         patch("brewq.cache.refresh_background"):
+         patch("brewq.cache.refresh_background"), \
+         patch("brewq.cli._augment_with_live_search", side_effect=lambda packages, _: packages):
         rc = main(["ripgrep", "--json"])
     assert rc == 0
     records = json.loads(capsys.readouterr().out)
@@ -149,7 +220,8 @@ def test_main_search_json(capsys):
 def test_main_search_bad_column(capsys):
     pkgs = [_pkg("ripgrep")]
     with patch("brewq.cache.load_packages", return_value=pkgs), \
-         patch("brewq.cache.refresh_background"):
+         patch("brewq.cache.refresh_background"), \
+         patch("brewq.cli._augment_with_live_search", side_effect=lambda packages, _: packages):
         rc = main(["ripgrep", "--columns", "bogus"])
     assert rc == 1
     assert "Unknown column" in capsys.readouterr().err

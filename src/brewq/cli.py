@@ -13,6 +13,7 @@ from brewq import options as options_mod
 from brewq import render as render_mod
 
 _COMMANDS = frozenset({"list", "cache", "config"})
+_BREW_INFO_BATCH_SIZE = 100
 
 
 def _build_search_parser() -> argparse.ArgumentParser:
@@ -219,6 +220,7 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         packages = _live_search(opts)
     else:
         cache_mod.refresh_background()
+        packages = _augment_with_live_search(packages, opts)
 
     ranked = options_mod.rank(packages, opts)
 
@@ -233,32 +235,51 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
     return 0
 
 
-def _live_search(opts: options_mod.SearchOptions) -> list:
-    try:
-        from brewq import brew as brew_mod
-        from brewq.model import from_cask, from_formula
-        brew = shutil.which("brew")
-        if not brew:
-            return []
-        command = [brew, "search"]
-        if opts.search_scope == "all":
-            command.append("--desc")
-        command.extend(["--", *opts.query])
-        result = subprocess.run(command, capture_output=True, text=True)
-        names = [
-            line.split(":", 1)[0].strip()
-            for line in result.stdout.splitlines()
-            if line.strip() and not line.startswith(("==>", "Warning:"))
-        ]
-        if not names:
-            return []
-        raw = brew_mod.info_packages(names[:30])
-        packages = []
+def _brew_search_names(opts: options_mod.SearchOptions) -> list[str]:
+    brew = shutil.which("brew")
+    if not brew:
+        return []
+    command = [brew, "search"]
+    if opts.search_scope == "all":
+        command.append("--desc")
+    command.extend(["--", *opts.query])
+    result = subprocess.run(command, capture_output=True, text=True)
+    return [
+        line.split(":", 1)[0].strip()
+        for line in result.stdout.splitlines()
+        if line.strip() and not line.startswith(("==>", "Warning:"))
+    ]
+
+
+def _packages_for_names(names: list[str]) -> list:
+    if not names:
+        return []
+    from brewq import brew as brew_mod
+    from brewq.model import from_cask, from_formula
+
+    packages = []
+    for start in range(0, len(names), _BREW_INFO_BATCH_SIZE):
+        raw = brew_mod.info_packages(names[start:start + _BREW_INFO_BATCH_SIZE])
         for f in raw.get("formulae", []):
             packages.append(from_formula(f))
         for c in raw.get("casks", []):
             packages.append(from_cask(c))
+    return packages
+
+
+def _augment_with_live_search(packages: list, opts: options_mod.SearchOptions) -> list:
+    try:
+        names = _brew_search_names(opts)
+        known = {pkg.name for pkg in packages}
+        missing = [name for name in names if name not in known]
+        return [*packages, *_packages_for_names(missing)]
+    except Exception:
         return packages
+
+
+def _live_search(opts: options_mod.SearchOptions) -> list:
+    try:
+        return _packages_for_names(_brew_search_names(opts))
     except Exception:
         return []
 
