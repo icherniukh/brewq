@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-07 16:13 EDT",
+  "generated_at": "2026-06-07 16:15 EDT",
   "summary_text": "Read-only Homebrew query and analytics tool. Current work is focused on output polish, metadata signals, performance visibility, script-friendly behavior, and a stronger public README.",
   "stats": {
     "average_lead_time_hours": 0,
@@ -145,6 +145,14 @@
   ],
   "commits": [
     {
+      "sha": "086a676",
+      "subject": "chore(beads): record dashboard refinements"
+    },
+    {
+      "sha": "faf6b29",
+      "subject": "docs: make status dashboard live"
+    },
+    {
       "sha": "e7828ab",
       "subject": "chore(beads): record output task split"
     },
@@ -167,14 +175,6 @@
     {
       "sha": "d2b0db6",
       "subject": "fix(search): reject loose fuzzy matches"
-    },
-    {
-      "sha": "71797b1",
-      "subject": "chore(beads): record closed issue interactions"
-    },
-    {
-      "sha": "de2dce1",
-      "subject": "chore(cli): add color palette preview"
     }
   ],
   "signals": [
