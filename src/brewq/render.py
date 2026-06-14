@@ -96,7 +96,8 @@ def render_table(
     fixed_width = sum(widths[i] for i in range(len(columns)) if i != desc_idx)
     gaps = 2 * max(0, len(columns) - 1)  # 2-space padding between columns
     if desc_idx is not None:
-        desc_width = max(20, term_width - fixed_width - gaps)
+        min_desc_width = len(headers[desc_idx])
+        desc_width = max(min_desc_width, term_width - fixed_width - gaps)
         widths[desc_idx] = desc_width
 
     # Header
@@ -119,6 +120,7 @@ def render_table(
     name_idx = next((i for i, c in enumerate(columns) if c.key == "name"), None)
     desc_idx_for_status = next((i for i, c in enumerate(columns) if c.key == "description"), None)
     status_idx = next((i for i, c in enumerate(columns) if c.key == "status"), None)
+    show_status_in_description = status_idx is None
 
     for pkg, row in zip(packages, rows, strict=False):
         pkg_type = pkg.type
@@ -127,7 +129,7 @@ def render_table(
         # Wrap description. Status prefixes are part of the visible description
         # cell, so include them before wrapping instead of prepending afterward.
         if desc_idx is not None:
-            desc_text = _plain_status_prefix(pkg) + row[desc_idx]
+            desc_text = (_plain_status_prefix(pkg) if show_status_in_description else "") + row[desc_idx]
             desc_lines = _wrap(desc_text, widths[desc_idx])
         else:
             desc_lines = None
@@ -140,7 +142,7 @@ def render_table(
                 cell = row[i]
                 if i == desc_idx:
                     cell = desc_lines[line_no] if line_no < len(desc_lines) else ""
-                    if line_no == 0 and i == desc_idx_for_status:
+                    if line_no == 0 and i == desc_idx_for_status and show_status_in_description:
                         plain_prefix = _plain_status_prefix(pkg)
                         if plain_prefix and cell.startswith(plain_prefix):
                             cell = _status_prefix(pkg, color) + cell[len(plain_prefix):]

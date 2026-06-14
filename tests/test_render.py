@@ -14,12 +14,12 @@ class TtyStringIO(io.StringIO):
 
 def _pkg(name: str = "ripgrep", type_: str = "formula", installs_30d: int = 80_000,
          desc: str = "Search tool like grep and The Silver Searcher",
-         installed: bool = False, status: str = "") -> Package:
+         installed: bool = False, status: str = "", version: str = "1.0") -> Package:
     deprecated = status == "deprecated"
     disabled = status == "disabled"
     return Package(
         name=name, type=type_, description=desc, url="https://example.com",
-        version="1.0", installs_30d=installs_30d, installs_365d=600_000,
+        version=version, installs_30d=installs_30d, installs_365d=600_000,
         installed=installed, deprecated=deprecated, disabled=disabled,
     )
 
@@ -137,6 +137,16 @@ def test_render_table_marks_disabled_in_default_description():
     assert "(disabled) Search tool" in out.getvalue()
 
 
+def test_render_table_omits_description_status_prefix_when_status_column_selected():
+    out = io.StringIO()
+    cols = resolve("name,status,description", [])
+    render_table([_pkg(status="deprecated")], cols, out=out)
+    text = out.getvalue()
+    assert "deprecated" in text
+    assert "(deprecated) Search tool" not in text
+    assert "Search tool" in text
+
+
 def test_render_table_status_prefix_wraps_inside_description_column(monkeypatch):
     monkeypatch.setattr("brewq.render._terminal_width", lambda: 80)
     out = io.StringIO()
@@ -160,3 +170,17 @@ def test_render_table_separator_stays_within_terminal_width(monkeypatch):
     render_table([_pkg()], cols, out=out)
     separator = next(line for line in out.getvalue().splitlines() if line.startswith("─"))
     assert len(separator) <= 80
+
+
+def test_render_table_fits_sixty_column_terminal(monkeypatch):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 60)
+    out = io.StringIO()
+    cols = resolve("name,version,installs,description", [])
+    pkg = _pkg(
+        name="wezterm",
+        version="20240203-110809,5046fc22",
+        desc="GPU-accelerated cross-platform terminal emulator and multiplexer",
+    )
+    render_table([pkg], cols, out=out)
+    lines = [line for line in out.getvalue().splitlines() if line]
+    assert all(len(line) <= 60 for line in lines)
