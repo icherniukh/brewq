@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from unittest.mock import patch
 
 import pytest
@@ -28,6 +27,10 @@ def isolated(tmp_path, monkeypatch):
 def test_main_no_args_prints_help(capsys):
     rc = main([])
     assert rc == 2
+    out = capsys.readouterr().out
+    assert "Commands:" in out
+    assert "Examples:" in out
+    assert "NO_COLOR=1" in out
 
 
 def test_main_search_no_cache_no_brew(capsys):
@@ -92,6 +95,69 @@ def test_main_list_columns_short_alias(capsys):
     out = capsys.readouterr().out
     assert "ripgrep" in out
     assert "DESCRIPTION" not in out
+
+
+def test_main_list_compact_uses_list_shaped_profile(capsys):
+    with patch("brewq.brew.info_installed", return_value={
+        "formulae": [{
+            "name": "ripgrep",
+            "full_name": "ripgrep",
+            "desc": "Search tool",
+            "homepage": "https://example.com",
+            "versions": {"stable": "1.0"},
+        }],
+        "casks": [],
+    }):
+        rc = main(["list", "-c", "compact"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "TYPE" in out
+    assert "INSTALLS" not in out
+
+
+def test_main_list_analytics_inserts_installs_before_description(capsys):
+    with patch("brewq.brew.info_installed", return_value={
+        "formulae": [{
+            "name": "ripgrep",
+            "full_name": "ripgrep",
+            "desc": "Search tool",
+            "homepage": "https://example.com",
+            "versions": {"stable": "1.0"},
+        }],
+        "casks": [],
+    }), patch("brewq.cache.load_packages", return_value=[_pkg("ripgrep", installs_30d=80_000)]):
+        rc = main(["list", "--analytics"])
+    assert rc == 0
+    header = next(line for line in capsys.readouterr().out.splitlines() if "NAME" in line)
+    assert header.index("INSTALLS(30d)") < header.index("DESCRIPTION")
+
+
+def test_main_list_analytics_respects_explicit_metric_column(capsys):
+    with patch("brewq.brew.info_installed", return_value={
+        "formulae": [{
+            "name": "ripgrep",
+            "full_name": "ripgrep",
+            "desc": "Search tool",
+            "homepage": "https://example.com",
+            "versions": {"stable": "1.0"},
+        }],
+        "casks": [],
+    }), patch("brewq.cache.load_packages", return_value=[_pkg("ripgrep", installs_30d=80_000)]):
+        rc = main(["list", "--analytics", "-c", "name,installs_365d,description"])
+    assert rc == 0
+    header = next(line for line in capsys.readouterr().out.splitlines() if "NAME" in line)
+    assert "365D" in header
+    assert "INSTALLS(30d)" not in header
+
+
+def test_search_terms_named_like_subcommands_are_not_rerouted(capsys):
+    pkgs = [_pkg("cachelib", installs_30d=80_000)]
+    with patch("brewq.cache.load_packages", return_value=pkgs), \
+         patch("brewq.cache.refresh_background"), \
+         patch("brewq.cli._augment_with_live_search", side_effect=lambda packages, _: packages):
+        rc = main(["--desc", "cache"])
+    assert rc == 0
+    assert "cachelib" in capsys.readouterr().out
 
 
 def test_main_search_desc_flag_searches_descriptions(capsys):
@@ -206,15 +272,44 @@ def test_main_search_includes_tapped_live_cache_miss(capsys):
     assert "unshield" not in out
 
 
-def test_main_search_json(capsys):
+def test_main_search_tsv(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load_packages", return_value=pkgs), \
          patch("brewq.cache.refresh_background"), \
          patch("brewq.cli._augment_with_live_search", side_effect=lambda packages, _: packages):
-        rc = main(["ripgrep", "--json"])
+        rc = main(["ripgrep", "--tsv", "-c", "name,installs,installed"])
     assert rc == 0
-    records = json.loads(capsys.readouterr().out)
-    assert records[0]["name"] == "ripgrep"
+    assert capsys.readouterr().out == "ripgrep\t80000\tfalse\n"
+
+
+def test_root_help_mentions_tsv_and_discoverability(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "--tsv" in out
+    assert "brewq cache status" in out
+    assert "brewq config path" in out
+
+
+def test_list_help_shows_presets_and_examples(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["list", "--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "Presets:" in out
+    assert "compact -> name,type,description" in out
+    assert "full    -> name,type,version,installed,status,description" in out
+    assert "brewq list --tsv -c name,type,version" in out
+
+
+def test_cache_help_mentions_refresh_flow(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["cache", "--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "brewq cache refresh --force" in out
+    assert "brewq config path" in out
 
 
 def test_main_search_bad_column(capsys):

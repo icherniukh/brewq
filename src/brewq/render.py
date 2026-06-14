@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import sys
@@ -179,7 +178,12 @@ def render_table(
     out.write("\n")
 
 
-def render_json(
+def _tsv_cell(value: object) -> str:
+    text = "" if value is None else str(value)
+    return text.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+
+
+def render_tsv(
     packages: list[Package],
     columns: list[ColumnDef],
     metric: str = "installs-30d",
@@ -187,14 +191,12 @@ def render_json(
 ) -> None:
     if out is None:
         out = sys.stdout
-    records = []
     for pkg in packages:
-        record = {}
+        cells = []
         for col in columns:
             if col.raw_getter is not None:
-                record[col.key] = col.raw_getter(pkg, metric)
+                value = col.raw_getter(pkg, metric)
             else:
-                record[col.key] = col.getter(pkg, metric)
-        records.append(record)
-    json.dump(records, out, indent=2)
-    out.write("\n")
+                value = col.getter(pkg, metric)
+            cells.append(_tsv_cell(value))
+        out.write("\t".join(cells) + "\n")

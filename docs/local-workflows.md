@@ -23,7 +23,7 @@ Implementation note:
 
 - `--desc` should search descriptions in addition to names.
 - It should be explicit because description search can be noisy.
-- It should still use the same ranking, cache, columns, and JSON output model.
+- It should still use the same ranking, cache, columns, and TSV output model.
 
 ## Installed List
 
@@ -53,7 +53,7 @@ brewq list --analytics
 brewq list --analytics --fetch
 brewq list --type formula
 brewq list --columns name,type,version,description
-brewq list --json
+brewq list --tsv
 ```
 
 Implementation note:

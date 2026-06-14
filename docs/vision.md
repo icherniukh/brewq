@@ -25,7 +25,7 @@ brewq --top 10 json
 brewq list
 brewq list --analytics
 brewq --columns compact rust
-brewq --json rust
+brewq --tsv rust
 ```
 
 Homebrew aliases should be supported as a convenience layer:
@@ -102,23 +102,26 @@ Built-in column presets:
 
 - `compact`: small terminal view, likely `name,installs,description`
 - `default`: normal discovery view, from config
-- `full`: wide inspection view, likely `name,type,version,installs,installed,status,url,description`
+- `full`: wide inspection view, likely `name,type,version,installs,installed,status,description`
 
 The exact default columns belong in config:
 
 ```toml
 [output]
 columns = ["name", "version", "installs", "description"]
+
+[list]
+columns = ["name", "type", "version", "description"]
 ```
 
 Script-friendly output is first-class:
 
 ```bash
-brewq --json QUERY
-brewq list --json
+brewq --tsv QUERY
+brewq list --tsv
 ```
 
-JSON should come from the same normalized records as table output. It should not be an afterthought bolted onto terminal rendering.
+TSV should come from the same normalized records as table output. It should not be an afterthought bolted onto terminal rendering.
 
 ## Installed Package Listing
 
@@ -127,8 +130,8 @@ JSON should come from the same normalized records as table output. It should not
 - list installed formulae and casks together
 - show descriptions
 - optionally show analytics
-- support the same columns/presets as search
-- support JSON
+- support the same column system, with list-shaped defaults and presets
+- support TSV
 - avoid network fetches by default
 
 Examples:
@@ -195,7 +198,7 @@ Performance goals for Stage 2:
 - no repeated linear joins during cache build
 - indexed local search data
 - stable renderer with no visible layout lag
-- fast JSON output for scripting
+- fast TSV output for scripting
 - cheap installed-list queries
 
 If Python becomes the bottleneck after the product shape is right, a rewrite in Rust, Go, or another compiled language should be considered. The rewrite decision should be made from measured hotspots, not from aesthetic preference.
@@ -255,6 +258,6 @@ If `brewq` starts adding category browsing, random discovery, install/uninstall,
 - `brewq --top N QUERY` surfaces the most trusted/popular candidates quickly.
 - `brewq list` replaces the existing installed-package shell function.
 - default columns are useful immediately but easy to change in config.
-- JSON output is clean enough for scripts.
+- TSV output is clean enough for scripts.
 - warm-cache search feels instant.
 - first release is useful before any semantic/vector-search work.

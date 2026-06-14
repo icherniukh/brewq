@@ -26,10 +26,21 @@ def test_resolve_profile():
 def test_resolve_full_profile_includes_version():
     cols = resolve("full", [])
     keys = [c.key for c in cols]
-    assert keys == [
-        "name", "type", "version", "installs",
-        "installed", "status", "url", "description",
-    ]
+    assert keys == ["name", "type", "version", "installs", "installed", "status", "description"]
+
+
+def test_unimplemented_installs_90d_is_not_public_surface():
+    try:
+        resolve("installs_90d", [])
+    except ValueError as exc:
+        assert "Unknown column" in str(exc)
+    else:
+        raise AssertionError("installs_90d should not resolve until data exists")
+
+
+def test_resolve_list_compact_profile():
+    cols = resolve("compact", [], profiles={"compact": ["name", "type", "description"]})
+    assert [c.key for c in cols] == ["name", "type", "description"]
 
 
 def test_resolve_custom_list():
@@ -43,7 +54,7 @@ def test_version_display_truncates_long_versions():
     assert cols[0].getter(pkg, "installs-30d") == "20240203-1…5046fc22"
 
 
-def test_version_json_keeps_full_version():
+def test_version_raw_keeps_full_version():
     pkg = _pkg(version="20240203-110809,5046fc22")
     cols = resolve("version", [])
     assert cols[0].raw_getter is not None

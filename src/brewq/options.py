@@ -16,7 +16,7 @@ class SearchOptions:
     search_scope: str = "name"  # "name" | "all"
     columns_spec: str = "default"
     limit: int = 0
-    json_output: bool = False
+    tsv_output: bool = False
 
     @property
     def include_desc(self) -> bool:
@@ -30,7 +30,7 @@ class ListOptions:
     fetch_analytics: bool = False
     columns_spec: str = "default"
     limit: int = 0
-    json_output: bool = False
+    tsv_output: bool = False
 
 
 def build_search_options(args: Any, cfg: dict) -> SearchOptions:
@@ -50,7 +50,7 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
         search_scope=search_scope,
         columns_spec=getattr(args, "columns", None) or "default",
         limit=limit,
-        json_output=getattr(args, "json", False),
+        tsv_output=getattr(args, "tsv", False),
     )
 
 
@@ -61,7 +61,7 @@ def build_list_options(args: Any, cfg: dict) -> ListOptions:
         fetch_analytics=getattr(args, "fetch", False),
         columns_spec=getattr(args, "columns", None) or "default",
         limit=getattr(args, "limit", None) or cfg["output"]["limit"],
-        json_output=getattr(args, "json", False),
+        tsv_output=getattr(args, "tsv", False),
     )
 
 

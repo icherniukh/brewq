@@ -45,7 +45,7 @@ Do not hardcode a final scoring formula in this spec. Ranking should be implemen
 brewq list
 brewq list --analytics
 brewq list --columns compact
-brewq list --json
+brewq list --tsv
 ```
 
 Expected behavior:
@@ -54,6 +54,7 @@ Expected behavior:
 - Use the same record/column/output model as query results.
 - Avoid network fetches by default.
 - Make analytics optional and cache-backed.
+- Default installed columns should include `type`, because list output mixes formulae and casks.
 
 ### Cache
 
@@ -87,7 +88,7 @@ brewq --columns name,type,installs,url rust
 First-class output forms:
 
 - table for humans
-- JSON for scripts
+- raw TSV for scripts
 
 Column presets should exist, but exact preset definitions may evolve:
 
@@ -111,7 +112,6 @@ Likely config areas:
 
 - default columns
 - default metric
-- default output format
 - default cache behavior
 - default row/top count
 
@@ -181,5 +181,5 @@ These are plausible but not first-release requirements:
 - `brewq --top N QUERY` is useful for finding the most credible candidates.
 - `brewq list` replaces the existing installed-package function.
 - output presets are useful, but custom columns are still easy.
-- JSON output is stable enough for scripts.
+- TSV output is stable enough for scripts.
 - first release remains compact and read-only.

@@ -14,13 +14,71 @@ from brewq import render as render_mod
 
 _COMMANDS = frozenset({"list", "cache", "config"})
 _BREW_INFO_BATCH_SIZE = 100
+_FORMATTER = argparse.RawDescriptionHelpFormatter
+
+_SEARCH_EPILOG = """\
+Commands:
+  list    Show installed formulae and casks
+  cache   Inspect and manage the local cache
+  config  Show config location
+
+Examples:
+  brewq ripgrep
+  brewq --desc terminal multiplexer
+  brewq --top 10 json
+  brewq list --analytics
+  brewq --tsv -c name,installs,url ripgrep
+
+Columns:
+  search presets: compact, full
+  list presets: compact, full
+
+Color:
+  formula and cask names use different colors on a TTY
+  set NO_COLOR=1 to disable color output
+
+Discoverability:
+  brewq cache status
+  brewq config path
+"""
+
+_LIST_EPILOG = """\
+Examples:
+  brewq list
+  brewq list --analytics
+  brewq list --fetch
+  brewq list -c compact
+  brewq list --tsv -c name,type,version
+
+Presets:
+  compact -> name,type,description
+  full    -> name,type,version,installed,status,description
+"""
+
+_CACHE_EPILOG = """\
+Examples:
+  brewq cache status
+  brewq cache refresh
+  brewq cache refresh --force
+  brewq cache clear
+
+Use `brewq config path` to find the config file.
+"""
+
+_CONFIG_EPILOG = """\
+Examples:
+  brewq config path
+
+The config file controls default columns and cache freshness.
+"""
 
 
 def _build_search_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="brewq",
-        description="Rich Homebrew search with cached analytics.",
-        epilog="Commands: list, cache, config",
+        description="Query Homebrew packages with cached analytics.",
+        epilog=_SEARCH_EPILOG,
+        formatter_class=_FORMATTER,
     )
     parser.add_argument("query", nargs="*", help="Search terms")
     parser.add_argument("--type", choices=["formula", "cask", "all"], default=None,
@@ -37,17 +95,23 @@ def _build_search_parser() -> argparse.ArgumentParser:
                         help="Cap results at N rows")
     parser.add_argument("--top", type=int, metavar="N",
                         help="Show top N results ranked by analytics (alias for sorted --limit N)")
-    parser.add_argument("--json", action="store_true",
-                        help="Output JSON instead of a table")
+    parser.add_argument("--tsv", action="store_true",
+                        help="Output raw tab-separated rows for shell scripting")
     return parser
 
 
 def _build_command_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="brewq")
+    parser = argparse.ArgumentParser(prog="brewq", formatter_class=_FORMATTER)
     subparsers = parser.add_subparsers(dest="command")
 
     # list
-    lst = subparsers.add_parser("list", help="Show installed formulae and casks")
+    lst = subparsers.add_parser(
+        "list",
+        help="Show installed formulae and casks",
+        description="Show installed formulae and casks with the same column system as search.",
+        epilog=_LIST_EPILOG,
+        formatter_class=_FORMATTER,
+    )
     lst.add_argument("--type", choices=["formula", "cask", "all"], default=None)
     lst.add_argument("--analytics", action="store_true",
                      help="Include analytics columns (cache-backed)")
@@ -55,10 +119,17 @@ def _build_command_parser() -> argparse.ArgumentParser:
                      help="Fetch missing per-package analytics (implies --analytics)")
     lst.add_argument("-c", "--columns", metavar="SPEC")
     lst.add_argument("--limit", type=int, metavar="N")
-    lst.add_argument("--json", action="store_true")
+    lst.add_argument("--tsv", action="store_true",
+                     help="Output raw tab-separated rows for shell scripting")
 
     # cache
-    cache = subparsers.add_parser("cache", help="Inspect and manage the local cache")
+    cache = subparsers.add_parser(
+        "cache",
+        help="Inspect and manage the local cache",
+        description="Inspect cache status and refresh behavior.",
+        epilog=_CACHE_EPILOG,
+        formatter_class=_FORMATTER,
+    )
     cache_sub = cache.add_subparsers(dest="cache_command", required=True)
     cache_sub.add_parser("status", help="Show cache path, age, counts, and lock state")
     refresh_p = cache_sub.add_parser("refresh", help="Refresh local cache data")
@@ -67,7 +138,13 @@ def _build_command_parser() -> argparse.ArgumentParser:
     cache_sub.add_parser("clear", help="Remove local cache files")
 
     # config
-    config_p = subparsers.add_parser("config", help="Show configuration info")
+    config_p = subparsers.add_parser(
+        "config",
+        help="Show configuration info",
+        description="Show where brewq reads configuration.",
+        epilog=_CONFIG_EPILOG,
+        formatter_class=_FORMATTER,
+    )
     config_p.add_argument("config_sub_cmd", nargs="?", choices=["path"], default="path")
 
     return parser
@@ -84,18 +161,17 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     list_cols_cfg = cfg["list"]["columns"]
 
     try:
-        col_defs = columns_mod.resolve(opts.columns_spec, list_cols_cfg)
+        col_defs = columns_mod.resolve(
+            opts.columns_spec,
+            list_cols_cfg,
+            profiles=columns_mod.list_profiles(),
+        )
     except ValueError as exc:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1
 
     if opts.with_analytics or opts.fetch_analytics:
-        keys = {c.key for c in col_defs}
-        if "installs" not in keys and "installs_30d" not in keys:
-            try:
-                col_defs = col_defs + columns_mod.resolve("installs", [])
-            except ValueError:
-                pass
+        col_defs = _ensure_list_analytics_column(col_defs)
 
     try:
         from brewq import brew as brew_mod
@@ -126,8 +202,8 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
 
     packages = options_mod.rank_installed(packages, opts)
 
-    if opts.json_output:
-        render_mod.render_json(packages, col_defs, out=sys.stdout)
+    if opts.tsv_output:
+        render_mod.render_tsv(packages, col_defs, out=sys.stdout)
     else:
         render_mod.render_table(packages, col_defs, out=sys.stdout)
     return 0
@@ -144,6 +220,17 @@ def _merge_cached_analytics(packages: list) -> None:
         if cached_pkg:
             pkg.installs_30d = cached_pkg.installs_30d
             pkg.installs_365d = cached_pkg.installs_365d
+
+
+def _ensure_list_analytics_column(col_defs: list) -> list:
+    keys = {c.key for c in col_defs}
+    if keys & {"installs", "installs_30d", "installs_365d"}:
+        return col_defs
+    installs_col = columns_mod.resolve("installs", [])[0]
+    desc_idx = next((i for i, col in enumerate(col_defs) if col.key == "description"), None)
+    if desc_idx is None:
+        return [*col_defs, installs_col]
+    return [*col_defs[:desc_idx], installs_col, *col_defs[desc_idx:]]
 
 
 def _cmd_cache(args: argparse.Namespace, cfg: dict) -> int:
@@ -228,8 +315,8 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         print(f"No results for: {' '.join(opts.query)}", file=sys.stderr)
         return 0
 
-    if opts.json_output:
-        render_mod.render_json(ranked, col_defs, metric=opts.metric, out=sys.stdout)
+    if opts.tsv_output:
+        render_mod.render_tsv(ranked, col_defs, metric=opts.metric, out=sys.stdout)
     else:
         render_mod.render_table(ranked, col_defs, metric=opts.metric, out=sys.stdout)
     return 0
@@ -290,9 +377,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     cfg = config_mod.load()
 
-    # Route to command parser if the first non-flag arg is a known command
-    first_word = next((a for a in raw_argv if not a.startswith("-")), None)
-    if first_word in _COMMANDS:
+    # Route subcommands only when they are the first token. Search remains the
+    # default command even when query terms are named like subcommands.
+    if raw_argv and raw_argv[0] in _COMMANDS:
         args = _build_command_parser().parse_args(raw_argv)
         if args.command == "list":
             return _cmd_list(args, cfg)

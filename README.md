@@ -6,22 +6,22 @@ It is designed around a small set of workflows:
 
 - search packages by name and description
 - compare matches with install analytics as a trust signal
-- choose table columns or JSON output for scripts
+- choose table columns or raw TSV output for scripts
 - list installed formulae and casks with richer metadata
 
 `brewq` is not a Homebrew manager. It does not install, uninstall, upgrade, manage services, or replace Brewfile workflows.
 
 ## Status
 
-This repository currently contains the product direction, CLI sketch, and a Python package scaffold. The historical shell prototype is preserved in `legacy/bsx-prototype.zsh` until replacement behavior is implemented and verified.
+The historical shell prototype is preserved in `legacy/bsx-prototype.zsh` until replacement behavior is implemented and verified.
 
-The Python entry point is intentionally a stub:
+The Python entry point already covers the current core workflows:
 
 ```bash
 PYTHONPATH=src python -m brewq.cli ripgrep
+PYTHONPATH=src python -m brewq.cli --tsv -c name,installs,url ripgrep
+PYTHONPATH=src python -m brewq.cli list --tsv -c name,type,version
 ```
-
-The planned CLI shape is documented before the implementation is filled in.
 
 For a visual project snapshot, open `docs/status-dashboard.html`. For fresh data every time the page loads, run:
 

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import io
-import json
 
 from brewq.columns import resolve
 from brewq.model import Package
-from brewq.render import render_json, render_table
+from brewq.render import render_table, render_tsv
 
 
 class TtyStringIO(io.StringIO):
@@ -63,30 +62,32 @@ def test_render_table_unknown_installs():
     assert "-" in out.getvalue()
 
 
-def test_render_json_valid():
+def test_render_tsv_uses_raw_values():
     out = io.StringIO()
     cols = resolve("name,type,installs", [])
-    render_json([_pkg()], cols, out=out)
-    records = json.loads(out.getvalue())
-    assert len(records) == 1
-    assert records[0]["name"] == "ripgrep"
-    assert records[0]["type"] == "formula"
+    render_tsv([_pkg()], cols, out=out)
+    assert out.getvalue() == "ripgrep\tformula\t80000\n"
 
 
-def test_render_json_installs_as_int():
+def test_render_tsv_unknown_installs_are_blank():
     out = io.StringIO()
     cols = resolve("installs", [])
-    render_json([_pkg(installs_30d=80_000)], cols, out=out)
-    records = json.loads(out.getvalue())
-    assert records[0]["installs"] == 80000
+    render_tsv([_pkg(installs_30d=-1)], cols, out=out)
+    assert out.getvalue() == "\n"
 
 
-def test_render_json_installed_as_bool():
+def test_render_tsv_installed_is_text_boolean():
     out = io.StringIO()
     cols = resolve("installed", [])
-    render_json([_pkg(installed=True)], cols, out=out)
-    records = json.loads(out.getvalue())
-    assert records[0]["installed"] is True
+    render_tsv([_pkg(installed=True)], cols, out=out)
+    assert out.getvalue() == "true\n"
+
+
+def test_render_tsv_sanitizes_tabs_and_newlines():
+    out = io.StringIO()
+    cols = resolve("description", [])
+    render_tsv([_pkg(desc="line one\tline two\nline three")], cols, out=out)
+    assert out.getvalue() == "line one line two line three\n"
 
 
 def test_render_table_multiple_packages():

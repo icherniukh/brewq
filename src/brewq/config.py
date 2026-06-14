@@ -17,13 +17,11 @@ DEFAULTS: dict[str, Any] = {
         "metric": "installs-30d",
     },
     "output": {
-        "format": "table",
         "columns": ["name", "version", "installs", "description"],
         "limit": 0,
     },
     "list": {
-        "columns": ["name", "version", "description"],
-        "analytics": False,
+        "columns": ["name", "type", "version", "description"],
     },
     "cache": {
         "max_age_seconds": 86400,

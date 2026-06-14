@@ -29,7 +29,7 @@ brewq --type formula ripgrep
 brewq --type cask chrome
 brewq --desc terminal multiplexer
 brewq -n ripgrep
-brewq --json ripgrep
+brewq --tsv ripgrep
 brewq -c name,version,installs ripgrep
 brewq --columns name,type,installs,description,url ripgrep
 ```
@@ -40,7 +40,7 @@ Options:
 - `--desc`: search names and descriptions, replacing the shell `brew-discover`/`bsd` workflow
 - `-n`, `--name`: sort by name instead of popularity
 - `-y`, `--year`: show 365-day installs instead of 30-day installs
-- `--json`: machine-readable output
+- `--tsv`: raw tab-separated rows for shell scripting
 - `-c`, `--columns LIST_OR_PROFILE`
 - `--limit N`
 
@@ -63,7 +63,7 @@ Those can come later if repeated use proves they are needed.
 
 ## Columns
 
-Columns are the main extension point. They should be universal, config-backed, and shared by table and JSON output.
+Columns are the main extension point. They should be universal, config-backed, and shared by table and TSV output.
 
 Column names:
 
@@ -72,7 +72,6 @@ Column names:
 - `version`
 - `installs`
 - `installs_30d`
-- `installs_90d`
 - `installs_365d`
 - `description`
 - `installed`
@@ -84,11 +83,17 @@ Derived aliases:
 - `popularity` maps to the selected metric, initially `installs-30d` or `installs-365d`
 - `homepage` aliases `url`
 
-Column profiles:
+Search column profiles:
 
-- `default`: loaded from config
+- `default`: loaded from config, currently `name,version,installs,description`
 - `compact`: `name,installs,description`
-- `full`: `name,type,version,installs,installed,status,url,description`
+- `full`: `name,type,version,installs,installed,status,description`
+
+List column profiles:
+
+- `default`: loaded from config, currently `name,type,version,description`
+- `compact`: `name,type,description`
+- `full`: `name,type,version,installed,status,description`
 
 CLI behavior:
 
@@ -104,7 +109,8 @@ Rules:
 - `-c` / `--columns` overrides config for one invocation.
 - Unknown columns are a clear user error.
 - Table output renders only selected columns.
-- JSON output includes selected columns by default, with a later option possible for full records if needed.
+- TSV output emits raw rows only, with no header row.
+- TSV uses the selected columns and prefers raw values over table formatting.
 - Renderers receive normalized result objects and a list of column definitions.
 
 ## Cache Commands
@@ -135,7 +141,7 @@ brewq list --type formula
 brewq list --analytics
 brewq list --analytics --fetch
 brewq list -c name,type,version,description
-brewq list --json
+brewq list --tsv
 ```
 
 Options:
@@ -145,15 +151,16 @@ Options:
 - `--fetch`: fetch missing per-package analytics
 - `-c`, `--columns LIST_OR_PROFILE`
 - `--limit N`
-- `--json`
+- `--tsv`
 
 Default:
 
 - installed formulae and casks
 - sorted by type then name
 - table output
-- columns from config
+- columns from config, currently `name,type,version,description`
 - no network fetch for missing analytics
+- `--analytics` inserts installs before description when the chosen columns do not already include it
 
 Reasoning:
 
@@ -194,13 +201,11 @@ sort = "popularity"
 metric = "installs-30d"
 
 [output]
-format = "table"
 columns = ["name", "version", "installs", "description"]
 limit = 0
 
 [list]
-columns = ["name", "version", "description"]
-analytics = false
+columns = ["name", "type", "version", "description"]
 
 [cache]
 max_age_seconds = 86400

@@ -7,7 +7,7 @@ def test_defaults_are_complete():
     conf = cfg_mod.load()
     assert conf["search"]["type"] == "all"
     assert conf["output"]["columns"] == ["name", "version", "installs", "description"]
-    assert conf["list"]["columns"] == ["name", "version", "description"]
+    assert conf["list"]["columns"] == ["name", "type", "version", "description"]
     assert conf["cache"]["max_age_seconds"] == 86400
 
 
