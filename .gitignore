@@ -4,6 +4,8 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
+.cache/
+demo.tape
 
 # Beads / Dolt files (added by bd init)
 .dolt/
