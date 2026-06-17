@@ -36,6 +36,17 @@ Then open `http://127.0.0.1:8765/`. To refresh the embedded static fallback, run
 python3 scripts/update-status-dashboard.py
 ```
 
+## Benchmarks
+
+Run the lightweight benchmark harness before performance work:
+
+```bash
+python3 scripts/benchmark.py --iterations 3
+python3 scripts/benchmark.py --list
+```
+
+The output is a markdown table covering cache load, ranking/filtering, table rendering, TSV rendering, and installed-list paths.
+
 ## Documentation
 
 - `docs/vision.md` - product goals and non-goals.
