@@ -1,14 +1,15 @@
 # Research Analysis
 
 Date: 2026-06-06
+Current-direction refresh: 2026-06-17
 
 ## Executive Summary
 
-The exact `bsx` toolset does not appear to exist as a single lightweight CLI today, but there are several adjacent tools. The opportunity is not "Homebrew discovery" broadly. That space already has web directories, TUIs, GUI managers, and at least one popularity-focused CLI.
+The exact `brewq` toolset does not appear to exist as a single lightweight CLI today, but there are several adjacent tools. The opportunity is not "Homebrew discovery" broadly. That space already has web directories, TUIs, GUI managers, and popularity-focused tools.
 
 The viable niche is narrower:
 
-`bsx` is a compact, non-interactive Homebrew query layer. Its core is a richer `brew search`, but it should also absorb the lightweight workflows currently handled by shell aliases: description search (`brew-discover`, `bsd`) and richer installed-package listing (`brew-installed`, `brew-ll`).
+`brewq` is a compact, non-interactive Homebrew query and analytics layer. Its core is a richer `brew search`, and it should also absorb the lightweight workflows currently handled by shell aliases: description search (`brew-discover`, `bsd`) and richer installed-package listing (`brew-installed`, `brew-ll`).
 
 That niche is still useful because existing alternatives tend to be one of:
 
@@ -18,7 +19,7 @@ That niche is still useful because existing alternatives tend to be one of:
 - broader discovery app with categories, random suggestions, and install workflows
 - multi-package-manager search tool
 
-`bsx` should stay close to Homebrew query commands: fast, scriptable, compact, no TUI, no install management, no package-manager abstraction.
+`brewq` should stay close to Homebrew query commands: fast, scriptable, compact, no TUI, no install management, no package-manager abstraction.
 
 ## What Homebrew Already Provides
 
@@ -29,7 +30,22 @@ Homebrew already exposes most of the raw data needed:
 - Analytics endpoints expose install counts for 30d, 90d, and 365d windows.
 - Public analytics are aggregate data, and Homebrew documents that public JSON analytics are available.
 
-Implication: `bsx` should not scrape. It should build on Homebrew JSON and formulae.brew.sh APIs.
+Implication: `brewq` should not scrape. It should build on Homebrew JSON and formulae.brew.sh APIs.
+
+## 2026 Refresh
+
+Homebrew has continued moving toward API-backed metadata and faster internal JSON paths. That supports `brewq`'s cache-first direction: use Homebrew and formulae.brew.sh as authoritative sources, then make repeated local queries faster and more readable than raw `brew search` or `brew info --json`.
+
+Important source facts for the current implementation:
+
+- Formula metadata is available from `https://formulae.brew.sh/api/formula.json`.
+- Cask metadata is available from `https://formulae.brew.sh/api/cask.json`.
+- Formula analytics should use `install-on-request` so dependency installs do not dominate the trust signal.
+- Cask analytics should use `cask-install`.
+- Analytics windows are `30d`, `90d`, and `365d`.
+- Public analytics are aggregate signals, not a quality guarantee.
+
+The current product implication is sharper than the original `bsx` notes: `brewq` should be cache-first and mostly local after refresh. A normal warm-cache query should not block on live `brew search` / `brew info` unless a later measured design deliberately chooses that tradeoff.
 
 The important gap is presentation and workflow:
 
@@ -88,7 +104,7 @@ Fit:
 Gap:
 
 - more of a discovery product than a compact `brew search` wrapper
-- category/random/info modes make it broader than `bsx`
+- category/random/info modes make it broader than `brewq`
 - not focused on user-configurable columns as the primary extension model
 
 ### Brewse
@@ -105,9 +121,9 @@ Fit:
 
 Gap:
 
-- interactive TUI and package management are outside `bsx` scope
+- interactive TUI and package management are outside `brewq` scope
 - heavier mental model than `brew search`
-- not primarily a scriptable table/JSON command
+- not primarily a scriptable table/TSV command
 
 ### fex
 
@@ -145,21 +161,16 @@ Gap:
 
 Local check:
 
-- `brew search bsx` returned `bsc`, not an exact `bsx` formula/cask.
+- `brew search brewq` should be rechecked before public release.
 - `brew search fex` returned `fex`.
 - `brew search brew-discover` did not show `brew-discover` in the default search here.
 - `brew search brewse` did not show `brewse` in the default search here.
 
-External search found unrelated `bsx` packages:
-
-- PyPI has a `bsx` package described as a placeholder Python SDK package for BSO.
-- npm has a `bsx` package unrelated to Homebrew search.
-
 Implication:
 
-- A Homebrew formula named `bsx` looks plausible.
-- A PyPI distribution named `bsx` is likely unavailable or undesirable.
-- If Python packaging matters, consider `brew-bsx`, `homebrew-bsx`, or a source-only install plus Homebrew formula.
+- A Homebrew formula named `brewq` looks plausible but must be verified before release.
+- Python packaging can use the existing `brewq` project name if available, but Homebrew distribution is the primary target.
+- The historical `bsx` name should remain provenance only.
 
 ## Recommended Lightweight Feature Set
 
@@ -167,37 +178,38 @@ Implication:
 
 Keep:
 
-- `bsx QUERY`
-- `bsx --desc QUERY`
-- `--type formula|cask|all`
-- `-n`, `--name`
-- `-y`, `--year`
-- `--limit N`
-- `--json`
-- `--columns LIST_OR_PROFILE`
+- `brewq QUERY`
+- `brewq -t N QUERY`
+- `brewq -s 30d|90d|365d|name QUERY`
+- `brewq -l QUERY`
+- `brewq -p compact|full QUERY`
+- `brewq -c name,30d,url QUERY`
+- `brewq --tsv -c name,30d,url QUERY`
 
 Reasoning:
 
-- These options map directly to common decisions: what matched, what kind of package, how popular, how much output, and what fields to display.
-- `--columns` prevents flag sprawl by making output customization universal.
-- `--desc` replaces the existing `brew-discover='brew search --desc --eval-all'` and `bsd='brew search --desc'` aliases without adding a separate command.
+- Default search now covers names, formula aliases, and descriptions. That better matches the query + analytics product goal than preserving Homebrew's exact name-only default.
+- `-s` and columns replace old one-off switches like `-n`, `-y`, and `--desc`.
+- `-t` is the search cap for top-ranked results; `--limit` remains list-specific.
+- `--tsv` is the public machine-readable mode. JSON remains an internal Homebrew/cache format, not a public `brewq` output promise.
 
 ### Installed List
 
 Keep:
 
-- `bsx list`
-- `bsx list --type formula|cask|all`
-- `bsx list --analytics`
-- `bsx list --analytics --fetch`
-- `bsx list --columns LIST_OR_PROFILE`
-- `bsx list --json`
+- `brewq list`
+- `brewq list --analytics`
+- `brewq list --fetch`
+- `brewq list -p compact|full`
+- `brewq list -c name,type,version`
+- `brewq list --tsv`
 
 Reasoning:
 
 - This replaces the current `brew_installed` shell function.
 - It reuses the same columns/rendering/config model as search.
 - It avoids becoming a package manager because it does not install, uninstall, upgrade, or mutate Homebrew state.
+- Installed rows are formulae and casks together; `type` is part of the default list view.
 
 ### Config
 
@@ -205,30 +217,34 @@ Keep:
 
 - optional TOML config
 - config-backed default columns
-- config-backed default metric, type, limit, and format
+- config-backed default sort, output limit, and cache freshness
 - `BREWQ_CONFIG`
-- `bsx config path`
+- `BREWQ_CACHE_DIR`
+- `BREWQ_CACHE_MAX_AGE`
+- `NO_COLOR`
+- `brewq config path`
 
 Reasoning:
 
 - Defaults should be user-owned.
 - A config file is lighter than many output flags.
 - `config path` is enough for discoverability without becoming a config editor.
+- Config editing commands remain deferred.
 
 ### Cache
 
 Keep:
 
-- `bsx cache status`
-- `bsx cache refresh`
-- `bsx cache refresh --force`
-- `bsx cache clear`
-- stale-while-revalidate on normal search
+- `brewq cache status`
+- `brewq cache refresh`
+- `brewq cache refresh --force`
+- `brewq cache clear`
 
 Reasoning:
 
 - Cache is central to the product.
 - These commands are easy to understand and sufficient for maintenance.
+- Warm-cache query speed is now the main release blocker. If the tool shells out on every normal query, it loses the main cache-first advantage.
 
 ### Columns
 
@@ -241,6 +257,8 @@ First-class built-ins:
 - `installs_30d`
 - `installs_90d`
 - `installs_365d`
+- `popularity`
+- `binaries`
 - `description`
 - `installed`
 - `status`
@@ -248,14 +266,28 @@ First-class built-ins:
 
 Profiles:
 
-- `compact`: `name,installs,description`
-- `default`: from config, fallback to `name,type,installs,description`
-- `full`: `name,type,installs,installed,status,url,description`
+- search `compact`: `name,installs_30d,description`
+- search `default`: from config, fallback to `name,installs,description`
+- search `full`: `name,type,version,installs_30d,installs_90d,installs_365d,installed,status,description`
+- list `compact`: `name,type,description`
+- list `default`: from config, fallback to `name,type,version,description`
+- list `full`: `name,type,version,installs_30d,installed,status,description`
 
 Reasoning:
 
 - This is enough to express most useful output without bespoke options.
 - More columns can be added without changing the CLI shape.
+
+## Local Lab Command
+
+`brewq random` is allowed for local layout testing and inspiration. It should:
+
+- choose from a fixed query list
+- vary sort, top count, preset, and explicit columns
+- print the generated `brewq ...` command to stderr
+- run the normal search/rank/render path
+
+It should not become category browsing, recommendations, or a public product promise.
 
 ## Logical Additions That Stay Lightweight
 
@@ -279,19 +311,20 @@ Why to defer:
 
 - requires preserving match metadata
 
-### `--desc`
+### Search scope controls
 
-Search descriptions as well as names.
+Default search already covers names, aliases, and descriptions.
 
-Why it fits:
+Why controls may fit later:
 
-- Homebrew already supports description-oriented search behavior.
-- It helps when the user knows the concept but not the package name.
+- measured output may show noisy description matches
+- scripts may want exact name-only behavior
+- debugging ranking is easier when search scope is explicit
 
-Why to be careful:
+Why to defer:
 
-- can make results noisy
-- should be explicit, not default
+- the current surface is intentionally smaller without `--desc`, `--desc-only`, or `--name-only`
+- adding controls before measuring output risks preserving prototype clutter
 
 ### `--open`
 
@@ -318,18 +351,20 @@ Why to defer:
 
 - matching semantics should be settled after cache-vs-brew-search decision
 
-### `--installed`
+### Installed-state enhancements
 
-Filter or mark installed packages.
+The current search surface has `-l` / `--installed` for installed-only filtering, and selected columns can expose installed state.
 
-Why it fits:
+Possible later additions:
 
-- current prototype already marks installed packages
+- clearer installed markers in compact output
+- installed-state ranking boosts
+- installed-list leaves mode
 
-Recommendation:
+Why to defer:
 
-- mark installed by default if data is cheap
-- defer filtering until needed
+- installed metadata should remain read-only
+- leaves/dependency behavior can pull the tool toward package-management workflows
 
 ## Features To Avoid
 
@@ -349,7 +384,7 @@ Avoid for first release:
 
 Reasoning:
 
-- These move `bsx` away from being a compact search wrapper.
+- These move `brewq` away from being a compact query and analytics wrapper.
 - Existing adjacent tools already cover many of these areas.
 - Each adds state, UI, or policy complexity.
 
@@ -361,10 +396,10 @@ I did not find an exact existing match for:
 - popularity-aware ranking
 - local cache-first speed
 - config-backed universal columns
-- compact table plus JSON output
+- compact table plus TSV output
 - no install management, no TUI, no category browser
 
-There are close competitors around popularity discovery and TUI browsing, especially brew-discover, Brewse, and fex. `bsx` should avoid competing with them broadly. Its differentiation should be restraint: a better `brew search`, not a Homebrew manager.
+There are close competitors around popularity discovery and TUI browsing, especially brew-discover, Brewse, and fex. `brewq` should avoid competing with them broadly. Its differentiation should be restraint: a better `brew search`, not a Homebrew manager.
 
 ## Sources
 

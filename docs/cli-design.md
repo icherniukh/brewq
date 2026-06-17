@@ -1,8 +1,8 @@
 # CLI Design
 
-Keep the command surface small, but make output composition universal.
+Keep `brewq` small: search, list, cache, config.
 
-`brewq` should feel like `brew search` with better results. It should not grow a custom flag for every display tweak. Instead, columns and defaults should come from a small config model, with command-line overrides when needed.
+`brewq` should feel like a sharper `brew search`: readable package matches, install analytics in view, and a single column system that works for humans and scripts. It is not a Homebrew manager and should not grow install, upgrade, service, Brewfile, TUI, GUI, or product-level random-discovery behavior.
 
 ## Command Shape
 
@@ -13,107 +13,156 @@ brewq cache status
 brewq cache refresh [--force]
 brewq cache clear
 brewq config path
+brewq random [--seed N]
 ```
 
-Search is the default command. There should be no public `search` subcommand.
+Search is the default command. There is no public `search` subcommand.
 
-`list` is the only package-data command besides default search. It means "installed packages," matching the workflow currently covered by `brew-installed` / `brew-ll`.
+`list` is the installed-package view. It uses the same column and TSV model as search, but its defaults are shaped for installed formulae and casks.
 
-## Search Options
+`random` is a lab command for exercising output layouts and finding inspiration while developing `brewq`. It is not the product's random package browser. It prints the generated command to stderr, then runs the normal search path.
 
-### Essential Search
+## Search
+
+Examples:
 
 ```bash
 brewq ripgrep
-brewq --type formula ripgrep
-brewq --type cask chrome
-brewq --desc terminal multiplexer
-brewq -n ripgrep
-brewq --tsv ripgrep
-brewq -c name,version,installs ripgrep
-brewq --columns name,type,installs,description,url ripgrep
+brewq terminal multiplexer
+brewq -t 10 json
+brewq -s 365d rust
+brewq -s name ripgrep
+brewq -p full rust
+brewq -c name,30d,365d,url rust
+brewq --tsv -c name,30d,url ripgrep
+brewq -l python
 ```
 
 Options:
 
-- `--type formula|cask|all`
-- `--desc`: search names and descriptions, replacing the shell `brew-discover`/`bsd` workflow
-- `-n`, `--name`: sort by name instead of popularity
-- `-y`, `--year`: show 365-day installs instead of 30-day installs
-- `--tsv`: raw tab-separated rows for shell scripting
-- `-c`, `--columns LIST_OR_PROFILE`
-- `--limit N`
+- `-s`, `--sort FIELD`: sort by `30d`, `90d`, `365d`, or `name`.
+- `-l`, `--installed`: filter search results to packages known to be installed.
+- `-p`, `--preset NAME`: use `compact` or `full`.
+- `-c`, `--columns KEYS`: use an explicit comma-joined column list.
+- `-t`, `--top N`: show the top N matches by install count.
+- `--tsv`: emit raw tab-separated rows with no header.
 
-Default:
+Rules:
 
-- `--type all`
-- name/token search, matching Homebrew default search scope
-- popularity sort
-- 30-day installs
-- table output
-- columns from config; the built-in default includes `version` and omits `type` because terminal output differentiates formulae and casks by entry color
+- Query text matches package names, formula aliases, and descriptions.
+- Install analytics are the default ranking signal.
+- `-t N` is the row cap for normal "top results" use.
+- `-p` and `-c` are mutually exclusive.
+- Disabled and deprecated packages remain visible, but rank after active packages.
+- Search may augment cache matches with live `brew search` names when available.
 
-Defer:
+## Sort Fields
 
-- installed-only filters
-- grouping controls
-- custom color controls
+Sort fields resolve through short aliases:
 
-Those can come later if repeated use proves they are needed.
+- `30d`: aliases `30`, `i30`, `installs`, `popularity`, `pop`.
+- `90d`: aliases `90`, `i90`.
+- `365d`: aliases `365`, `i365`, `y`, `year`.
+- `name`: aliases `n`, `alpha`, `az`.
+
+Default search sort is `30d`.
+
+The table header marks the active sort column when that column is visible, for example `30D ↓`.
 
 ## Columns
 
-Columns are the main extension point. They should be universal, config-backed, and shared by table and TSV output.
+Columns are the main extension point. They are shared by table and TSV output.
 
-Column names:
+Canonical columns:
 
 - `name`
 - `type`
 - `version`
-- `installs`
 - `installs_30d`
+- `installs_90d`
 - `installs_365d`
+- `popularity`
+- `binaries`
 - `description`
 - `installed`
 - `status`
 - `url`
 
-Derived aliases:
+Useful aliases:
 
-- `popularity` maps to the selected metric, initially `installs-30d` or `installs-365d`
-- `homepage` aliases `url`
+- `n` -> `name`
+- `t` -> `type`
+- `v`, `ver` -> `version`
+- `30`, `30d`, `i30`, `installs` -> `installs_30d`
+- `90`, `90d`, `i90` -> `installs_90d`
+- `365`, `365d`, `i365`, `y`, `year` -> `installs_365d`
+- `pop`, `score`, `rank` -> `popularity`
+- `bin`, `bins` -> `binaries`
+- `d`, `desc` -> `description`
+- `i`, `inst` -> `installed`
+- `h`, `home`, `homepage` -> `url`
 
-Search column profiles:
+Search presets:
 
-- `default`: loaded from config, currently `name,version,installs,description`
-- `compact`: `name,installs,description`
-- `full`: `name,type,version,installs,installed,status,description`
+- `default`: config-backed, built in as `name,installs,description`
+- `compact`: `name,installs_30d,description`
+- `full`: `name,type,version,installs_30d,installs_90d,installs_365d,installed,status,description`
 
-List column profiles:
+List presets:
 
-- `default`: loaded from config, currently `name,type,version,description`
+- `default`: config-backed, built in as `name,type,version,description`
 - `compact`: `name,type,description`
-- `full`: `name,type,version,installed,status,description`
+- `full`: `name,type,version,installs_30d,installed,status,description`
 
-CLI behavior:
+## TSV
+
+`--tsv` is the only public machine-readable output mode.
+
+TSV rules:
+
+- no header row
+- selected columns only
+- raw values where available
+- tabs and newlines sanitized inside cells
+- same records and column definitions as table output
+
+Examples:
 
 ```bash
-brewq ripgrep
-brewq -c compact ripgrep
-brewq --columns name,installs,url ripgrep
+brewq --tsv -c name,30d,url ripgrep
+brewq list --tsv -c name,type,version
 ```
 
-Rules:
+## Installed List
 
-- Config owns the default column list.
-- `-c` / `--columns` overrides config for one invocation.
-- Unknown columns are a clear user error.
-- Table output renders only selected columns.
-- TSV output emits raw rows only, with no header row.
-- TSV uses the selected columns and prefers raw values over table formatting.
-- Renderers receive normalized result objects and a list of column definitions.
+Examples:
 
-## Cache Commands
+```bash
+brewq list
+brewq list --analytics
+brewq list --fetch
+brewq list -p full
+brewq list -c name,type,version
+brewq list --tsv -c name,type,version
+```
+
+Options:
+
+- `--analytics`: merge cached analytics into installed rows.
+- `--fetch`: refresh missing analytics before rendering; implies analytics.
+- `-p`, `--preset NAME`: use `compact` or `full`.
+- `-c`, `--columns KEYS`: use an explicit comma-joined column list.
+- `--limit N`: cap installed rows.
+- `--tsv`: emit raw tab-separated rows with no header.
+
+Default behavior:
+
+- installed formulae and casks are shown together
+- rows sort by type, then name
+- no network fetch for missing analytics
+- `--analytics` inserts `30D` before `DESCRIPTION` if no install metric column is already selected
+
+## Cache
 
 ```bash
 brewq cache status
@@ -122,7 +171,7 @@ brewq cache refresh --force
 brewq cache clear
 ```
 
-Cache command output should be plain and inspectable:
+Cache output should stay plain:
 
 - cache path
 - exists or missing
@@ -131,77 +180,28 @@ Cache command output should be plain and inspectable:
 - formula count
 - cask count
 - analytics availability
-- active lock, if any
+- lock state
 
-## Installed List
-
-```bash
-brewq list
-brewq list --type formula
-brewq list --analytics
-brewq list --analytics --fetch
-brewq list -c name,type,version,description
-brewq list --tsv
-```
-
-Options:
-
-- `--type formula|cask|all`
-- `--analytics`: include analytics columns if cached
-- `--fetch`: fetch missing per-package analytics
-- `-c`, `--columns LIST_OR_PROFILE`
-- `--limit N`
-- `--tsv`
-
-Default:
-
-- installed formulae and casks
-- sorted by type then name
-- table output
-- columns from config, currently `name,type,version,description`
-- no network fetch for missing analytics
-- `--analytics` inserts installs before description when the chosen columns do not already include it
-
-Reasoning:
-
-- This directly replaces `brew_installed`.
-- It should not duplicate all of `brew list`.
-- It answers "what do I have installed and what is it?" rather than managing packages.
-
-## Environment
-
-Environment variables:
-
-- `BREWQ_CACHE_DIR`
-- `BREWQ_CACHE_MAX_AGE`
-- `BREWQ_CONFIG`
-- `NO_COLOR`
-
-Use a cache directory instead of a single configurable file path. The tool can own multiple files cleanly:
-
-- metadata cache
-- analytics cache
-- merged search index
-- lock file
+`update-cache` is kept as a compatibility alias for `cache refresh`.
 
 ## Config
 
-Config should be simple and optional. If the file is missing, built-in defaults apply.
+Config is optional and only controls defaults.
 
 Default path:
 
-- `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`
+```text
+${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml
+```
 
-Initial config:
+Built-in defaults:
 
 ```toml
 [search]
-type = "all"
-sort = "popularity"
-metric = "installs-30d"
+sort = "installs_30d"
 
 [output]
-columns = ["name", "version", "installs", "description"]
+columns = ["name", "installs", "description"]
 limit = 0
 
 [list]
@@ -211,14 +211,28 @@ columns = ["name", "type", "version", "description"]
 max_age_seconds = 86400
 ```
 
-`brewq config path` exists only to show where the config file would live. It should not become a large config-management subsystem.
+Environment:
 
-## Compatibility Aliases
+- `BREWQ_CACHE_DIR`
+- `BREWQ_CACHE_MAX_AGE`
+- `BREWQ_CONFIG`
+- `NO_COLOR`
 
-Support these prototype-compatible aliases for the first release:
+`brewq config path` only prints the config path. It should not become a config-management subsystem.
 
-- `-n`
-- `-y`
-- `update-cache` as an alias for `cache refresh`
+## Lab Command
 
-Do not preserve every prototype flag forever. The Python version should define the stable interface.
+```bash
+brewq random
+brewq random --seed 7
+```
+
+`random` exists for local testing and design exploration:
+
+- pick a query from a fixed term list
+- vary sort field and top count
+- vary preset or explicit column layout
+- print the generated `brewq ...` command before rendering
+- use the normal search, rank, column, and renderer paths
+
+Keep this command small. It should help test layouts and spark ideas without changing the first-release product promise.

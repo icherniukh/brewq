@@ -13,8 +13,8 @@ from brewq.model import Package
 _BOLD = "\033[1m"
 _DIM = "\033[2m"
 _RESET = "\033[0m"
-_COLOR_FORMULA = "\033[38;5;183m"   # lavender
-_COLOR_CASK = "\033[38;5;115m"      # seafoam green
+_COLOR_FORMULA = "\033[38;5;75m"    # sky blue
+_COLOR_CASK = "\033[38;5;215m"      # amber
 _COLOR_GREEN = "\033[32m"
 _COLOR_DEPRECATED = "\033[38;5;208m"  # orange
 _COLOR_DISABLED = "\033[38;5;167m"    # red
@@ -44,12 +44,6 @@ def _wrap(text: str, width: int) -> list[str]:
     return textwrap.wrap(text, width) or [""]
 
 
-def _header(col: ColumnDef, metric: str) -> str:
-    if col.key == "installs":
-        return "INSTALLS(365d)" if metric == "installs-365d" else "INSTALLS(30d)"
-    return col.header
-
-
 def _status_prefix(pkg: Package, color: bool) -> str:
     text = _plain_status_prefix(pkg)
     if not text or not color:
@@ -64,8 +58,8 @@ def _status_prefix(pkg: Package, color: bool) -> str:
 def render_table(
     packages: list[Package],
     columns: list[ColumnDef],
-    metric: str = "installs-30d",
     out: TextIO | None = None,
+    sorted_col: str | None = None,
 ) -> None:
     if out is None:
         out = sys.stdout
@@ -74,10 +68,13 @@ def render_table(
 
     # Compute raw cell values
     rows: list[list[str]] = [
-        [col.getter(pkg, metric) for col in columns]
+        [col.getter(pkg) for col in columns]
         for pkg in packages
     ]
-    headers = [_header(col, metric) for col in columns]
+    headers = [
+        (col.header + " ↓" if sorted_col and col.key == sorted_col else col.header)
+        for col in columns
+    ]
 
     # Find description column index (wrappable)
     desc_idx = next(
@@ -92,13 +89,14 @@ def render_table(
             if i != desc_idx:
                 widths[i] = max(widths[i], len(cell))
 
-    # Cap description width to fill terminal
+    # Set description width: fit content, but wrap if wider than terminal allows
     fixed_width = sum(widths[i] for i in range(len(columns)) if i != desc_idx)
     gaps = 2 * max(0, len(columns) - 1)  # 2-space padding between columns
     if desc_idx is not None:
         min_desc_width = len(headers[desc_idx])
-        desc_width = max(min_desc_width, term_width - fixed_width - gaps)
-        widths[desc_idx] = desc_width
+        available = max(min_desc_width, term_width - fixed_width - gaps)
+        max_content = max((len(row[desc_idx]) for row in rows), default=0)
+        widths[desc_idx] = max(min_desc_width, min(max_content, available))
 
     # Header
     header_parts = []
@@ -188,7 +186,6 @@ def _tsv_cell(value: object) -> str:
 def render_tsv(
     packages: list[Package],
     columns: list[ColumnDef],
-    metric: str = "installs-30d",
     out: TextIO | None = None,
 ) -> None:
     if out is None:
@@ -197,8 +194,8 @@ def render_tsv(
         cells = []
         for col in columns:
             if col.raw_getter is not None:
-                value = col.raw_getter(pkg, metric)
+                value = col.raw_getter(pkg)
             else:
-                value = col.getter(pkg, metric)
+                value = col.getter(pkg)
             cells.append(_tsv_cell(value))
         out.write("\t".join(cells) + "\n")

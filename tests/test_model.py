@@ -34,8 +34,9 @@ def test_from_formula_basic(formula_raw):
 
 
 def test_from_formula_with_analytics(formula_raw):
-    pkg = from_formula(formula_raw, installs_30d=50_000, installs_365d=600_000)
+    pkg = from_formula(formula_raw, installs_30d=50_000, installs_90d=150_000, installs_365d=600_000)
     assert pkg.installs_30d == 50_000
+    assert pkg.installs_90d == 150_000
     assert pkg.installs_365d == 600_000
     assert pkg.installs == 50_000  # default metric is 30d
 
@@ -50,14 +51,14 @@ def test_from_cask_basic(cask_raw):
 def test_status_property():
     pkg = Package(
         name="x", type="formula", description="", url="", version="",
-        installs_30d=-1, installs_365d=-1, installed=False,
+        installs_30d=-1, installs_90d=-1, installs_365d=-1, installed=False,
         deprecated=True, disabled=False,
     )
     assert pkg.status == "deprecated"
 
     pkg2 = Package(
         name="x", type="formula", description="", url="", version="",
-        installs_30d=-1, installs_365d=-1, installed=False,
+        installs_30d=-1, installs_90d=-1, installs_365d=-1, installed=False,
         deprecated=False, disabled=True,
     )
     assert pkg2.status == "disabled"

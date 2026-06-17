@@ -12,12 +12,10 @@ except ImportError:
 
 DEFAULTS: dict[str, Any] = {
     "search": {
-        "type": "all",
-        "sort": "popularity",
-        "metric": "installs-30d",
+        "sort": "installs_30d",
     },
     "output": {
-        "columns": ["name", "version", "installs", "description"],
+        "columns": ["name", "installs", "description"],
         "limit": 0,
     },
     "list": {

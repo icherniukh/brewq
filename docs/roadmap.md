@@ -12,7 +12,7 @@ Goal: finish implementation and cut a usable release within a few days.
 - Implement the universal column system before table rendering.
 - Implement result model and Homebrew subprocess boundary.
 - Implement cache path/freshness checks.
-- Implement description search to replace `brew-discover` / `bsd`.
+- Implement name, alias, and description search to replace `brew-discover` / `bsd` without preserving their flags.
 - Implement installed listing to replace `brew-installed` / `brew-ll`.
 - Add unit tests for config loading, column normalization, argument parsing, and renderer basics.
 
@@ -44,6 +44,6 @@ Goal: finish implementation and cut a usable release within a few days.
 
 ## Open Decisions
 
-- Whether to include 365-day installs by default or behind `-y`.
+- Whether to show 365-day installs in the default preset or only through `-s 365d` / explicit columns.
 - Whether to keep `brew search` as the matching source or search directly in the cache.
 - Whether the first public release should be Python-only or include the zsh prototype as an unsupported legacy script.

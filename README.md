@@ -19,7 +19,8 @@ The Python entry point already covers the current core workflows:
 
 ```bash
 PYTHONPATH=src python -m brewq.cli ripgrep
-PYTHONPATH=src python -m brewq.cli --tsv -c name,installs,url ripgrep
+PYTHONPATH=src python -m brewq.cli -t 10 -s 365d rust
+PYTHONPATH=src python -m brewq.cli --tsv -c name,30d,url ripgrep
 PYTHONPATH=src python -m brewq.cli list --tsv -c name,type,version
 ```
 

@@ -12,47 +12,26 @@ from brewq import config as config_mod
 from brewq import options as options_mod
 from brewq import render as render_mod
 
-_COMMANDS = frozenset({"list", "cache", "config"})
+_COMMANDS = frozenset({"list", "cache", "config", "random"})
 _BREW_INFO_BATCH_SIZE = 100
 _FORMATTER = argparse.RawDescriptionHelpFormatter
 
 _SEARCH_EPILOG = """\
-Commands:
-  list    Show installed formulae and casks
-  cache   Inspect and manage the local cache
-  config  Show config location
-
 Examples:
   brewq ripgrep
-  brewq --desc terminal multiplexer
-  brewq --top 10 json
-  brewq list --analytics
-  brewq --tsv -c name,installs,url ripgrep
+  brewq -t 10 json
+  brewq -s 365d rust
+  brewq terminal multiplexer
 
-Columns:
-  search presets: compact, full
-  list presets: compact, full
-
-Color:
-  formula and cask names use different colors on a TTY
-  set NO_COLOR=1 to disable color output
-
-Discoverability:
-  brewq cache status
-  brewq config path
+Commands: list  cache  config
 """
 
 _LIST_EPILOG = """\
 Examples:
   brewq list
-  brewq list --analytics
   brewq list --fetch
-  brewq list -c compact
-  brewq list --tsv -c name,type,version
-
-Presets:
-  compact -> name,type,description
-  full    -> name,type,version,installed,status,description
+  brewq list -p full
+  brewq list -c name,type,version
 """
 
 _CACHE_EPILOG = """\
@@ -81,22 +60,18 @@ def _build_search_parser() -> argparse.ArgumentParser:
         formatter_class=_FORMATTER,
     )
     parser.add_argument("query", nargs="*", help="Search terms")
-    parser.add_argument("--type", choices=["formula", "cask", "all"], default=None,
-                        help="Limit to formula, cask, or all (default: all)")
-    parser.add_argument("--desc", action="store_true",
-                        help="Search package names and descriptions")
-    parser.add_argument("-n", "--name", action="store_true",
-                        help="Sort results by name instead of popularity")
-    parser.add_argument("-y", "--year", action="store_true",
-                        help="Show 365-day installs instead of 30-day")
-    parser.add_argument("-c", "--columns", metavar="SPEC",
-                        help="Column spec: profile name (compact/full) or comma-joined keys")
-    parser.add_argument("--limit", type=int, metavar="N",
-                        help="Cap results at N rows")
-    parser.add_argument("--top", type=int, metavar="N",
-                        help="Show top N results ranked by analytics (alias for sorted --limit N)")
+    parser.add_argument("-s", "--sort", metavar="FIELD",
+                        help="Sort by: 30d (i30), 365d (i365), name  [default: 30d]")
+    parser.add_argument("-l", "--installed", action="store_true",
+                        help="Filter to installed packages")
+    parser.add_argument("-p", "--preset", metavar="NAME",
+                        help="Column preset: compact, full")
+    parser.add_argument("-c", "--columns", metavar="KEYS",
+                        help="Columns: name (n), 30d, 90d, 365d, pop, bin, type (t), version (v), desc (d), inst (i), status, url (h)")
+    parser.add_argument("-t", "--top", type=int, metavar="N",
+                        help="Show top N by installs")
     parser.add_argument("--tsv", action="store_true",
-                        help="Output raw tab-separated rows for shell scripting")
+                        help="Tab-separated output for scripting")
     return parser
 
 
@@ -112,12 +87,14 @@ def _build_command_parser() -> argparse.ArgumentParser:
         epilog=_LIST_EPILOG,
         formatter_class=_FORMATTER,
     )
-    lst.add_argument("--type", choices=["formula", "cask", "all"], default=None)
     lst.add_argument("--analytics", action="store_true",
                      help="Include analytics columns (cache-backed)")
     lst.add_argument("--fetch", action="store_true",
                      help="Fetch missing per-package analytics (implies --analytics)")
-    lst.add_argument("-c", "--columns", metavar="SPEC")
+    lst.add_argument("-p", "--preset", metavar="NAME",
+                     help="Column preset: compact, full")
+    lst.add_argument("-c", "--columns", metavar="KEYS",
+                     help="Explicit columns: comma-joined keys")
     lst.add_argument("--limit", type=int, metavar="N")
     lst.add_argument("--tsv", action="store_true",
                      help="Output raw tab-separated rows for shell scripting")
@@ -147,6 +124,16 @@ def _build_command_parser() -> argparse.ArgumentParser:
     )
     config_p.add_argument("config_sub_cmd", nargs="?", choices=["path"], default="path")
 
+    # random
+    rand_p = subparsers.add_parser(
+        "random",
+        help="Run a random layout lab search",
+        description="Pick a random query and output layout, then run the normal search path.",
+        formatter_class=_FORMATTER,
+    )
+    rand_p.add_argument("--seed", type=int, metavar="N",
+                        help="Fix the random seed for a reproducible lab run")
+
     return parser
 
 
@@ -156,7 +143,19 @@ def _normalize_argv(argv: list[str]) -> list[str]:
     return argv
 
 
+def _validate_column_flags(args: argparse.Namespace) -> str | None:
+    """Return an error string if -p and -c are both set, else None."""
+    if getattr(args, "preset", None) and getattr(args, "columns", None):
+        return "cannot use both -p/--preset and -c/--columns"
+    return None
+
+
 def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
+    err = _validate_column_flags(args)
+    if err:
+        print(f"brewq: {err}", file=sys.stderr)
+        return 1
+
     opts = options_mod.build_list_options(args, cfg)
     list_cols_cfg = cfg["list"]["columns"]
 
@@ -219,14 +218,15 @@ def _merge_cached_analytics(packages: list) -> None:
         cached_pkg = by_name.get(pkg.name)
         if cached_pkg:
             pkg.installs_30d = cached_pkg.installs_30d
+            pkg.installs_90d = cached_pkg.installs_90d
             pkg.installs_365d = cached_pkg.installs_365d
 
 
 def _ensure_list_analytics_column(col_defs: list) -> list:
     keys = {c.key for c in col_defs}
-    if keys & {"installs", "installs_30d", "installs_365d"}:
+    if keys & {"installs_30d", "installs_90d", "installs_365d"}:
         return col_defs
-    installs_col = columns_mod.resolve("installs", [])[0]
+    installs_col = columns_mod.resolve("installs_30d", [])[0]
     desc_idx = next((i for i, col in enumerate(col_defs) if col.key == "description"), None)
     if desc_idx is None:
         return [*col_defs, installs_col]
@@ -279,10 +279,65 @@ def _cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
-    opts = options_mod.build_search_options(args, cfg)
+_RANDOM_TERMS = (
+    "json", "http", "markdown", "terminal", "pdf", "video",
+    "image", "database", "git", "compress", "encrypt", "monitor",
+    "search", "diff", "sync", "backup", "proxy", "log", "parser",
+    "fuzzy", "render", "stream", "lint", "format", "test",
+)
+_RANDOM_SORTS = ("30d", "30d", "365d", "90d", "name")
+_RANDOM_LAYOUTS = (
+    ("default", None, None),
+    ("compact", "compact", None),
+    ("full", "full", None),
+    ("metrics", None, "name,30d,90d,365d,description"),
+    ("ops", None, "name,type,version,bin,description"),
+    ("links", None, "name,30d,url"),
+)
 
-    if not opts.query:
+
+def _cmd_random(args: argparse.Namespace, cfg: dict) -> int:
+    import random as random_mod
+
+    rng = random_mod.Random(getattr(args, "seed", None))
+    query = rng.choice(_RANDOM_TERMS)
+    sort = rng.choice(_RANDOM_SORTS)
+    top = rng.randint(4, 10)
+    _, preset, columns = rng.choice(_RANDOM_LAYOUTS)
+
+    command = ["brewq", "-t", str(top), "-s", sort]
+    if preset:
+        command.extend(["-p", preset])
+    if columns:
+        command.extend(["-c", columns])
+    command.append(query)
+    print(" ".join(command), file=sys.stderr)
+
+    search_args = argparse.Namespace(
+        query=[query],
+        sort=sort,
+        installed=False,
+        preset=preset,
+        columns=columns,
+        top=top,
+        tsv=False,
+    )
+    return _cmd_search(search_args, cfg)
+
+
+def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
+    err = _validate_column_flags(args)
+    if err:
+        print(f"brewq: {err}", file=sys.stderr)
+        return 1
+
+    try:
+        opts = options_mod.build_search_options(args, cfg)
+    except ValueError as exc:
+        print(f"brewq: {exc}", file=sys.stderr)
+        return 1
+
+    if not opts.query and not opts.installed_only:
         _build_search_parser().print_help()
         return 2
 
@@ -312,13 +367,14 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
     ranked = options_mod.rank(packages, opts)
 
     if not ranked:
-        print(f"No results for: {' '.join(opts.query)}", file=sys.stderr)
+        query_str = " ".join(opts.query) if opts.query else "(installed filter)"
+        print(f"No results for: {query_str}", file=sys.stderr)
         return 0
 
     if opts.tsv_output:
-        render_mod.render_tsv(ranked, col_defs, metric=opts.metric, out=sys.stdout)
+        render_mod.render_tsv(ranked, col_defs, out=sys.stdout)
     else:
-        render_mod.render_table(ranked, col_defs, metric=opts.metric, out=sys.stdout)
+        render_mod.render_table(ranked, col_defs, out=sys.stdout, sorted_col=opts.sort)
     return 0
 
 
@@ -326,10 +382,7 @@ def _brew_search_names(opts: options_mod.SearchOptions) -> list[str]:
     brew = shutil.which("brew")
     if not brew:
         return []
-    command = [brew, "search"]
-    if opts.search_scope == "all":
-        command.append("--desc")
-    command.extend(["--", *opts.query])
+    command = [brew, "search", "--", *opts.query]
     result = subprocess.run(command, capture_output=True, text=True)
     return [
         line.split(":", 1)[0].strip()
@@ -355,6 +408,8 @@ def _packages_for_names(names: list[str]) -> list:
 
 
 def _augment_with_live_search(packages: list, opts: options_mod.SearchOptions) -> list:
+    if not opts.query:
+        return packages
     try:
         names = _brew_search_names(opts)
         known = {pkg.name for pkg in packages}
@@ -365,6 +420,8 @@ def _augment_with_live_search(packages: list, opts: options_mod.SearchOptions) -
 
 
 def _live_search(opts: options_mod.SearchOptions) -> list:
+    if not opts.query:
+        return []
     try:
         return _packages_for_names(_brew_search_names(opts))
     except Exception:
@@ -387,6 +444,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _cmd_cache(args, cfg)
         if args.command == "config":
             return _cmd_config(args)
+        if args.command == "random":
+            return _cmd_random(args, cfg)
 
     args = _build_search_parser().parse_args(raw_argv)
     return _cmd_search(args, cfg)

@@ -5,8 +5,8 @@ from brewq import config as cfg_mod
 
 def test_defaults_are_complete():
     conf = cfg_mod.load()
-    assert conf["search"]["type"] == "all"
-    assert conf["output"]["columns"] == ["name", "version", "installs", "description"]
+    assert conf["search"]["sort"] == "installs_30d"
+    assert conf["output"]["columns"] == ["name", "installs", "description"]
     assert conf["list"]["columns"] == ["name", "type", "version", "description"]
     assert conf["cache"]["max_age_seconds"] == 86400
 
@@ -24,7 +24,7 @@ def test_env_override_config_path(monkeypatch, tmp_path):
     conf = cfg_mod.load()
     assert conf["output"]["columns"] == ["name"]
     # defaults for untouched sections still present
-    assert conf["search"]["type"] == "all"
+    assert conf["search"]["sort"] == "installs_30d"
 
 
 def test_cache_dir_env(monkeypatch, tmp_path):

@@ -25,6 +25,21 @@ The core shape is query + analytics:
 
 Avoid over-locking undecided details. If a choice is not settled, mark it as `deferred` or `open` instead of turning it into implementation policy.
 
+## Current CLI Contract
+
+The current implementation and docs intentionally settle these first-release choices:
+
+- Search is the root command: `brewq [search-options] <query...>`.
+- Default search matches package names, formula aliases, and descriptions.
+- Search defaults to 30-day install analytics ranking.
+- `-s` / `--sort` selects `30d`, `90d`, `365d`, or `name`.
+- `-t` / `--top` is the search result cap for top-ranked matches.
+- `list --limit` is the installed-list cap.
+- `-p` selects built-in presets; `-c` selects explicit comma-joined columns.
+- `--tsv` is the only public machine-readable output mode.
+- `list --analytics` merges cached analytics; `list --fetch` may refresh before rendering.
+- `random` is a local layout lab command. It is not a product-level random browser.
+
 ## Working Rules
 
 - Read the relevant docs before changing code.
@@ -34,24 +49,18 @@ Avoid over-locking undecided details. If a choice is not settled, mark it as `de
 - Verify factual claims against files or commands.
 - Do not push or otherwise touch remotes unless explicitly asked.
 
-## Open Decisions
+## Remaining Open Decisions
 
 Treat these as open until a later spec resolves them:
 
-- Default search semantics: name-only by default versus name + description by default.
-- Description flags: whether `--desc` means include descriptions, whether `--desc-only` exists, and whether `--name-only` is the compatibility mode.
-- Result cap semantics: whether `--top N` is distinct from `--limit N`, and what each guarantees.
-- Column presets: exact columns for `compact`, `default`, `full`, and installed-list views.
-- Analytics metric defaults: whether 30-day installs remain default and 365-day installs stay behind `-y` / `--year`.
 - Cache matching strategy: whether normal search shells out to `brew search` for matching or searches directly in a local cache/index.
 - Cache refresh defaults: manual, stale-while-revalidate, blocking-when-missing, live fallback, or a measured hybrid.
 - Cold-cache behavior: how long first run may wait before falling back to live Homebrew data.
 - Grouping behavior: whether formulae and casks are mixed by relevance by default, with grouping deferred or exposed.
 - Status behavior: how deprecated and disabled packages affect display and ranking.
-- List analytics behavior: cache-only by default versus optional per-package fetch with `--fetch`.
 - First release packaging: Python-only release versus including the zsh prototype as unsupported legacy.
 - Post-replacement cleanup: when to update dotfiles, remove/archive `dot_scripts/executable_bsx`, and replace the old ccconfig guide with a pointer here.
-- Deferred discovery features: trend score, semantic/vector search, `info`, `--exact`, `--explain`, `--open`, and `list --leaves`.
+- Deferred query features: trend score, semantic/vector search, `info`, `--exact`, `--explain`, `--open`, and `list --leaves`.
 - Future rewrite: whether Rust/Go is justified after measuring Python bottlenecks.
 
 ## Tracker

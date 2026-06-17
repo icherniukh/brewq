@@ -124,12 +124,14 @@ def load_packages() -> list[Package]:
         packages.append(from_formula(
             f,
             installs_30d=f.get("installs_30d", -1),
+            installs_90d=f.get("installs_90d", -1),
             installs_365d=f.get("installs_365d", -1),
         ))
     for c in raw.get("casks", []):
         packages.append(from_cask(
             c,
             installs_30d=c.get("installs_30d", -1),
+            installs_90d=c.get("installs_90d", -1),
             installs_365d=c.get("installs_365d", -1),
         ))
     return packages

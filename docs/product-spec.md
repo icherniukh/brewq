@@ -23,17 +23,17 @@ Default query should be useful for product discovery and analytics-backed compar
 
 ```bash
 brewq ripgrep
-brewq --desc terminal multiplexer
-brewq --top 10 json
+brewq terminal multiplexer
+brewq -t 10 json
+brewq -s 365d rust
 ```
 
 Expected behavior:
 
-- Search package names and cask tokens by default, matching Homebrew's default search scope.
-- Keep `--desc` as the explicit name+description discovery mode.
+- Search package names, formula aliases, and descriptions by default.
 - Rank with install analytics as a major signal.
 - Mark installed, deprecated, and disabled packages when known.
-- Support formula/cask filtering.
+- Support an installed-only filter.
 
 Do not hardcode a final scoring formula in this spec. Ranking should be implemented in a way that can be tuned after real output review.
 
@@ -44,7 +44,7 @@ Do not hardcode a final scoring formula in this spec. Ranking should be implemen
 ```bash
 brewq list
 brewq list --analytics
-brewq list --columns compact
+brewq list -p compact
 brewq list --tsv
 ```
 
@@ -80,9 +80,9 @@ Output should be compact by default and customizable without flag sprawl.
 Use columns as the primary extension mechanism:
 
 ```bash
-brewq --columns compact rust
-brewq --columns full rust
-brewq --columns name,type,installs,url rust
+brewq -p compact rust
+brewq -p full rust
+brewq -c name,type,30d,url rust
 ```
 
 First-class output forms:
@@ -111,7 +111,7 @@ ${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml
 Likely config areas:
 
 - default columns
-- default metric
+- default sort
 - default cache behavior
 - default row/top count
 
@@ -124,11 +124,11 @@ Install analytics are a core part of the product, not decoration.
 Initial useful metrics:
 
 - 30-day installs
+- 90-day installs
 - 365-day installs
 
 Possible later metrics:
 
-- 90-day installs
 - trend score
 - popularity buckets
 
@@ -142,7 +142,6 @@ Possible alias layer:
 
 ```bash
 brew alias "q=!brewq"
-brew alias "qd=!brewq --desc"
 brew alias "ql=!brewq list"
 ```
 
@@ -161,6 +160,8 @@ Do not build these into the core product:
 - remote sync
 - security scanner
 
+`brewq random` is allowed as a local lab command for exercising layouts and finding inspiration during development. It should stay small and route through normal search/output code. It is not a commitment to product-level random discovery or category browsing.
+
 ## Future Directions
 
 These are plausible but not first-release requirements:
@@ -178,7 +179,7 @@ These are plausible but not first-release requirements:
 
 - `brewq QUERY` helps compare package options faster than plain `brew search`.
 - install counts are visible enough to support trust/quality judgment.
-- `brewq --top N QUERY` is useful for finding the most credible candidates.
+- `brewq -t N QUERY` is useful for finding the most credible candidates.
 - `brewq list` replaces the existing installed-package function.
 - output presets are useful, but custom columns are still easy.
 - TSV output is stable enough for scripts.

@@ -16,14 +16,13 @@ alias bsd='brew search --desc'
 
 ```bash
 brewq QUERY
-brewq --desc QUERY
+brewq QUERY TERMS
 ```
 
 Implementation note:
 
-- `--desc` should search descriptions in addition to names.
-- It should be explicit because description search can be noisy.
-- It should still use the same ranking, cache, columns, and TSV output model.
+- Search should cover names, formula aliases, and descriptions using the same ranking, cache, columns, and TSV output model.
+- If description matching proves too noisy in real use, treat search-scope controls as a later product decision instead of reintroducing one-off compatibility flags.
 
 ## Installed List
 
@@ -51,7 +50,6 @@ The existing `brew_installed` function:
 brewq list
 brewq list --analytics
 brewq list --analytics --fetch
-brewq list --type formula
 brewq list --columns name,type,version,description
 brewq list --tsv
 ```

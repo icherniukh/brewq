@@ -23,22 +23,29 @@ def test_parse_count_invalid():
 def test_merge_into_brew_data():
     brew_data = json.loads((FIXTURES / "fixtures_brew_info.json").read_text())
     analytics = {
-        "formula_30d": {"ripgrep": 80_000, "bat": 50_000},
+        "formula_30d":  {"ripgrep": 80_000, "bat": 50_000},
+        "formula_90d":  {"ripgrep": 240_000},
         "formula_365d": {"ripgrep": 900_000},
-        "cask_30d": {},
+        "cask_30d":  {},
+        "cask_90d":  {},
         "cask_365d": {},
     }
     result = merge_into_brew_data(brew_data, analytics)
     rg = next(f for f in result["formulae"] if f["name"] == "ripgrep")
     assert rg["installs_30d"] == 80_000
+    assert rg["installs_90d"] == 240_000
     assert rg["installs_365d"] == 900_000
 
     bat = next(f for f in result["formulae"] if f["name"] == "bat")
     assert bat["installs_30d"] == 50_000
-    assert bat["installs_365d"] == -1  # not in analytics fixture
+    assert bat["installs_90d"] == -1   # not in analytics fixture
+    assert bat["installs_365d"] == -1
 
 
 def test_merge_missing_package_gets_minus_one():
     brew_data = {"formulae": [{"name": "unknown-pkg", "full_name": "unknown-pkg"}], "casks": []}
-    result = merge_into_brew_data(brew_data, {"formula_30d": {}, "formula_365d": {}, "cask_30d": {}, "cask_365d": {}})
+    empty = {"formula_30d": {}, "formula_90d": {}, "formula_365d": {},
+             "cask_30d": {}, "cask_90d": {}, "cask_365d": {}}
+    result = merge_into_brew_data(brew_data, empty)
     assert result["formulae"][0]["installs_30d"] == -1
+    assert result["formulae"][0]["installs_90d"] == -1

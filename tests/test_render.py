@@ -19,7 +19,8 @@ def _pkg(name: str = "ripgrep", type_: str = "formula", installs_30d: int = 80_0
     disabled = status == "disabled"
     return Package(
         name=name, type=type_, description=desc, url="https://example.com",
-        version=version, installs_30d=installs_30d, installs_365d=600_000,
+        version=version, installs_30d=installs_30d, installs_90d=240_000,
+        installs_365d=600_000,
         installed=installed, deprecated=deprecated, disabled=disabled,
     )
 
@@ -38,14 +39,14 @@ def test_render_table_contains_header():
     render_table([_pkg()], cols, out=out)
     text = out.getvalue()
     assert "NAME" in text
-    assert "INSTALLS(30d)" in text
+    assert "30D" in text
 
 
-def test_render_table_installs_header_uses_selected_metric():
+def test_render_table_365d_column_shows_365d_header():
     out = io.StringIO()
-    cols = resolve("installs", [])
-    render_table([_pkg()], cols, metric="installs-365d", out=out)
-    assert "INSTALLS(365d)" in out.getvalue()
+    cols = resolve("installs_365d", [])
+    render_table([_pkg()], cols, out=out)
+    assert "365D" in out.getvalue()
 
 
 def test_render_table_formats_installs_with_comma():
@@ -119,8 +120,8 @@ def test_render_table_colors_formulae_and_casks_differently(monkeypatch):
         _pkg("google-chrome", type_="cask"),
     ], cols, out=out)
     text = out.getvalue()
-    assert "\033[38;5;183mripgrep" in text
-    assert "\033[38;5;115mgoogle-chrome" in text
+    assert "\033[38;5;75mripgrep" in text
+    assert "\033[38;5;215mgoogle-chrome" in text
 
 
 def test_render_table_marks_deprecated_in_default_description():

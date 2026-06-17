@@ -20,11 +20,11 @@ The daily interface should feel compact:
 
 ```bash
 brewq ripgrep
-brewq --desc terminal multiplexer
-brewq --top 10 json
+brewq terminal multiplexer
+brewq -t 10 json
 brewq list
 brewq list --analytics
-brewq --columns compact rust
+brewq -p compact rust
 brewq --tsv rust
 ```
 
@@ -40,20 +40,20 @@ Those aliases should point to `brewq`; they should not force the tool to become 
 
 ## Search Semantics
 
-Homebrew default behavior, verified from `brew search --help`, is:
+Homebrew baseline behavior, verified from `brew search --help`, is:
 
 - default `brew search TEXT` performs substring search of cask tokens and formula names
 - `brew search --desc TEXT` searches formula descriptions and cask names/descriptions
 
 `brewq` should be query-and-analytics-first, not a byte-for-byte clone of `brew search`.
 
-Default `brewq QUERY` should match Homebrew's default search scope: cask tokens and formula names. Description search should stay one explicit flag away via `--desc`, because it is useful but can be noisy.
+Default `brewq QUERY` should cover names, formula aliases, and descriptions, because the product goal is useful query and comparison rather than strict Homebrew compatibility. If this proves noisy, add a search-scope control later from measured output, not as prototype flag preservation.
 
-Compatibility should still be available:
+Examples:
 
 ```bash
 brewq ripgrep
-brewq --desc multiplexer
+brewq multiplexer
 ```
 
 Search ranking should combine:
@@ -67,17 +67,19 @@ Search ranking should combine:
 The central discovery operation is:
 
 ```bash
-brewq --top 10 QUERY
+brewq -t 10 QUERY
 ```
 
-`--top N` should mean "show the top N most relevant, most installed results." It is not merely a row limit. It should apply after matching, scoring, and analytics-aware ranking.
+`-t N` should mean "show the top N most relevant, most installed results." It applies after matching, scoring, and analytics-aware ranking.
 
-`--limit N` may still exist as a dumb output cap, but `--top N` is the analytics-backed query feature.
+`--limit N` remains list-specific output capping.
 
-Initial metric:
+Sort fields:
 
-- 30-day installs by default
-- 365-day installs via `--year`
+- `30d` by default
+- `90d` when requested
+- `365d` when requested
+- `name` for alphabetical output
 
 Potential future metric:
 
@@ -92,10 +94,9 @@ Output customization should be universal, not a pile of bespoke flags.
 Columns are the extension point:
 
 ```bash
-brewq --columns compact QUERY
-brewq --columns default QUERY
-brewq --columns full QUERY
-brewq --columns name,type,installs,url QUERY
+brewq -p compact QUERY
+brewq -p full QUERY
+brewq -c name,type,30d,url QUERY
 ```
 
 Built-in column presets:
@@ -139,8 +140,8 @@ Examples:
 ```bash
 brewq list
 brewq list --analytics
-brewq list --columns compact
-brewq list --columns name,type,version,description
+brewq list -p compact
+brewq list -c name,type,version,description
 ```
 
 This is still query/read-only behavior. It should not grow into uninstall, upgrade, services, cleanup, or Brewfile management.
@@ -227,6 +228,8 @@ Do not build:
 
 These can be useful tools, but they are not `brewq`.
 
+Exception: `brewq random` may exist as a local lab command for testing output layouts and sparking query ideas. It should print the generated command and run normal search/output paths. It should not become category browsing, recommendations, or a public product promise.
+
 ## Private Competitive Context
 
 Keep this section isolated. Do not publish it in public-facing README or release material.
@@ -255,7 +258,7 @@ If `brewq` starts adding category browsing, random discovery, install/uninstall,
 ## Success Criteria
 
 - `brewq QUERY` helps query and compare packages without opening formula pages.
-- `brewq --top N QUERY` surfaces the most trusted/popular candidates quickly.
+- `brewq -t N QUERY` surfaces the most trusted/popular candidates quickly.
 - `brewq list` replaces the existing installed-package shell function.
 - default columns are useful immediately but easy to change in config.
 - TSV output is clean enough for scripts.
