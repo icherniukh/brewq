@@ -16,7 +16,7 @@ DEFAULTS: dict[str, Any] = {
     },
     "output": {
         "columns": ["name", "installs", "description"],
-        "limit": 0,
+        "limit": 15,
     },
     "list": {
         "columns": ["name", "type", "version", "description"],

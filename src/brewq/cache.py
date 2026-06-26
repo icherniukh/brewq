@@ -29,7 +29,7 @@ def lock_path() -> Path:
     return _dir() / _LOCK_FILE
 
 
-def _age_seconds() -> float | None:
+def age_seconds() -> float | None:
     p = cache_path()
     if not p.exists():
         return None
@@ -37,14 +37,14 @@ def _age_seconds() -> float | None:
 
 
 def is_stale(max_age: int) -> bool:
-    age = _age_seconds()
+    age = age_seconds()
     if age is None:
         return True
     return age >= max_age
 
 
 def status() -> dict[str, Any]:
-    age = _age_seconds()
+    age = age_seconds()
     locked = lock_path().exists()
     data: dict[str, Any] = {
         "path": str(cache_path()),
@@ -135,21 +135,3 @@ def load_packages() -> list[Package]:
             installs_365d=c.get("installs_365d", -1),
         ))
     return packages
-
-
-def refresh_background(max_age: int | None = None) -> None:
-    """Trigger a background cache refresh (non-blocking)."""
-    cfg = config_mod.load()
-    if max_age is None:
-        max_age = cfg["cache"]["max_age_seconds"]
-    if not is_stale(max_age):
-        return
-    pid = os.fork()
-    if pid == 0:
-        # child: detach and refresh
-        os.setsid()
-        try:
-            refresh(force=True)
-        except Exception:
-            pass
-        os._exit(0)

@@ -97,15 +97,31 @@ def test_rank_by_365d():
     assert result[0].name == "popular-parser"
 
 
-def test_rank_prefers_name_match_then_installs_30d():
+def test_rank_keeps_exact_match_first_then_uses_installs():
     local = [
+        _pkg("json", installs_30d=20, desc="exact match"),
         _pkg("rare-json", installs_30d=100, desc="json tool"),
         _pkg("popular-parser", installs_30d=900_000, desc="json parser"),
         _pkg("medium-json", installs_30d=50_000, desc="json name match"),
     ]
     opts = SearchOptions(query=["json"], sort="installs_30d")
     result = rank(local, opts)
-    assert [p.name for p in result] == ["medium-json", "rare-json", "popular-parser"]
+    assert [p.name for p in result] == [
+        "json",
+        "popular-parser",
+        "medium-json",
+        "rare-json",
+    ]
+
+
+def test_rank_popular_description_match_can_beat_weaker_name_match():
+    local = [
+        _pkg("git-small", installs_30d=100, desc="git helper"),
+        _pkg("gh", installs_30d=282_000, desc="GitHub command-line tool"),
+    ]
+    opts = SearchOptions(query=["git"], sort="installs_30d")
+    result = rank(local, opts)
+    assert [p.name for p in result] == ["gh", "git-small"]
 
 
 def test_rank_by_name():

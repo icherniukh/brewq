@@ -43,17 +43,17 @@ _COLUMN_REGISTRY: dict[str, ColumnDef] = {
     "type": ColumnDef("type", "TYPE", "left", lambda p: p.type, lambda p: p.type),
     "version": ColumnDef("version", "VERSION", "left", _short_version, lambda p: p.version or ""),
     "installs_30d": ColumnDef(
-        "installs_30d", "30D", "right",
+        "installs_30d", "30d", "right",
         lambda p: _fmt(p.installs_30d),
         lambda p: "" if p.installs_30d < 0 else p.installs_30d,
     ),
     "installs_90d": ColumnDef(
-        "installs_90d", "90D", "right",
+        "installs_90d", "90d", "right",
         lambda p: _fmt(p.installs_90d),
         lambda p: "" if p.installs_90d < 0 else p.installs_90d,
     ),
     "installs_365d": ColumnDef(
-        "installs_365d", "365D", "right",
+        "installs_365d", "365d", "right",
         lambda p: _fmt(p.installs_365d),
         lambda p: "" if p.installs_365d < 0 else p.installs_365d,
     ),

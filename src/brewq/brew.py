@@ -22,23 +22,3 @@ def info_all() -> dict[str, Any]:
         capture_output=True, text=True, check=True,
     )
     return json.loads(result.stdout)
-
-
-def info_installed() -> dict[str, Any]:
-    """Return parsed output of `brew info --json=v2 --installed`."""
-    result = subprocess.run(
-        [_brew_path(), "info", "--json=v2", "--installed"],
-        capture_output=True, text=True, check=True,
-    )
-    return json.loads(result.stdout)
-
-
-def info_packages(names: list[str]) -> dict[str, Any]:
-    """Return parsed output of `brew info --json=v2 <name...>` for specific packages."""
-    if not names:
-        return {"formulae": [], "casks": []}
-    result = subprocess.run(
-        [_brew_path(), "info", "--json=v2", *names],
-        capture_output=True, text=True, check=True,
-    )
-    return json.loads(result.stdout)

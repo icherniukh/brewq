@@ -56,11 +56,11 @@ brewq ripgrep
 brewq multiplexer
 ```
 
-Search ranking should combine:
+Current search ranking combines:
 
-- match source: exact/name/token matches above weaker matches
-- install popularity: default 30-day installs
-- package state: disabled/deprecated packages should be visibly marked and probably ranked lower
+- exact package or alias matches first
+- install volume across the remaining matches, using the selected analytics window
+- package state: disabled/deprecated packages are visibly marked and ranked after active packages
 
 ## Popularity And Top-N
 
@@ -155,17 +155,19 @@ MVP cache behavior:
 - warm-cache queries should be fast
 - normal search should not require network access
 - cache refresh should be atomic and lock-protected
-- stale cache should be usable while a refresh happens
-- cache commands should be simple: `status`, `refresh`, `clear`
+- stale cache should remain usable without blocking normal commands
+- normal output should concisely disclose cache age
+- stale cache disclosure should be more visible than fresh-cache disclosure
+- refresh should be explicit through `brewq refresh` or `brewq -r QUERY`
 
 Potential cache strategies:
 
-- `manual`: only refresh on explicit `brewq cache refresh`
-- `stale-while-revalidate`: use stale cache and refresh in background
-- `blocking-when-missing`: first run waits for a complete cache if no cache exists
-- `live-fallback`: first run uses slower live Homebrew data while cache builds
+- `manual`: only refresh on explicit `brewq refresh`
+- `delayed-low-load`: schedule refresh a few minutes after use, gated on low CPU/load
+- `brew-update-hook`: refresh after Homebrew itself updates metadata
+- `blocking-when-requested`: `brewq -r QUERY` refreshes before rendering
 
-The default should optimize perceived responsiveness. The exact default can be decided after measuring cold-cache behavior.
+The default should stay quick. Normal command startup should not pay refresh or scheduler cost.
 
 ## Future Direction: Smarter Search
 

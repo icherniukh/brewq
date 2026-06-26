@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import shutil
-import subprocess
 import sys
 from collections.abc import Sequence
 
@@ -12,9 +10,10 @@ from brewq import config as config_mod
 from brewq import options as options_mod
 from brewq import render as render_mod
 
-_COMMANDS = frozenset({"list", "cache", "config", "random"})
-_BREW_INFO_BATCH_SIZE = 100
+_COMMANDS = frozenset({"list", "refresh", "config", "random"})
 _FORMATTER = argparse.RawDescriptionHelpFormatter
+_COLOR_RED = "\033[31m"
+_RESET = "\033[0m"
 
 _SEARCH_EPILOG = """\
 Examples:
@@ -23,23 +22,21 @@ Examples:
   brewq -s 365d rust
   brewq terminal multiplexer
 
-Commands: list  cache  config
+Commands: list  refresh  config
 """
 
 _LIST_EPILOG = """\
 Examples:
   brewq list
-  brewq list --fetch
   brewq list -p full
   brewq list -c name,type,version
 """
 
-_CACHE_EPILOG = """\
+_REFRESH_EPILOG = """\
 Examples:
-  brewq cache status
-  brewq cache refresh
-  brewq cache refresh --force
-  brewq cache clear
+  brewq refresh
+  brewq refresh --force
+  brewq -r ripgrep
 
 Use `brewq config path` to find the config file.
 """
@@ -61,7 +58,7 @@ def _build_search_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("query", nargs="*", help="Search terms")
     parser.add_argument("-s", "--sort", metavar="FIELD",
-                        help="Sort by: 30d (i30), 365d (i365), name  [default: 30d]")
+                        help="Sort by: 30d (i30), 90d (i90), 365d (i365), name  [default: 30d]")
     parser.add_argument("-l", "--installed", action="store_true",
                         help="Filter to installed packages")
     parser.add_argument("-p", "--preset", metavar="NAME",
@@ -70,6 +67,8 @@ def _build_search_parser() -> argparse.ArgumentParser:
                         help="Columns: name (n), 30d, 90d, 365d, pop, bin, type (t), version (v), desc (d), inst (i), status, url (h)")
     parser.add_argument("-t", "--top", type=int, metavar="N",
                         help="Show top N by installs")
+    parser.add_argument("-r", "--refresh", action="store_true",
+                        help="Refresh cache before searching")
     parser.add_argument("--tsv", action="store_true",
                         help="Tab-separated output for scripting")
     return parser
@@ -89,8 +88,6 @@ def _build_command_parser() -> argparse.ArgumentParser:
     )
     lst.add_argument("--analytics", action="store_true",
                      help="Include analytics columns (cache-backed)")
-    lst.add_argument("--fetch", action="store_true",
-                     help="Fetch missing per-package analytics (implies --analytics)")
     lst.add_argument("-p", "--preset", metavar="NAME",
                      help="Column preset: compact, full")
     lst.add_argument("-c", "--columns", metavar="KEYS",
@@ -99,20 +96,16 @@ def _build_command_parser() -> argparse.ArgumentParser:
     lst.add_argument("--tsv", action="store_true",
                      help="Output raw tab-separated rows for shell scripting")
 
-    # cache
-    cache = subparsers.add_parser(
-        "cache",
-        help="Inspect and manage the local cache",
-        description="Inspect cache status and refresh behavior.",
-        epilog=_CACHE_EPILOG,
+    # refresh
+    refresh_p = subparsers.add_parser(
+        "refresh",
+        help="Refresh local cache data",
+        description="Refresh local Homebrew metadata and analytics cache.",
+        epilog=_REFRESH_EPILOG,
         formatter_class=_FORMATTER,
     )
-    cache_sub = cache.add_subparsers(dest="cache_command", required=True)
-    cache_sub.add_parser("status", help="Show cache path, age, counts, and lock state")
-    refresh_p = cache_sub.add_parser("refresh", help="Refresh local cache data")
     refresh_p.add_argument("--force", action="store_true",
                            help="Refresh even when cache is fresh")
-    cache_sub.add_parser("clear", help="Remove local cache files")
 
     # config
     config_p = subparsers.add_parser(
@@ -139,7 +132,7 @@ def _build_command_parser() -> argparse.ArgumentParser:
 
 def _normalize_argv(argv: list[str]) -> list[str]:
     if argv and argv[0] == "update-cache":
-        return ["cache", "refresh", *argv[1:]]
+        return ["refresh", *argv[1:]]
     return argv
 
 
@@ -169,35 +162,11 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1
 
-    if opts.with_analytics or opts.fetch_analytics:
+    if opts.with_analytics:
         col_defs = _ensure_list_analytics_column(col_defs)
 
-    try:
-        from brewq import brew as brew_mod
-        raw = brew_mod.info_installed()
-    except FileNotFoundError as exc:
-        print(f"brewq: {exc}", file=sys.stderr)
-        return 1
-    except Exception as exc:
-        print(f"brewq: failed to query installed packages: {exc}", file=sys.stderr)
-        return 1
-
-    from brewq.model import from_cask, from_formula
-    packages = []
-    for f in raw.get("formulae", []):
-        packages.append(from_formula(f))
-    for c in raw.get("casks", []):
-        packages.append(from_cask(c))
-
-    if opts.fetch_analytics:
-        try:
-            print("Fetching analytics…", file=sys.stderr)
-            cache_mod.refresh(force=False)
-        except Exception as exc:
-            print(f"brewq: analytics fetch failed: {exc}", file=sys.stderr)
-        _merge_cached_analytics(packages)
-    elif opts.with_analytics:
-        _merge_cached_analytics(packages)
+    _print_cache_age(cfg)
+    packages = [p for p in cache_mod.load_packages() if p.installed]
 
     packages = options_mod.rank_installed(packages, opts)
 
@@ -206,20 +175,6 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     else:
         render_mod.render_table(packages, col_defs, out=sys.stdout)
     return 0
-
-
-def _merge_cached_analytics(packages: list) -> None:
-    try:
-        cached = cache_mod.load_packages()
-    except Exception:
-        return
-    by_name = {p.name: p for p in cached}
-    for pkg in packages:
-        cached_pkg = by_name.get(pkg.name)
-        if cached_pkg:
-            pkg.installs_30d = cached_pkg.installs_30d
-            pkg.installs_90d = cached_pkg.installs_90d
-            pkg.installs_365d = cached_pkg.installs_365d
 
 
 def _ensure_list_analytics_column(col_defs: list) -> list:
@@ -233,45 +188,21 @@ def _ensure_list_analytics_column(col_defs: list) -> list:
     return [*col_defs[:desc_idx], installs_col, *col_defs[desc_idx:]]
 
 
-def _cmd_cache(args: argparse.Namespace, cfg: dict) -> int:
-    sub = args.cache_command
-
-    if sub == "status":
+def _cmd_refresh(args: argparse.Namespace) -> int:
+    force = getattr(args, "force", False)
+    print("Refreshing cache...", file=sys.stderr)
+    try:
+        cache_mod.refresh(force=force)
         s = cache_mod.status()
-        age = s["age_seconds"]
-        age_str = f"{age}s" if age is not None else "n/a"
-        max_age = cfg["cache"]["max_age_seconds"]
-        print(f"path:      {s['path']}")
-        print(f"exists:    {s['exists']}")
-        print(f"age:       {age_str}")
-        print(f"max age:   {max_age}s")
-        print(f"formulae:  {s['formula_count']}")
-        print(f"casks:     {s['cask_count']}")
-        print(f"analytics: {s['has_analytics']}")
-        print(f"locked:    {s['locked']}")
-        return 0
-
-    if sub == "refresh":
-        force = getattr(args, "force", False)
-        print("Refreshing cache…", file=sys.stderr)
-        try:
-            cache_mod.refresh(force=force)
-            s = cache_mod.status()
-            print(
-                f"Done. {s['formula_count']} formulae, {s['cask_count']} casks.",
-                file=sys.stderr,
-            )
-        except Exception as exc:
-            print(f"brewq: cache refresh failed: {exc}", file=sys.stderr)
-            return 1
-        return 0
-
-    if sub == "clear":
-        cache_mod.clear()
-        print("Cache cleared.", file=sys.stderr)
-        return 0
-
-    return 1
+        print(
+            f"cache: {_format_age(s.get('age_seconds'))} old; "
+            f"{s['formula_count']} formulae, {s['cask_count']} casks",
+            file=sys.stderr,
+        )
+    except Exception as exc:
+        print(f"brewq: cache refresh failed: {exc}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def _cmd_config(args: argparse.Namespace) -> int:
@@ -320,6 +251,7 @@ def _cmd_random(args: argparse.Namespace, cfg: dict) -> int:
         preset=preset,
         columns=columns,
         top=top,
+        refresh=False,
         tsv=False,
     )
     return _cmd_search(search_args, cfg)
@@ -348,21 +280,22 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1
 
+    if getattr(args, "refresh", False):
+        try:
+            print("Refreshing cache...", file=sys.stderr)
+            cache_mod.refresh(force=True)
+        except Exception as exc:
+            print(f"brewq: cache refresh failed: {exc}", file=sys.stderr)
+            return 1
+
+    _print_cache_age(cfg)
     packages = cache_mod.load_packages()
 
     if not packages:
         print(
-            "Cache not built yet. Building in background; showing live results (slower)…",
+            "Cache not built yet. Run `brewq refresh`.",
             file=sys.stderr,
         )
-        try:
-            cache_mod.refresh_background()
-        except Exception:
-            pass
-        packages = _live_search(opts)
-    else:
-        cache_mod.refresh_background()
-        packages = _augment_with_live_search(packages, opts)
 
     ranked = options_mod.rank(packages, opts)
 
@@ -378,54 +311,39 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
     return 0
 
 
-def _brew_search_names(opts: options_mod.SearchOptions) -> list[str]:
-    brew = shutil.which("brew")
-    if not brew:
-        return []
-    command = [brew, "search", "--", *opts.query]
-    result = subprocess.run(command, capture_output=True, text=True)
-    return [
-        line.split(":", 1)[0].strip()
-        for line in result.stdout.splitlines()
-        if line.strip() and not line.startswith(("==>", "Warning:"))
-    ]
+def _format_age(age_seconds: object) -> str:
+    if age_seconds is None:
+        return "missing"
+    age = max(0, int(age_seconds))
+    if age < 60:
+        return f"{age}s"
+    if age < 3600:
+        return f"{age // 60}m"
+    if age < 172800:
+        return f"{age // 3600}h"
+    return f"{age // 86400}d"
 
 
-def _packages_for_names(names: list[str]) -> list:
-    if not names:
-        return []
-    from brewq import brew as brew_mod
-    from brewq.model import from_cask, from_formula
-
-    packages = []
-    for start in range(0, len(names), _BREW_INFO_BATCH_SIZE):
-        raw = brew_mod.info_packages(names[start:start + _BREW_INFO_BATCH_SIZE])
-        for f in raw.get("formulae", []):
-            packages.append(from_formula(f))
-        for c in raw.get("casks", []):
-            packages.append(from_cask(c))
-    return packages
+def _stderr_uses_color() -> bool:
+    return hasattr(sys.stderr, "isatty") and sys.stderr.isatty()
 
 
-def _augment_with_live_search(packages: list, opts: options_mod.SearchOptions) -> list:
-    if not opts.query:
-        return packages
-    try:
-        names = _brew_search_names(opts)
-        known = {pkg.name for pkg in packages}
-        missing = [name for name in names if name not in known]
-        return [*packages, *_packages_for_names(missing)]
-    except Exception:
-        return packages
+def _print_cache_age(cfg: dict) -> None:
+    age = cache_mod.age_seconds()
+    if age is None:
+        print("cache: missing; run `brewq refresh`", file=sys.stderr)
+        return
 
+    max_age = int(cfg["cache"]["max_age_seconds"])
+    age_text = _format_age(age)
+    if int(age) >= max_age:
+        text = f"cache: stale, {age_text} old; run `brewq refresh`"
+        if _stderr_uses_color():
+            text = f"{_COLOR_RED}{text}{_RESET}"
+        print(text, file=sys.stderr)
+        return
 
-def _live_search(opts: options_mod.SearchOptions) -> list:
-    if not opts.query:
-        return []
-    try:
-        return _packages_for_names(_brew_search_names(opts))
-    except Exception:
-        return []
+    print(f"cache: {age_text} old", file=sys.stderr)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -440,8 +358,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = _build_command_parser().parse_args(raw_argv)
         if args.command == "list":
             return _cmd_list(args, cfg)
-        if args.command == "cache":
-            return _cmd_cache(args, cfg)
+        if args.command == "refresh":
+            return _cmd_refresh(args)
         if args.command == "config":
             return _cmd_config(args)
         if args.command == "random":

@@ -61,9 +61,8 @@ Expected behavior:
 Cache should be visible enough to trust:
 
 ```bash
-brewq cache status
-brewq cache refresh
-brewq cache clear
+brewq refresh
+brewq -r ripgrep
 ```
 
 Expected behavior:
@@ -71,7 +70,9 @@ Expected behavior:
 - Warm-cache queries should be fast.
 - Normal query should not require network access.
 - Refresh should be atomic and lock-protected.
-- Missing/stale cache behavior can be tuned; do not over-design it before measurement.
+- Normal search/list should disclose cache age concisely.
+- Cache older than the configured max age should be called out more visibly.
+- Missing/stale cache refresh is explicit for now; deferred low-CPU scheduling is a separate design decision.
 
 ## Output
 

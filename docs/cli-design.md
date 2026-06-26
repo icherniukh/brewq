@@ -1,6 +1,6 @@
 # CLI Design
 
-Keep `brewq` small: search, list, cache, config.
+Keep `brewq` small: search, list, refresh, config.
 
 `brewq` should feel like a sharper `brew search`: readable package matches, install analytics in view, and a single column system that works for humans and scripts. It is not a Homebrew manager and should not grow install, upgrade, service, Brewfile, TUI, GUI, or product-level random-discovery behavior.
 
@@ -9,14 +9,13 @@ Keep `brewq` small: search, list, cache, config.
 ```bash
 brewq [search-options] <query...>
 brewq list [list-options]
-brewq cache status
-brewq cache refresh [--force]
-brewq cache clear
+brewq refresh [--force]
 brewq config path
 brewq random [--seed N]
 ```
 
-Search is the default command. There is no public `search` subcommand.
+Search is the default command. There is no public `search` subcommand. Normal
+search is cache-only and does not shell out to Homebrew.
 
 `list` is the installed-package view. It uses the same column and TSV model as search, but its defaults are shaped for installed formulae and casks.
 
@@ -36,6 +35,7 @@ brewq -p full rust
 brewq -c name,30d,365d,url rust
 brewq --tsv -c name,30d,url ripgrep
 brewq -l python
+brewq -r ripgrep
 ```
 
 Options:
@@ -45,16 +45,21 @@ Options:
 - `-p`, `--preset NAME`: use `compact` or `full`.
 - `-c`, `--columns KEYS`: use an explicit comma-joined column list.
 - `-t`, `--top N`: show the top N matches by install count.
+- `-r`, `--refresh`: refresh cache before searching.
 - `--tsv`: emit raw tab-separated rows with no header.
 
 Rules:
 
 - Query text matches package names, formula aliases, and descriptions.
 - Install analytics are the default ranking signal.
-- `-t N` is the row cap for normal "top results" use.
+- Search defaults to the top 15 matches.
+- `-t N` overrides the default row cap for normal "top results" use.
 - `-p` and `-c` are mutually exclusive.
 - Disabled and deprecated packages remain visible, but rank after active packages.
-- Search may augment cache matches with live `brew search` names when available.
+- Search uses the local cache by default; use `brewq refresh` or `brewq -r QUERY`
+  when live Homebrew data should be fetched first.
+- Search prints a concise cache-age disclosure to stderr. Stale cache is called
+  out more visibly than fresh cache.
 
 ## Sort Fields
 
@@ -67,7 +72,7 @@ Sort fields resolve through short aliases:
 
 Default search sort is `30d`.
 
-The table header marks the active sort column when that column is visible, for example `30D ↓`.
+The table header marks the active sort column when that column is visible, for example `30d ↓`.
 
 ## Columns
 
@@ -140,7 +145,6 @@ Examples:
 ```bash
 brewq list
 brewq list --analytics
-brewq list --fetch
 brewq list -p full
 brewq list -c name,type,version
 brewq list --tsv -c name,type,version
@@ -148,8 +152,7 @@ brewq list --tsv -c name,type,version
 
 Options:
 
-- `--analytics`: merge cached analytics into installed rows.
-- `--fetch`: refresh missing analytics before rendering; implies analytics.
+- `--analytics`: show cached analytics columns.
 - `-p`, `--preset NAME`: use `compact` or `full`.
 - `-c`, `--columns KEYS`: use an explicit comma-joined column list.
 - `--limit N`: cap installed rows.
@@ -159,30 +162,22 @@ Default behavior:
 
 - installed formulae and casks are shown together
 - rows sort by type, then name
-- no network fetch for missing analytics
-- `--analytics` inserts `30D` before `DESCRIPTION` if no install metric column is already selected
+- no Homebrew subprocess or network fetch
+- `--analytics` inserts `30d` before `DESCRIPTION` if no install metric column is already selected
+- cache age is disclosed on stderr
 
-## Cache
+## Refresh
 
 ```bash
-brewq cache status
-brewq cache refresh
-brewq cache refresh --force
-brewq cache clear
+brewq refresh
+brewq refresh --force
+brewq -r ripgrep
 ```
 
-Cache output should stay plain:
+Normal commands are quick by default and do not schedule or perform refresh work.
+Explicit refresh is the foreground Homebrew boundary.
 
-- cache path
-- exists or missing
-- age
-- max age
-- formula count
-- cask count
-- analytics availability
-- lock state
-
-`update-cache` is kept as a compatibility alias for `cache refresh`.
+`update-cache` is kept as a compatibility alias for `refresh`.
 
 ## Config
 
@@ -202,7 +197,7 @@ sort = "installs_30d"
 
 [output]
 columns = ["name", "installs", "description"]
-limit = 0
+limit = 15
 
 [list]
 columns = ["name", "type", "version", "description"]

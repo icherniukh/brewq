@@ -160,17 +160,17 @@ def test_installs_90d_column_reads_90d():
 
 def test_installs_90d_header():
     cols = resolve("installs_90d", [])
-    assert cols[0].header == "90D"
+    assert cols[0].header == "90d"
 
 
 def test_installs_365d_header():
     cols = resolve("installs_365d", [])
-    assert cols[0].header == "365D"
+    assert cols[0].header == "365d"
 
 
 def test_installs_30d_header():
     cols = resolve("installs_30d", [])
-    assert cols[0].header == "30D"
+    assert cols[0].header == "30d"
 
 
 def test_resolve_default_uses_config():

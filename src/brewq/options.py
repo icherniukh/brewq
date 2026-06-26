@@ -67,7 +67,6 @@ class SearchOptions:
 @dataclass
 class ListOptions:
     with_analytics: bool = False
-    fetch_analytics: bool = False
     columns_spec: str = "default"
     limit: int = 0
     tsv_output: bool = False
@@ -110,9 +109,8 @@ def build_list_options(args: Any, cfg: dict) -> ListOptions:
     )
     return ListOptions(
         with_analytics=getattr(args, "analytics", False),
-        fetch_analytics=getattr(args, "fetch", False),
         columns_spec=columns_spec,
-        limit=getattr(args, "limit", None) or cfg["output"]["limit"],
+        limit=getattr(args, "limit", None) or 0,
         tsv_output=getattr(args, "tsv", False),
     )
 
@@ -182,6 +180,15 @@ def _match_score(pkg: Package, query_terms: list[str]) -> int:
     return 0
 
 
+def _exact_match_score(pkg: Package, query_terms: list[str]) -> int:
+    if not query_terms:
+        return 0
+    query = _simplify(" ".join(query_terms))
+    if not query:
+        return 0
+    return 1 if any(_simplify(field) == query for field in _name_fields(pkg)) else 0
+
+
 def rank(
     packages: list[Package],
     opts: SearchOptions,
@@ -212,9 +219,14 @@ def rank(
             else (lambda p: p.installs_30d)
         )
 
-        def sort_key(p: Package) -> tuple[int, int, str]:
+        def sort_key(p: Package) -> tuple[int, int, int, str]:
             installs = max(installs_key(p), -1)
-            return (-_match_score(p, query_terms), -installs, p.name.lower())
+            return (
+                -_exact_match_score(p, query_terms),
+                -installs,
+                -_match_score(p, query_terms),
+                p.name.lower(),
+            )
 
         normal.sort(key=sort_key)
         degraded.sort(key=sort_key)

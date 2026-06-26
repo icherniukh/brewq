@@ -44,6 +44,16 @@ def _wrap(text: str, width: int) -> list[str]:
     return textwrap.wrap(text, width) or [""]
 
 
+def _clip(text: str, width: int) -> str:
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    if width == 1:
+        return "…"
+    return text[:width - 1].rstrip() + "…"
+
+
 def _status_prefix(pkg: Package, color: bool) -> str:
     text = _plain_status_prefix(pkg)
     if not text or not color:
@@ -131,7 +141,10 @@ def render_table(
         # cell, so include them before wrapping instead of prepending afterward.
         if desc_idx is not None:
             desc_text = (_plain_status_prefix(pkg) if show_status_in_description else "") + row[desc_idx]
-            desc_lines = _wrap(desc_text, widths[desc_idx])
+            if show_status_in_description and _plain_status_prefix(pkg):
+                desc_lines = [_clip(desc_text, widths[desc_idx])]
+            else:
+                desc_lines = _wrap(desc_text, widths[desc_idx])
         else:
             desc_lines = None
 

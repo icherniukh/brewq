@@ -199,7 +199,7 @@ Keep:
 
 - `brewq list`
 - `brewq list --analytics`
-- `brewq list --fetch`
+- `brewq refresh`
 - `brewq list -p compact|full`
 - `brewq list -c name,type,version`
 - `brewq list --tsv`
@@ -235,10 +235,9 @@ Reasoning:
 
 Keep:
 
-- `brewq cache status`
-- `brewq cache refresh`
-- `brewq cache refresh --force`
-- `brewq cache clear`
+- `brewq refresh`
+- `brewq refresh --force`
+- `brewq -r QUERY`
 
 Reasoning:
 

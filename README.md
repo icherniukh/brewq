@@ -22,7 +22,12 @@ PYTHONPATH=src python -m brewq.cli ripgrep
 PYTHONPATH=src python -m brewq.cli -t 10 -s 365d rust
 PYTHONPATH=src python -m brewq.cli --tsv -c name,30d,url ripgrep
 PYTHONPATH=src python -m brewq.cli list --tsv -c name,type,version
+PYTHONPATH=src python -m brewq.cli refresh
 ```
+
+Normal search and list commands use the local cache only and disclose cache age
+on stderr. Use `brewq refresh` or `brewq -r QUERY` when you want to refresh
+before rendering.
 
 For a visual project snapshot, open `docs/status-dashboard.html`. For fresh data every time the page loads, run:
 

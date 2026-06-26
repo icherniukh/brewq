@@ -44,14 +44,17 @@ def test_render_table_contains_header():
     render_table([_pkg()], cols, out=out)
     text = out.getvalue()
     assert "NAME" in text
-    assert "30D" in text
+    assert "30d" in text
 
 
-def test_render_table_365d_column_shows_365d_header():
+def test_render_table_metric_columns_use_lowercase_d_headers():
     out = io.StringIO()
-    cols = resolve("installs_365d", [])
+    cols = resolve("installs_30d,installs_90d,installs_365d", [])
     render_table([_pkg()], cols, out=out)
-    assert "365D" in out.getvalue()
+    text = out.getvalue()
+    assert "30d" in text
+    assert "90d" in text
+    assert "365d" in text
 
 
 def test_render_table_formats_installs_with_comma():
@@ -153,7 +156,7 @@ def test_render_table_omits_description_status_prefix_when_status_column_selecte
     assert "Search tool" in text
 
 
-def test_render_table_status_prefix_wraps_inside_description_column(monkeypatch):
+def test_render_table_status_prefix_stays_inside_description_column(monkeypatch):
     monkeypatch.setattr("brewq.render._terminal_width", lambda: 80)
     out = io.StringIO()
     cols = resolve("name,version,installs,description", [])
@@ -166,7 +169,22 @@ def test_render_table_status_prefix_wraps_inside_description_column(monkeypatch)
     lines = [line for line in out.getvalue().splitlines() if line]
     assert all(len(line) <= 80 for line in lines)
     assert "(deprecated) Multi-platform" in out.getvalue()
-    assert "Security Scanner" in out.getvalue()
+
+
+def test_render_table_status_prefix_clips_instead_of_wrapping(monkeypatch):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 72)
+    out = io.StringIO()
+    cols = resolve("name,version,installs,description", [])
+    pkg = _pkg(
+        name="libgit2@1.7",
+        desc="C library of Git core methods that is re-entrant and linkable",
+        status="disabled",
+    )
+    render_table([pkg], cols, out=out)
+    lines = [line for line in out.getvalue().splitlines() if "libgit2@1.7" in line]
+    assert len(lines) == 1
+    assert "(disabled)" in lines[0]
+    assert lines[0].endswith("…")
 
 
 def test_render_table_separator_stays_within_terminal_width(monkeypatch):

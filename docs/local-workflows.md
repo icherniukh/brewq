@@ -41,7 +41,7 @@ The existing `brew_installed` function:
 - colors formulae and casks differently
 - supports `--limit N`
 - supports `--analytics`
-- supports `--fetch` to fetch missing analytics
+- uses cached analytics only during normal list rendering
 - caches per-package analytics under `~/.cache/brew-installed`
 
 `brewq` replacement:
@@ -49,7 +49,8 @@ The existing `brew_installed` function:
 ```bash
 brewq list
 brewq list --analytics
-brewq list --analytics --fetch
+brewq refresh
+brewq list --analytics
 brewq list --columns name,type,version,description
 brewq list --tsv
 ```
@@ -58,5 +59,5 @@ Implementation note:
 
 - Reuse the main `brewq` cache when possible instead of keeping a separate `brew-installed` cache.
 - Keep `--analytics` cache-only by default.
-- Require explicit `--fetch` for missing per-package analytics.
+- Require explicit `brewq refresh` before rendering when fresh analytics are needed.
 - Do not add install/uninstall/upgrade behavior.

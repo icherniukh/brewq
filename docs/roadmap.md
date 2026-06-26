@@ -28,9 +28,9 @@ Goal: finish implementation and cut a usable release within a few days.
 
 ## Day 3 - Fallbacks and Local Install
 
-- Implement cold-cache fallback using live `brew info --json=v2`.
+- Implement cold-cache guidance that keeps normal commands quick and points users to explicit refresh.
 - Add useful errors for missing `brew`, invalid cache JSON, and interrupted refreshes.
-- Add `update-cache` command.
+- Add explicit `refresh` command and keep `update-cache` as a compatibility alias.
 - Add install docs and shell alias docs.
 - Validate in a fresh shell.
 

@@ -33,11 +33,14 @@ The current implementation and docs intentionally settle these first-release cho
 - Default search matches package names, formula aliases, and descriptions.
 - Search defaults to 30-day install analytics ranking.
 - `-s` / `--sort` selects `30d`, `90d`, `365d`, or `name`.
-- `-t` / `--top` is the search result cap for top-ranked matches.
+- Search defaults to the top 15 matches; `-t` / `--top` overrides the cap.
 - `list --limit` is the installed-list cap.
 - `-p` selects built-in presets; `-c` selects explicit comma-joined columns.
 - `--tsv` is the only public machine-readable output mode.
-- `list --analytics` merges cached analytics; `list --fetch` may refresh before rendering.
+- Normal search and list paths are cache-only and do not shell out to Homebrew.
+- Every normal search/list run prints a concise cache-age disclosure; stale cache is more visible.
+- `refresh` refreshes the cache explicitly; `-r` / `--refresh` refreshes before a root search.
+- `list --analytics` exposes analytics already present in the cache.
 - `random` is a local layout lab command. It is not a product-level random browser.
 
 ## Working Rules
@@ -53,11 +56,10 @@ The current implementation and docs intentionally settle these first-release cho
 
 Treat these as open until a later spec resolves them:
 
-- Cache matching strategy: whether normal search shells out to `brew search` for matching or searches directly in a local cache/index.
-- Cache refresh defaults: manual, stale-while-revalidate, blocking-when-missing, live fallback, or a measured hybrid.
-- Cold-cache behavior: how long first run may wait before falling back to live Homebrew data.
+- Deferred refresh scheduling: whether to use launchd, a Homebrew update hook, or another low-CPU delayed job mechanism.
 - Grouping behavior: whether formulae and casks are mixed by relevance by default, with grouping deferred or exposed.
-- Status behavior: how deprecated and disabled packages affect display and ranking.
+- Status filtering: whether deprecated and disabled packages are hidden by default,
+  and whether exact matches or an explicit override still show them.
 - First release packaging: Python-only release versus including the zsh prototype as unsupported legacy.
 - Post-replacement cleanup: when to update dotfiles, remove/archive `dot_scripts/executable_bsx`, and replace the old ccconfig guide with a pointer here.
 - Deferred query features: trend score, semantic/vector search, `info`, `--exact`, `--explain`, `--open`, and `list --leaves`.
