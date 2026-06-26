@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 
@@ -14,6 +15,7 @@ _COMMANDS = frozenset({"list", "refresh", "config", "random"})
 _FORMATTER = argparse.RawDescriptionHelpFormatter
 _COLOR_RED = "\033[31m"
 _RESET = "\033[0m"
+_COLOR_SCHEMES = range(10)
 
 _SEARCH_EPILOG = """\
 Examples:
@@ -69,6 +71,8 @@ def _build_search_parser() -> argparse.ArgumentParser:
                         help="Show top N by installs")
     parser.add_argument("-r", "--refresh", action="store_true",
                         help="Refresh cache before searching")
+    parser.add_argument("--colors", type=int, choices=_COLOR_SCHEMES, metavar="N",
+                        help="Temporary formula/cask palette: 0..9")
     parser.add_argument("--tsv", action="store_true",
                         help="Tab-separated output for scripting")
     return parser
@@ -93,6 +97,8 @@ def _build_command_parser() -> argparse.ArgumentParser:
     lst.add_argument("-c", "--columns", metavar="KEYS",
                      help="Explicit columns: comma-joined keys")
     lst.add_argument("--limit", type=int, metavar="N")
+    lst.add_argument("--colors", type=int, choices=_COLOR_SCHEMES, metavar="N",
+                     help="Temporary formula/cask palette: 0..9")
     lst.add_argument("--tsv", action="store_true",
                      help="Output raw tab-separated rows for shell scripting")
 
@@ -173,7 +179,12 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     if opts.tsv_output:
         render_mod.render_tsv(packages, col_defs, out=sys.stdout)
     else:
-        render_mod.render_table(packages, col_defs, out=sys.stdout)
+        render_mod.render_table(
+            packages,
+            col_defs,
+            out=sys.stdout,
+            color_scheme=getattr(args, "colors", None) or 0,
+        )
     return 0
 
 
@@ -252,6 +263,7 @@ def _cmd_random(args: argparse.Namespace, cfg: dict) -> int:
         columns=columns,
         top=top,
         refresh=False,
+        colors=0,
         tsv=False,
     )
     return _cmd_search(search_args, cfg)
@@ -307,7 +319,13 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
     if opts.tsv_output:
         render_mod.render_tsv(ranked, col_defs, out=sys.stdout)
     else:
-        render_mod.render_table(ranked, col_defs, out=sys.stdout, sorted_col=opts.sort)
+        render_mod.render_table(
+            ranked,
+            col_defs,
+            out=sys.stdout,
+            sorted_col=opts.sort,
+            color_scheme=getattr(args, "colors", None) or 0,
+        )
     return 0
 
 
@@ -325,7 +343,11 @@ def _format_age(age_seconds: object) -> str:
 
 
 def _stderr_uses_color() -> bool:
-    return hasattr(sys.stderr, "isatty") and sys.stderr.isatty()
+    return (
+        not os.environ.get("NO_COLOR")
+        and hasattr(sys.stderr, "isatty")
+        and sys.stderr.isatty()
+    )
 
 
 def _print_cache_age(cfg: dict) -> None:

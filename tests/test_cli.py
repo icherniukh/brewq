@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from unittest.mock import patch
 
 import pytest
@@ -312,6 +313,56 @@ def test_main_search_tsv(capsys):
     assert capsys.readouterr().out == "ripgrep\t80000\tfalse\n"
 
 
+def test_main_search_passes_selected_color_scheme(capsys):
+    with patch("brewq.cache.load_packages", return_value=[_pkg("ripgrep")]), \
+         patch("brewq.render.render_table") as render:
+        rc = main(["--colors", "9", "ripgrep"])
+    assert rc == 0
+    assert render.call_args.kwargs["color_scheme"] == 9
+
+
+def test_main_list_passes_selected_color_scheme(capsys):
+    with patch("brewq.cache.load_packages", return_value=[
+        _pkg("ripgrep", installed=True),
+    ]), patch("brewq.render.render_table") as render:
+        rc = main(["list", "--colors", "1"])
+    assert rc == 0
+    assert render.call_args.kwargs["color_scheme"] == 1
+
+
+@pytest.mark.parametrize("value", ["-1", "10", "nope"])
+def test_main_rejects_invalid_color_scheme(value):
+    with pytest.raises(SystemExit) as exc:
+        main(["--colors", value, "ripgrep"])
+    assert exc.value.code == 2
+
+
+def test_main_list_rejects_invalid_color_scheme():
+    with pytest.raises(SystemExit) as exc:
+        main(["list", "--colors", "10"])
+    assert exc.value.code == 2
+
+
+def test_main_tsv_accepts_color_scheme_without_ansi(capsys):
+    with patch("brewq.cache.load_packages", return_value=[_pkg("ripgrep")]):
+        rc = main(["--colors", "9", "--tsv", "-c", "name", "ripgrep"])
+    assert rc == 0
+    assert capsys.readouterr().out == "ripgrep\n"
+
+
+def test_stale_cache_warning_respects_no_color(monkeypatch):
+    stderr = io.StringIO()
+    stderr.isatty = lambda: True
+    monkeypatch.setenv("NO_COLOR", "1")
+    monkeypatch.setattr("brewq.cli.sys.stderr", stderr)
+    with patch("brewq.cache.age_seconds", return_value=90_000), \
+         patch("brewq.cache.load_packages", return_value=[_pkg("ripgrep")]):
+        rc = main(["ripgrep"])
+    assert rc == 0
+    assert "cache: stale" in stderr.getvalue()
+    assert "\033[" not in stderr.getvalue()
+
+
 def test_random_runs_generated_search(capsys):
     with patch("brewq.cli._cmd_search", return_value=0) as search:
         rc = main(["random", "--seed", "7"])
@@ -331,6 +382,16 @@ def test_root_help_mentions_tsv_and_discoverability(capsys):
     out = capsys.readouterr().out
     assert "--tsv" in out
     assert "Commands: list  refresh  config" in out
+
+
+def test_root_help_marks_color_selector_as_temporary(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "--colors" in out
+    assert "temporary" in out.lower()
+    assert "0..9" in out
 
 
 def test_root_help_shows_sort_fields(capsys):

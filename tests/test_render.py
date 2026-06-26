@@ -3,6 +3,8 @@ from __future__ import annotations
 import io
 import re
 
+import pytest
+
 from brewq.columns import resolve
 from brewq.model import Package
 from brewq.render import render_table, render_tsv
@@ -132,6 +134,52 @@ def test_render_table_colors_formulae_and_casks_differently(monkeypatch):
     assert "\033[38;5;215mgoogle-chrome" in text
 
 
+@pytest.mark.parametrize(
+    ("scheme", "formula", "cask"),
+    [
+        (0, 75, 215),
+        (1, 179, 215),
+        (2, 115, 116),
+        (3, 183, 189),
+        (4, 147, 153),
+        (5, 183, 115),
+        (6, 117, 116),
+        (7, 75, 81),
+        (8, 141, 147),
+        (9, 121, 115),
+    ],
+)
+def test_render_table_selects_indexed_formula_cask_colors(
+    monkeypatch, scheme, formula, cask,
+):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    out = TtyStringIO()
+    cols = resolve("name", [])
+    render_table(
+        [_pkg("ripgrep"), _pkg("google-chrome", type_="cask")],
+        cols,
+        out=out,
+        color_scheme=scheme,
+    )
+    text = out.getvalue()
+    assert f"\033[38;5;{formula}mripgrep" in text
+    assert f"\033[38;5;{cask}mgoogle-chrome" in text
+
+
+def test_render_table_selected_colors_still_respect_no_color(monkeypatch):
+    monkeypatch.setenv("NO_COLOR", "1")
+    out = TtyStringIO()
+    render_table([_pkg()], resolve("name", []), out=out, color_scheme=9)
+    assert "\033[" not in out.getvalue()
+
+
+def test_render_table_selected_colors_stay_plain_when_not_a_tty(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    out = io.StringIO()
+    render_table([_pkg()], resolve("name", []), out=out, color_scheme=9)
+    assert "\033[" not in out.getvalue()
+
+
 def test_render_table_marks_deprecated_in_default_description():
     out = io.StringIO()
     cols = resolve("name,version,installs,description", [])
@@ -214,10 +262,15 @@ def test_render_table_installed_marker_keeps_columns_aligned(monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     out = TtyStringIO()
     cols = resolve("name,installs,description", [])
-    render_table([
-        _pkg("awscli", installs_30d=202_215),
-        _pkg("python@3.14", installed=True, installs_30d=84_739),
-    ], cols, out=out)
+    render_table(
+        [
+            _pkg("awscli", installs_30d=202_215),
+            _pkg("python@3.14", installed=True, installs_30d=84_739),
+        ],
+        cols,
+        out=out,
+        color_scheme=9,
+    )
 
     lines = [_strip_ansi(line) for line in out.getvalue().splitlines()]
     awscli = next(line for line in lines if "awscli" in line)
