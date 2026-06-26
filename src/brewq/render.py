@@ -81,13 +81,17 @@ def render_table(
         (i for i, col in enumerate(columns) if col.key == "description"),
         None,
     )
+    name_idx = next((i for i, col in enumerate(columns) if col.key == "name"), None)
 
     # Compute column widths from content (header or data)
     widths = [len(h) for h in headers]
-    for row in rows:
+    for pkg, row in zip(packages, rows, strict=False):
         for i, cell in enumerate(row):
             if i != desc_idx:
-                widths[i] = max(widths[i], len(cell))
+                visible_width = len(cell)
+                if color and i == name_idx and pkg.installed:
+                    visible_width += 2
+                widths[i] = max(widths[i], visible_width)
 
     # Set description width: fit content, but wrap if wider than terminal allows
     fixed_width = sum(widths[i] for i in range(len(columns)) if i != desc_idx)
@@ -115,7 +119,6 @@ def render_table(
     out.write(separator + "\n")
 
     # Rows
-    name_idx = next((i for i, c in enumerate(columns) if c.key == "name"), None)
     desc_idx_for_status = next((i for i, c in enumerate(columns) if c.key == "description"), None)
     status_idx = next((i for i, c in enumerate(columns) if c.key == "status"), None)
     show_status_in_description = status_idx is None

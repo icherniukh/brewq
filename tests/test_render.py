@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import re
 
 from brewq.columns import resolve
 from brewq.model import Package
@@ -10,6 +11,10 @@ from brewq.render import render_table, render_tsv
 class TtyStringIO(io.StringIO):
     def isatty(self) -> bool:
         return True
+
+
+def _strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
 def _pkg(name: str = "ripgrep", type_: str = "formula", installs_30d: int = 80_000,
@@ -185,3 +190,20 @@ def test_render_table_fits_sixty_column_terminal(monkeypatch):
     render_table([pkg], cols, out=out)
     lines = [line for line in out.getvalue().splitlines() if line]
     assert all(len(line) <= 60 for line in lines)
+
+
+def test_render_table_installed_marker_keeps_columns_aligned(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    out = TtyStringIO()
+    cols = resolve("name,installs,description", [])
+    render_table([
+        _pkg("awscli", installs_30d=202_215),
+        _pkg("python@3.14", installed=True, installs_30d=84_739),
+    ], cols, out=out)
+
+    lines = [_strip_ansi(line) for line in out.getvalue().splitlines()]
+    awscli = next(line for line in lines if "awscli" in line)
+    python = next(line for line in lines if "python@3.14" in line)
+    assert "python@3.14 ✔" in python
+    assert awscli.index("202,215") + len("202,215") == python.index("84,739") + len("84,739")
+    assert awscli.index("Search tool") == python.index("Search tool")
