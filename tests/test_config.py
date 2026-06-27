@@ -17,6 +17,21 @@ def test_env_override_cache_max_age(monkeypatch):
     assert conf["cache"]["max_age_seconds"] == 3600
 
 
+def test_env_override_does_not_leak_into_later_loads(monkeypatch):
+    monkeypatch.setenv("BREWQ_CACHE_MAX_AGE", "1")
+    assert cfg_mod.load()["cache"]["max_age_seconds"] == 1
+    monkeypatch.delenv("BREWQ_CACHE_MAX_AGE")
+    assert cfg_mod.load()["cache"]["max_age_seconds"] == 86400
+
+
+def test_loaded_config_can_be_mutated_without_changing_defaults():
+    conf = cfg_mod.load()
+    conf["output"]["columns"].append("url")
+    assert cfg_mod.load()["output"]["columns"] == [
+        "name", "installs", "description",
+    ]
+
+
 def test_env_override_config_path(monkeypatch, tmp_path):
     toml = tmp_path / "brewq.toml"
     toml.write_text('[output]\ncolumns = ["name"]\n')

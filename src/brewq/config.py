@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 from pathlib import Path
 from typing import Any
@@ -47,7 +48,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def load() -> dict[str, Any]:
-    cfg = dict(DEFAULTS)
+    cfg = copy.deepcopy(DEFAULTS)
     path = _config_path()
     if path.exists():
         with path.open("rb") as fh:
