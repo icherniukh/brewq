@@ -116,8 +116,18 @@ def test_render_table_no_color_when_no_color_env(monkeypatch):
     out = io.StringIO()
     out.isatty = lambda: True  # simulate tty
     cols = resolve("name,installs", [])
-    render_table([_pkg()], cols, out=out)
-    # Should not contain ANSI escape codes
+    render_table([_pkg(installed=True)], cols, out=out)
+    text = out.getvalue()
+    assert "ripgrep ✔" in text
+    assert "\033[" not in text
+
+
+def test_render_table_non_tty_keeps_plain_installed_marker(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    out = io.StringIO()
+    cols = resolve("name,installs", [])
+    render_table([_pkg(installed=True)], cols, out=out)
+    assert "ripgrep ✔" in out.getvalue()
     assert "\033[" not in out.getvalue()
 
 

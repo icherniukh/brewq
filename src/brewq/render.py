@@ -114,7 +114,7 @@ def render_table(
         for i, cell in enumerate(row):
             if i != desc_idx:
                 visible_width = len(cell)
-                if color and i == name_idx and pkg.installed:
+                if i == name_idx and pkg.installed:
                     visible_width += 2
                 widths[i] = max(widths[i], visible_width)
 
@@ -180,24 +180,27 @@ def render_table(
                     # continuation lines: only desc column has content
                     cell = ""
 
-                if color and line_no == 0:
-                    if i == name_idx:
+                if line_no == 0 and i == name_idx:
+                    marker_width = 2 if is_installed else 0
+                    if color:
                         pkg_color = cask_color if pkg_type == "cask" else formula_color
                         marker = (" " + _COLOR_GREEN + "✔" + _RESET) if is_installed else ""
-                        # Bold for installed
                         styled = _BOLD + pkg_color + cell + _RESET + marker
-                        # Pad without ANSI codes affecting width
-                        pad = w - len(cell) - (2 if is_installed else 0)
-                        parts.append(styled + " " * max(0, pad))
-                        continue
-                    elif i == status_idx and cell:
-                        if cell == "disabled":
-                            parts.append(_COLOR_DISABLED + f"{cell:<{w}}" + _RESET)
-                        elif cell == "deprecated":
-                            parts.append(_COLOR_DEPRECATED + f"{cell:<{w}}" + _RESET)
-                        else:
-                            parts.append(f"{cell:<{w}}")
-                        continue
+                    else:
+                        marker = " ✔" if is_installed else ""
+                        styled = cell + marker
+                    pad = w - len(cell) - marker_width
+                    parts.append(styled + " " * max(0, pad))
+                    continue
+
+                if color and line_no == 0 and i == status_idx and cell:
+                    if cell == "disabled":
+                        parts.append(_COLOR_DISABLED + f"{cell:<{w}}" + _RESET)
+                    elif cell == "deprecated":
+                        parts.append(_COLOR_DEPRECATED + f"{cell:<{w}}" + _RESET)
+                    else:
+                        parts.append(f"{cell:<{w}}")
+                    continue
 
                 if col.align == "right":
                     parts.append(f"{cell:>{w}}")
