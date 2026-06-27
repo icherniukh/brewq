@@ -44,11 +44,6 @@ def _brewq(*args: str) -> tuple[str, ...]:
 
 CASES: tuple[Case, ...] = (
     Case(
-        "cache_status",
-        "brewq cache status",
-        _brewq("cache", "status"),
-    ),
-    Case(
         "cache_load",
         "python -c 'from brewq import cache; print(len(cache.load_packages()))'",
         _python("-c", "from brewq import cache; print(len(cache.load_packages()))"),

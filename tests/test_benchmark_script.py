@@ -33,9 +33,9 @@ def test_summarize_times_reports_milliseconds():
 def test_select_cases_returns_requested_cases_in_requested_order():
     bench = _load_benchmark_module()
 
-    selected = bench.select_cases(["search_tsv", "cache_status"])
+    selected = bench.select_cases(["search_tsv", "list_default"])
 
-    assert [case.name for case in selected] == ["search_tsv", "cache_status"]
+    assert [case.name for case in selected] == ["search_tsv", "list_default"]
 
 
 def test_select_cases_rejects_unknown_case():
@@ -47,6 +47,11 @@ def test_select_cases_rejects_unknown_case():
         assert "Unknown benchmark case" in str(exc)
     else:
         raise AssertionError("select_cases should reject unknown names")
+
+
+def test_cases_do_not_invoke_removed_cache_subcommand():
+    bench = _load_benchmark_module()
+    assert all(case.argv[-2:] != ("cache", "status") for case in bench.CASES)
 
 
 def test_format_markdown_table_contains_core_columns():
