@@ -51,6 +51,13 @@ The config file controls default columns and cache freshness.
 """
 
 
+def _positive_int(raw: str) -> int:
+    value = int(raw)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return value
+
+
 def _build_search_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="brewq",
@@ -67,7 +74,7 @@ def _build_search_parser() -> argparse.ArgumentParser:
                         help="Column preset: compact, full")
     parser.add_argument("-c", "--columns", metavar="KEYS",
                         help="Columns: name (n), 30d, 90d, 365d, pop, bin, type (t), version (v), desc (d), inst (i), status, url (h)")
-    parser.add_argument("-t", "--top", type=int, metavar="N",
+    parser.add_argument("-t", "--top", type=_positive_int, metavar="N",
                         help="Show top N by installs")
     parser.add_argument("-r", "--refresh", action="store_true",
                         help="Refresh cache before searching")
@@ -96,7 +103,7 @@ def _build_command_parser() -> argparse.ArgumentParser:
                      help="Column preset: compact, full")
     lst.add_argument("-c", "--columns", metavar="KEYS",
                      help="Explicit columns: comma-joined keys")
-    lst.add_argument("--limit", type=int, metavar="N")
+    lst.add_argument("--limit", type=_positive_int, metavar="N")
     lst.add_argument("--colors", type=int, choices=_COLOR_SCHEMES, metavar="N",
                      help="Temporary formula/cask palette: 0..9")
     lst.add_argument("--tsv", action="store_true",

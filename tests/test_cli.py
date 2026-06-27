@@ -82,6 +82,21 @@ def test_main_search_explicit_top_overrides_default(capsys):
     assert "git-tool-10" not in out
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["-t", "0", "git"],
+        ["-t", "-1", "git"],
+        ["list", "--limit", "0"],
+        ["list", "--limit", "-1"],
+    ],
+)
+def test_main_rejects_non_positive_row_limits(argv):
+    with pytest.raises(SystemExit) as exc:
+        main(argv)
+    assert exc.value.code == 2
+
+
 def test_main_search_default_columns_omit_type(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load_packages", return_value=pkgs):
