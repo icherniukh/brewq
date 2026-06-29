@@ -60,7 +60,7 @@ def test_main_search_from_cache(capsys):
     assert rc == 0
     captured = capsys.readouterr()
     assert "ripgrep" in captured.out
-    assert "cache: 1m old" in captured.err
+    assert "cache: 1min old" in captured.err
 
 
 def test_main_search_non_tty_shows_all_results(capsys):
@@ -196,7 +196,7 @@ def test_main_search_discloses_stale_cache(capsys):
          patch("brewq.scheduler.schedule_if_needed", return_value="scheduled"):
         rc = main(["ripgrep"])
     assert rc == 0
-    assert "cache: stale; refresh scheduled" in capsys.readouterr().err
+    assert "cache: 25h old; refresh scheduled" in capsys.readouterr().err
 
 
 def test_main_list_columns_short_alias(capsys):
@@ -254,7 +254,7 @@ def test_main_list_uses_cache_without_brew(capsys):
     captured = capsys.readouterr()
     assert "ripgrep" in captured.out
     assert "bat" not in captured.out
-    assert "cache: 2m old" in captured.err
+    assert "cache: 2min old" in captured.err
 
 
 def test_main_list_does_not_inherit_search_result_limit(capsys):
@@ -273,7 +273,7 @@ def test_cache_age_disclosure_uses_metadata_only(capsys):
          patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")], age=90)):
         rc = main(["ripgrep"])
     assert rc == 0
-    assert "cache: 1m old" in capsys.readouterr().err
+    assert "cache: 1min old" in capsys.readouterr().err
 
 
 def test_search_terms_after_noncommand_are_not_rerouted(capsys):
@@ -345,7 +345,7 @@ def test_stale_cache_warning_respects_no_color(monkeypatch):
          patch("brewq.scheduler.schedule_if_needed", return_value="scheduled"):
         rc = main(["ripgrep"])
     assert rc == 0
-    assert "cache: stale" in stderr.getvalue()
+    assert "25h old; refresh scheduled" in stderr.getvalue()
     assert "\033[" not in stderr.getvalue()
 
 
@@ -411,7 +411,7 @@ def test_seed_search_renders_before_scheduling(capsys):
         rc = main(["ripgrep"])
 
     assert rc == 0
-    assert events == ["render", "schedule"]
+    assert events == ["schedule", "render"]
     assert "cache: bundled seed; refresh scheduled" in capsys.readouterr().err
 
 
@@ -423,7 +423,7 @@ def test_stale_user_cache_renders_and_schedules(capsys):
 
     assert rc == 0
     schedule.assert_called_once()
-    assert "cache: stale; refresh scheduled" in capsys.readouterr().err
+    assert "cache: 25h old; refresh scheduled" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

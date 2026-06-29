@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from collections.abc import Sequence
@@ -16,6 +17,14 @@ from brewq import seed as seed_mod
 _COMMANDS = frozenset({"list", "refresh", "config", "random"})
 _FORMATTER = argparse.RawDescriptionHelpFormatter
 _COLOR_SCHEMES = range(10)
+_COLOR_RED = "\033[31m"
+_RESET = "\033[0m"
+
+
+def _use_color_stderr() -> bool:
+    if os.environ.get("NO_COLOR"):
+        return False
+    return hasattr(sys.stderr, "isatty") and sys.stderr.isatty()
 
 _SEARCH_EPILOG = """\
 Examples:
@@ -187,6 +196,7 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
 
     packages = options_mod.rank_installed(packages, opts)
 
+    _finish_cache_command(loaded, cfg)
     if opts.tsv_output:
         render_mod.render_tsv(packages, col_defs, out=sys.stdout)
     else:
@@ -196,7 +206,6 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
             out=sys.stdout,
             color_scheme=getattr(args, "colors", None) or 3,
         )
-    _finish_cache_command(loaded, cfg)
     return 0
 
 
@@ -343,10 +352,10 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
 
     ranked = options_mod.rank(packages, opts)
 
+    _finish_cache_command(loaded, cfg)
     if not ranked:
         query_str = " ".join(opts.query) if opts.query else "(installed filter)"
         print(f"No results for: {query_str}", file=sys.stderr)
-        _finish_cache_command(loaded, cfg)
         return 0
 
     if opts.tsv_output:
@@ -359,7 +368,6 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
             sorted_col=opts.sort,
             color_scheme=getattr(args, "colors", None) or 3,
         )
-    _finish_cache_command(loaded, cfg)
     return 0
 
 
@@ -378,15 +386,20 @@ def _load_cache() -> cache_mod.CacheLoad | None:
 def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict) -> None:
     max_age = int(cfg["cache"]["max_age_seconds"])
     scheduler_state = scheduler_mod.schedule_if_needed(loaded, max_age)
+    suffix = "refresh scheduled" if scheduler_state == "scheduled" else "refresh pending"
+
     if loaded.source == "seed":
-        suffix = "refresh scheduled" if scheduler_state == "scheduled" else "refresh pending"
         print(f"cache: bundled seed; {suffix}", file=sys.stderr)
         return
+
+    age_str = _format_age(loaded.age_seconds)
+    if _use_color_stderr():
+        age_str = f"{_COLOR_RED}{age_str}{_RESET}"
+
     if loaded.requires_refresh or loaded.age_seconds >= max_age:
-        suffix = "refresh scheduled" if scheduler_state == "scheduled" else "refresh pending"
-        print(f"cache: stale; {suffix}", file=sys.stderr)
-        return
-    print(f"cache: {_format_age(loaded.age_seconds)} old", file=sys.stderr)
+        print(f"cache: {age_str} old; {suffix}", file=sys.stderr)
+    else:
+        print(f"cache: {age_str} old", file=sys.stderr)
 
 
 def _format_age(age_seconds: object) -> str:
@@ -396,7 +409,7 @@ def _format_age(age_seconds: object) -> str:
     if age < 60:
         return f"{age}s"
     if age < 3600:
-        return f"{age // 60}m"
+        return f"{age // 60}min"
     if age < 172800:
         return f"{age // 3600}h"
     return f"{age // 86400}d"
