@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,7 @@ DEFAULTS: dict[str, Any] = {
     },
     "output": {
         "columns": ["name", "installs", "description"],
-        "limit": 15,
+        "limit": 0,
     },
     "list": {
         "columns": ["name", "type", "version", "description"],
@@ -51,9 +52,15 @@ def load() -> dict[str, Any]:
     cfg = copy.deepcopy(DEFAULTS)
     path = _config_path()
     if path.exists():
-        with path.open("rb") as fh:
-            file_cfg = tomllib.load(fh)
-        cfg = _deep_merge(cfg, file_cfg)
+        try:
+            with path.open("rb") as fh:
+                file_cfg = tomllib.load(fh)
+            cfg = _deep_merge(cfg, file_cfg)
+        except Exception as exc:
+            print(
+                f"brewq: config error ({path}): {exc} — using defaults",
+                file=sys.stderr,
+            )
 
     # Environment overrides
     if os.environ.get("BREWQ_CACHE_MAX_AGE"):

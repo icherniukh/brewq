@@ -51,3 +51,15 @@ def test_cache_dir_xdg(monkeypatch, tmp_path):
     monkeypatch.setenv("BREWQ_CACHE_DIR", "")
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     assert cfg_mod.cache_dir() == tmp_path / "brewq"
+
+
+def test_corrupt_config_warns_and_uses_defaults(monkeypatch, tmp_path, capsys):
+    toml = tmp_path / "bad.toml"
+    toml.write_text("this is not valid toml = [[[")
+    monkeypatch.setenv("BREWQ_CONFIG", str(toml))
+    conf = cfg_mod.load()
+    err = capsys.readouterr().err
+    assert "config error" in err
+    assert str(toml) in err
+    assert conf["search"]["sort"] == "installs_30d"
+    assert conf["output"]["limit"] == 0

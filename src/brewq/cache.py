@@ -3,6 +3,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import sys
 import time
 from dataclasses import dataclass
 from enum import StrEnum
@@ -180,8 +181,11 @@ def load(now: float | None = None) -> CacheLoad:
                 packages=_packages_from_data(raw),
                 age_seconds=max(0.0, current_time - p.stat().st_mtime),
             )
-        except (OSError, TypeError, json.JSONDecodeError):
-            pass
+        except (OSError, TypeError, json.JSONDecodeError) as exc:
+            print(
+                f"brewq: cache corrupt ({p}) — using bundled data; run 'brewq refresh' to recover ({exc})",
+                file=sys.stderr,
+            )
 
     raw, metadata = seed_mod.load_resource()
     packages = _packages_from_data(raw)

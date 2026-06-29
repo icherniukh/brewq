@@ -26,7 +26,8 @@ def test_fresh_user_cache_does_not_spawn():
 
 
 def test_seed_schedules_once_and_repeated_command_sees_pending():
-    with patch("brewq.scheduler.subprocess.Popen") as spawn:
+    with patch("brewq.scheduler.subprocess.Popen") as spawn, \
+         patch("brewq.scheduler.os.kill"):  # PID 123 treated as alive
         spawn.return_value.pid = 123
         first = scheduler.schedule_if_needed(_load("seed"), max_age=100, now=1_000)
         second = scheduler.schedule_if_needed(_load("seed"), max_age=100, now=1_001)
@@ -37,6 +38,18 @@ def test_seed_schedules_once_and_repeated_command_sees_pending():
     state = json.loads(scheduler.state_path().read_text())
     assert state["state"] == "scheduled"
     assert state["pid"] == 123
+
+
+def test_dead_scheduled_pid_allows_rescheduling():
+    scheduler.write_state({"state": "scheduled", "scheduled_at": 500, "pid": 99999})
+
+    with patch("brewq.scheduler.subprocess.Popen") as spawn, \
+         patch("brewq.scheduler.os.kill", side_effect=ProcessLookupError):
+        spawn.return_value.pid = 456
+        outcome = scheduler.schedule_if_needed(_load("seed"), max_age=100, now=1_000)
+
+    assert outcome == "scheduled"
+    assert scheduler.read_state()["pid"] == 456
 
 
 def test_foreground_command_never_waits_for_worker_lock():
@@ -59,6 +72,7 @@ def test_failed_attempt_observes_retry_cooldown():
 
 
 def test_stale_scheduled_state_is_replaced():
+    # State is old enough (age > ACTIVE_STALE_AFTER) regardless of PID liveness
     scheduler.write_state({"state": "scheduled", "scheduled_at": 1, "pid": 12})
 
     with patch("brewq.scheduler.subprocess.Popen") as spawn:

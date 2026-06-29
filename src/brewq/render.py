@@ -48,6 +48,10 @@ def _terminal_width() -> int:
     return shutil.get_terminal_size((100, 24)).columns
 
 
+def _terminal_height() -> int:
+    return shutil.get_terminal_size((100, 24)).lines
+
+
 def _wrap(text: str, width: int) -> list[str]:
     if not text or width <= 0:
         return [text or ""]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from collections.abc import Sequence
 
@@ -299,8 +300,9 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         print(f"brewq: {err}", file=sys.stderr)
         return 1
 
+    tty_rows = shutil.get_terminal_size().lines if sys.stdout.isatty() else None
     try:
-        opts = options_mod.build_search_options(args, cfg)
+        opts = options_mod.build_search_options(args, cfg, tty_rows=tty_rows)
     except ValueError as exc:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1

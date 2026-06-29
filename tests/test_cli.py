@@ -63,18 +63,45 @@ def test_main_search_from_cache(capsys):
     assert "cache: 1m old" in captured.err
 
 
-def test_main_search_defaults_to_top_15(capsys):
+def test_main_search_non_tty_shows_all_results(capsys):
     pkgs = [
         _pkg(f"git-tool-{i:02d}", installs_30d=10_000 - i)
         for i in range(45)
     ]
+    # capsys stdout is not a TTY, so no cap is applied
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
         rc = main(["git"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "git-tool-14" in out
-    assert "git-tool-15" not in out
-    assert "git-tool-44" not in out
+    assert "git-tool-00" in out
+    assert "git-tool-44" in out
+
+
+def test_main_search_tty_caps_by_terminal_height():
+    import os
+    import brewq.options as opts_mod
+
+    pkgs = [
+        _pkg(f"git-tool-{i:02d}", installs_30d=10_000 - i)
+        for i in range(45)
+    ]
+    captured = []
+    orig = opts_mod.build_search_options
+
+    def spy(args, cfg, *, tty_rows=None):
+        result = orig(args, cfg, tty_rows=tty_rows)
+        captured.append(result)
+        return result
+
+    with patch("brewq.cache.load", return_value=_loaded(pkgs)), \
+         patch("brewq.cli.sys.stdout") as mock_out, \
+         patch("brewq.cli.shutil.get_terminal_size", return_value=os.terminal_size((120, 24))), \
+         patch("brewq.options.build_search_options", side_effect=spy):
+        mock_out.isatty.return_value = True
+        main(["git"])
+
+    assert captured, "build_search_options was not called"
+    assert captured[0].limit == 18  # max(5, 24 - 6)
 
 
 def test_main_search_explicit_top_overrides_default(capsys):

@@ -56,10 +56,23 @@ def _state_time(state: dict[str, Any]) -> float:
     return 0.0
 
 
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
 def _schedule_decision(state: dict[str, Any], now: float) -> str | None:
     name = state.get("state")
     age = max(0.0, now - _state_time(state))
     if name in {"scheduled", "running"} and age <= _ACTIVE_STALE_AFTER:
+        pid = state.get("pid")
+        if pid and not _pid_alive(pid):
+            return None
         return "pending"
     if name in {"partial", "deferred", "failed"} and age < RETRY_COOLDOWN:
         return "cooldown"

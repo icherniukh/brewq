@@ -72,7 +72,7 @@ class ListOptions:
     tsv_output: bool = False
 
 
-def build_search_options(args: Any, cfg: dict) -> SearchOptions:
+def build_search_options(args: Any, cfg: dict, *, tty_rows: int | None = None) -> SearchOptions:
     raw_sort = getattr(args, "sort", None)
     top = getattr(args, "top", None)
 
@@ -84,7 +84,16 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
         cfg_sort = cfg["search"].get("sort", "installs_30d")
         sort = parse_sort(cfg_sort)
 
-    limit = top or cfg["output"]["limit"]
+    cfg_limit = cfg["output"]["limit"]
+    if top:
+        limit = top
+    elif cfg_limit > 0:
+        limit = cfg_limit
+    elif tty_rows is not None:
+        limit = max(5, tty_rows - 6)
+    else:
+        limit = 0
+
     columns_spec = (
         getattr(args, "columns", None)
         or getattr(args, "preset", None)

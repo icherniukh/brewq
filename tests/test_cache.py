@@ -117,3 +117,27 @@ def test_refresh_writes_metadata_and_reports_analytics_failure():
     assert result.outcome is cache_mod.RefreshOutcome.METADATA_ONLY
     assert result.analytics_error == "formula_30d: offline"
     assert json.loads(cache_mod.cache_path().read_text())["formulae"][0]["name"] == "ripgrep"
+
+
+def test_corrupt_cache_warns_and_falls_back_to_seed(capsys):
+    cache_mod.cache_path().parent.mkdir(parents=True, exist_ok=True)
+    cache_mod.cache_path().write_text("{ not valid json !!!!")
+
+    seed_data = {
+        "_brewq_seed": {"schema_version": 1, "generated_at": 1700000000},
+        "formulae": [{"name": "ripgrep", "full_name": "ripgrep", "desc": "",
+                      "homepage": "", "versions": {"stable": "1.0"},
+                      "installed": [], "deprecated": False, "disabled": False,
+                      "aliases": []}],
+        "casks": [],
+    }
+    from brewq.seed import SeedMetadata
+    with patch.object(cache_mod.seed_mod, "load_resource",
+                      return_value=(seed_data, SeedMetadata(schema_version=1, generated_at=1700000000))), \
+         patch.object(cache_mod.brew_mod, "storage_roots", side_effect=OSError("no brew")):
+        result = cache_mod.load()
+
+    err = capsys.readouterr().err
+    assert "cache corrupt" in err
+    assert "brewq refresh" in err
+    assert result.source == "seed"

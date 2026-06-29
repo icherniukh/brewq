@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+import argparse
+
 from brewq.model import Package
-from brewq.options import ListOptions, SearchOptions, parse_sort, rank, rank_installed
+from brewq.options import ListOptions, SearchOptions, build_search_options, parse_sort, rank, rank_installed
 
 
 def _pkg(name: str, type_: str = "formula", installs_30d: int = -1,
@@ -225,3 +227,39 @@ def test_rank_installed_sorts_by_type_then_name():
     result = rank_installed(installed, opts)
     types = [p.type for p in result]
     assert types == sorted(types)
+
+
+# --- build_search_options limit precedence ---
+
+def _args(**kwargs):
+    defaults = dict(query=[], sort=None, top=None, preset=None, columns=None, tsv=False, installed=False)
+    return argparse.Namespace(**{**defaults, **kwargs})
+
+
+def _cfg(limit=0):
+    return {"search": {"sort": "installs_30d"}, "output": {"limit": limit, "columns": []}}
+
+
+def test_build_search_options_non_tty_has_no_limit():
+    opts = build_search_options(_args(query=["git"]), _cfg(), tty_rows=None)
+    assert opts.limit == 0
+
+
+def test_build_search_options_tty_uses_terminal_height():
+    opts = build_search_options(_args(query=["git"]), _cfg(), tty_rows=24)
+    assert opts.limit == 18  # max(5, 24 - 6)
+
+
+def test_build_search_options_tty_clamps_small_terminals():
+    opts = build_search_options(_args(query=["git"]), _cfg(), tty_rows=8)
+    assert opts.limit == 5  # max(5, 8 - 6)
+
+
+def test_build_search_options_config_limit_overrides_tty():
+    opts = build_search_options(_args(query=["git"]), _cfg(limit=20), tty_rows=24)
+    assert opts.limit == 20
+
+
+def test_build_search_options_top_flag_overrides_all():
+    opts = build_search_options(_args(query=["git"], top=5), _cfg(limit=20), tty_rows=24)
+    assert opts.limit == 5
