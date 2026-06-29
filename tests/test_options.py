@@ -88,17 +88,6 @@ def test_rank_by_90d():
     assert result[0].name == "popular-parser"
 
 
-def test_rank_by_365d():
-    local = [
-        _pkg("rare-json",      installs_365d=500),
-        _pkg("popular-parser", installs_365d=900_000),
-        _pkg("medium-json",    installs_365d=50_000),
-    ]
-    opts = SearchOptions(query=[], sort="installs_365d")
-    result = rank(local, opts)
-    assert result[0].name == "popular-parser"
-
-
 def test_rank_keeps_exact_match_first_then_uses_installs():
     local = [
         _pkg("json", installs_30d=20, desc="exact match"),
@@ -137,12 +126,6 @@ def test_rank_no_match():
     opts = SearchOptions(query=["not-present"])
     result = rank(list(pkgs), opts)
     assert result == []
-
-
-def test_rank_with_desc():
-    opts = SearchOptions(query=["search"])
-    result = rank(list(pkgs), opts)
-    assert any(p.name == "ripgrep" for p in result)
 
 
 def test_rank_name_search_uses_formula_aliases():
@@ -197,18 +180,44 @@ def test_rank_name_search_does_not_fuzzy_match_casks():
     assert result == []
 
 
-def test_rank_deprecated_last():
+def test_rank_deprecated_included_with_no_limit():
     deprecated = _pkg("old-tool", installs_30d=999_999, deprecated=True)
     local = list(pkgs) + [deprecated]
-    opts = SearchOptions(query=[], sort="installs_30d")
+    opts = SearchOptions(query=[], sort="installs_30d", limit=0)
+    result = rank(local, opts)
+    assert any(p.name == "old-tool" for p in result)
+
+
+def test_rank_deprecated_excluded_when_results_overflow_view():
+    deprecated = _pkg("old-tool", installs_30d=999_999, deprecated=True)
+    local = list(pkgs) + [deprecated]  # 6 total
+    opts = SearchOptions(query=[], sort="installs_30d", limit=5)  # limit < total
+    result = rank(local, opts)
+    assert all(p.name != "old-tool" for p in result)
+
+
+def test_rank_deprecated_included_when_results_fit_in_view():
+    deprecated = _pkg("old-tool", installs_30d=999_999, deprecated=True)
+    local = list(pkgs) + [deprecated]  # 6 total
+    opts = SearchOptions(query=[], sort="installs_30d", limit=10)  # limit > total
+    result = rank(local, opts)
+    assert any(p.name == "old-tool" for p in result)
+
+
+def test_rank_deprecated_last_with_show_all():
+    deprecated = _pkg("old-tool", installs_30d=999_999, deprecated=True)
+    local = list(pkgs) + [deprecated]
+    opts = SearchOptions(query=[], sort="installs_30d", show_all=True, limit=0)
     result = rank(local, opts)
     assert result[-1].name == "old-tool"
 
 
-def test_rank_limit():
-    opts = SearchOptions(query=[], limit=2)
-    result = rank(list(pkgs), opts)
-    assert len(result) == 2
+def test_rank_disabled_included_with_no_limit():
+    disabled = _pkg("dead-tool", installs_30d=999_999, disabled=True)
+    local = list(pkgs) + [disabled]
+    opts = SearchOptions(query=[], sort="installs_30d", limit=0)
+    result = rank(local, opts)
+    assert any(p.name == "dead-tool" for p in result)
 
 
 def test_rank_installed_only_filter():

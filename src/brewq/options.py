@@ -62,6 +62,7 @@ class SearchOptions:
     limit: int = 0
     tsv_output: bool = False
     installed_only: bool = False
+    show_all: bool = False
 
 
 @dataclass
@@ -107,6 +108,7 @@ def build_search_options(args: Any, cfg: dict, *, tty_rows: int | None = None) -
         limit=limit,
         tsv_output=getattr(args, "tsv", False),
         installed_only=getattr(args, "installed", False),
+        show_all=getattr(args, "all", False),
     )
 
 
@@ -207,6 +209,15 @@ def rank(
     # Filter to installed packages when requested
     if opts.installed_only:
         packages = [p for p in packages if p.installed]
+
+    if not opts.show_all:
+        # Filter deprecated/disabled only when a view limit exists and results would overflow it.
+        # No view limit (piped/non-TTY) means no constraint — include all.
+        if opts.limit > 0:
+            _fuzzy_all = _formula_fuzzy_names(packages, query_terms)
+            _total = sum(1 for p in packages if _matches(p, query_terms) or p.name in _fuzzy_all)
+            if _total > opts.limit:
+                packages = [p for p in packages if not p.deprecated and not p.disabled]
 
     formula_fuzzy_names = _formula_fuzzy_names(packages, query_terms)
     packages = [

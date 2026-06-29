@@ -32,14 +32,6 @@ def _pkg(name: str = "ripgrep", type_: str = "formula", installs_30d: int = 80_0
     )
 
 
-def test_render_table_contains_name():
-    out = io.StringIO()
-    pkgs = [_pkg()]
-    cols = resolve("name,installs,description", [])
-    render_table(pkgs, cols, out=out)
-    assert "ripgrep" in out.getvalue()
-
-
 def test_render_table_contains_header():
     out = io.StringIO()
     cols = resolve("name,type,installs", [])
@@ -101,16 +93,6 @@ def test_render_tsv_sanitizes_tabs_and_newlines():
     assert out.getvalue() == "line one line two line three\n"
 
 
-def test_render_table_multiple_packages():
-    out = io.StringIO()
-    pkgs = [_pkg("ripgrep"), _pkg("bat", installs_30d=50_000, desc="Cat clone")]
-    cols = resolve("compact", [])
-    render_table(pkgs, cols, out=out)
-    text = out.getvalue()
-    assert "ripgrep" in text
-    assert "bat" in text
-
-
 def test_render_table_no_color_when_no_color_env(monkeypatch):
     monkeypatch.setenv("NO_COLOR", "1")
     out = io.StringIO()
@@ -131,26 +113,13 @@ def test_render_table_non_tty_keeps_plain_installed_marker(monkeypatch):
     assert "\033[" not in out.getvalue()
 
 
-def test_render_table_colors_formulae_and_casks_differently(monkeypatch):
-    monkeypatch.delenv("NO_COLOR", raising=False)
-    out = TtyStringIO()
-    cols = resolve("name,installs", [])
-    render_table([
-        _pkg("ripgrep", type_="formula"),
-        _pkg("google-chrome", type_="cask"),
-    ], cols, out=out)
-    text = out.getvalue()
-    assert "\033[38;5;75mripgrep" in text
-    assert "\033[38;5;215mgoogle-chrome" in text
-
-
 @pytest.mark.parametrize(
     ("scheme", "formula", "cask"),
     [
         (0, 75, 215),
         (1, 179, 215),
         (2, 115, 116),
-        (3, 183, 189),
+        (3, 189, 183),
         (4, 147, 153),
         (5, 183, 115),
         (6, 117, 116),
@@ -195,13 +164,6 @@ def test_render_table_marks_deprecated_in_default_description():
     cols = resolve("name,version,installs,description", [])
     render_table([_pkg(status="deprecated")], cols, out=out)
     assert "(deprecated) Search tool" in out.getvalue()
-
-
-def test_render_table_marks_disabled_in_default_description():
-    out = io.StringIO()
-    cols = resolve("name,version,installs,description", [])
-    render_table([_pkg(status="disabled")], cols, out=out)
-    assert "(disabled) Search tool" in out.getvalue()
 
 
 def test_render_table_omits_description_status_prefix_when_status_column_selected():

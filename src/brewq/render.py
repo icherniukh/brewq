@@ -17,10 +17,10 @@ _COLOR_GREEN = "\033[32m"
 _COLOR_DEPRECATED = "\033[38;5;208m"  # orange
 _COLOR_DISABLED = "\033[38;5;167m"    # red
 _COLOR_SCHEMES = (
-    (75, 215),   # current: sky blue / amber
+    (75, 215),   # sky blue / amber
     (179, 215),  # soft amber / apricot
     (115, 116),  # seafoam / pale aqua
-    (183, 189),  # lavender / periwinkle
+    (189, 183),  # current: periwinkle / lavender
     (147, 153),  # periwinkle / pale blue
     (183, 115),  # lavender / seafoam
     (117, 116),  # ice blue / soft cyan
@@ -122,14 +122,16 @@ def render_table(
                     visible_width += 2
                 widths[i] = max(widths[i], visible_width)
 
-    # Set description width: fit content, but wrap if wider than terminal allows
+    # Set description width: clip to available terminal space; wrap only when columns overflow.
     fixed_width = sum(widths[i] for i in range(len(columns)) if i != desc_idx)
     gaps = 2 * max(0, len(columns) - 1)  # 2-space padding between columns
+    columns_overflow = False
     if desc_idx is not None:
         min_desc_width = len(headers[desc_idx])
         available = max(min_desc_width, term_width - fixed_width - gaps)
         max_content = max((len(row[desc_idx]) for row in rows), default=0)
         widths[desc_idx] = max(min_desc_width, min(max_content, available))
+        columns_overflow = (fixed_width + gaps + min_desc_width) > term_width
 
     # Header
     header_parts = []
@@ -148,7 +150,6 @@ def render_table(
     out.write(separator + "\n")
 
     # Rows
-    desc_idx_for_status = next((i for i, c in enumerate(columns) if c.key == "description"), None)
     status_idx = next((i for i, c in enumerate(columns) if c.key == "status"), None)
     show_status_in_description = status_idx is None
 
@@ -156,14 +157,18 @@ def render_table(
         pkg_type = pkg.type
         is_installed = pkg.installed
 
-        # Wrap description. Status prefixes are part of the visible description
-        # cell, so include them before wrapping instead of prepending afterward.
+        # Clip description to column width; wrap only when columns overflow the terminal.
+        # Status prefix is embedded before clip/wrap so word boundaries are respected.
         if desc_idx is not None:
             desc_text = (_plain_status_prefix(pkg) if show_status_in_description else "") + row[desc_idx]
-            if show_status_in_description and _plain_status_prefix(pkg):
-                desc_lines = [_clip(desc_text, widths[desc_idx])]
-            else:
+            if columns_overflow:
                 desc_lines = _wrap(desc_text, widths[desc_idx])
+            else:
+                desc_lines = [_clip(desc_text, widths[desc_idx])]
+            if show_status_in_description and desc_lines:
+                plain_prefix = _plain_status_prefix(pkg)
+                if plain_prefix and desc_lines[0].startswith(plain_prefix):
+                    desc_lines[0] = _status_prefix(pkg, color) + desc_lines[0][len(plain_prefix):]
         else:
             desc_lines = None
 
@@ -172,17 +177,9 @@ def render_table(
         for line_no in range(n_lines):
             parts = []
             for i, (col, w) in enumerate(zip(columns, widths, strict=False)):
-                cell = row[i]
-                if i == desc_idx:
+                cell = row[i] if line_no == 0 else ""
+                if i == desc_idx and desc_lines:
                     cell = desc_lines[line_no] if line_no < len(desc_lines) else ""
-                    if line_no == 0 and i == desc_idx_for_status and show_status_in_description:
-                        plain_prefix = _plain_status_prefix(pkg)
-                        if plain_prefix and cell.startswith(plain_prefix):
-                            cell = _status_prefix(pkg, color) + cell[len(plain_prefix):]
-
-                if line_no > 0 and i != desc_idx:
-                    # continuation lines: only desc column has content
-                    cell = ""
 
                 if line_no == 0 and i == name_idx:
                     marker_width = 2 if is_installed else 0

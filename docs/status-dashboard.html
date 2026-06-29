@@ -456,57 +456,49 @@
 
   <script id="dashboard-data" type="application/json">
 {
-  "generated_at": "2026-06-07 16:15 EDT",
+  "generated_at": "2026-06-29 02:57 PDT",
   "summary_text": "Read-only Homebrew query and analytics tool. Current work is focused on output polish, metadata signals, performance visibility, script-friendly behavior, and a stronger public README.",
   "stats": {
     "average_lead_time_hours": 0,
     "blocked_issues": 0,
-    "closed_issues": 11,
+    "closed_issues": 40,
     "deferred_issues": 0,
     "epics_eligible_for_closure": 0,
     "in_progress_issues": 0,
-    "open_issues": 9,
+    "open_issues": 20,
     "pinned_issues": 0,
-    "ready_issues": 9,
-    "total_issues": 20
+    "ready_issues": 20,
+    "total_issues": 60
   },
-  "completion_percent": 55,
+  "completion_percent": 67,
   "tests": {
     "passed": 85,
     "command": "PYTHONPATH=src uv run pytest"
   },
   "ready": [
     {
-      "id": "brewq-cbr",
-      "title": "Make --help compact, structured, and useful",
-      "summary": "Design and implement a small, polished help surface for brewq. Cover default search, list/cache/config commands,...",
+      "id": "brewq-9f4",
+      "title": "Refine CLI help wording, aliases, and explanation groups",
+      "summary": "Run several focused passes over brewq help. Explain important concepts like installed binaries, drop low-value wo...",
       "labels": [
-        "cli",
-        "help",
-        "output"
+        "docs",
+        "help"
       ],
       "priority": 2
     },
     {
-      "id": "brewq-jnt",
-      "title": "Define script-friendly output mode",
-      "summary": "Decide and implement the script-friendly output model for brewq. Cover whether output should become --format tabl...",
-      "labels": [
-        "cli",
-        "output",
-        "scripts"
-      ],
-      "priority": 2
+      "id": "brewq-su6",
+      "title": "Config preset management UI (brewq config create/edit/delete)",
+      "summary": "Add editor-backed preset management to brewq config subcommand. Commands: config create <name>, config edit <name...",
+      "labels": [],
+      "priority": 3
     },
     {
-      "id": "brewq-npo",
-      "title": "Calibrate and lock column presets",
-      "summary": "Decide and document the compact/default/full column presets for search and list. Validate against real terminal o...",
-      "labels": [
-        "cli",
-        "output"
-      ],
-      "priority": 2
+      "id": "brewq-ztl",
+      "title": "brewq: preset configs in config.toml",
+      "summary": "Allow user to define named column presets in config.toml under [presets] section, usable via -p. Currently only c...",
+      "labels": [],
+      "priority": 3
     },
     {
       "id": "brewq-2w4",
@@ -515,16 +507,6 @@
       "labels": [
         "docs",
         "readme"
-      ],
-      "priority": 2
-    },
-    {
-      "id": "brewq-9mo",
-      "title": "Add performance metrics and benchmarks",
-      "summary": "Add a lightweight benchmark/metrics harness for brewq's important paths: cache load, ranking/filtering, table ren...",
-      "labels": [
-        "performance",
-        "testing"
       ],
       "priority": 2
     },
@@ -549,38 +531,124 @@
       "priority": 2
     },
     {
-      "id": "brewq-rhy",
-      "title": "Investigate optional trend analytics column",
-      "summary": "Design an optional trend signal derived from Homebrew install analytics. Explore ratios between 30d/90d and 90d/3...",
+      "id": "brewq-zij",
+      "title": "Handle corrupt cache and config files without tracebacks",
+      "summary": "Normal search and list call JSON and TOML parsers without a user-facing error boundary. A malformed brew-all.json...",
       "labels": [
-        "analytics",
-        "output"
+        "cache",
+        "config",
+        "error-handling"
       ],
+      "priority": 1
+    },
+    {
+      "id": "brewq-472",
+      "title": "Add cache-backed autocomplete suggestions for brew and brewq",
+      "summary": "Add an autocomplete/suggestion surface that uses the maintained brewq cache as the package-name source instead of...",
+      "labels": [],
       "priority": 2
     },
     {
-      "id": "brewq-g54",
-      "title": "Run thorough CLI output aesthetic review",
-      "summary": "Review brewq table/help/list/json output as an end-user CLI. Cover spacing, wrapping, long package names, long ca...",
-      "labels": [
-        "cli",
-        "output"
-      ],
+      "id": "brewq-73z",
+      "title": "brewq: 10x speed \u2014 cache binary format + lazy JSON",
+      "summary": "Current ~1s startup is Python overhead loading 16k packages from JSON each run. Needs: msgpack/pickle binary cach...",
+      "labels": [],
       "priority": 2
+    },
+    {
+      "id": "brewq-jf1",
+      "title": "brewq: as-we-type fuzzy find with prefetched data",
+      "summary": "TUI mode where data is prefetched once and filtered interactively as you type. fzf-style. Requires fast in-memory...",
+      "labels": [],
+      "priority": 2
+    },
+    {
+      "id": "brewq-aur",
+      "title": "brewq alias: command to set up brew aliases (brew q, brew ql, brew qi)",
+      "summary": "Add a command (e.g. 'brewq alias setup') that configures Homebrew aliases so users can type 'brew q', 'brew ql',...",
+      "labels": [],
+      "priority": 3
+    },
+    {
+      "id": "brewq-cdj",
+      "title": "brewq: extended package metadata (cross-PM, security, tags)",
+      "summary": "Phase 2 enrichment: cross-check with MacPorts/pip/npm; community engagement (GitHub stars/issues); 3rd-party secu...",
+      "labels": [],
+      "priority": 3
+    },
+    {
+      "id": "brewq-1xx",
+      "title": "Stabilize and simplify brewq first-release CLI",
+      "summary": "Deliver a coherent, reliable first-release CLI by resolving the concrete defects and product changes already iden...",
+      "labels": [],
+      "priority": 0
+    },
+    {
+      "id": "brewq-1xx.1",
+      "title": "Define reliable brewq verification commands",
+      "summary": "Why this issue exists: passing unit tests are not enough if they do not exercise the behavior users care about. W...",
+      "labels": [],
+      "priority": 0
+    },
+    {
+      "id": "brewq-1xx.3",
+      "title": "Audit brewq test coverage against real user workflows",
+      "summary": "Why this issue exists: current tests pass while missing failures in real colored TTY output, cache-age UX, defaul...",
+      "labels": [],
+      "priority": 0
+    },
+    {
+      "id": "brewq-1xx.4",
+      "title": "Simplify brewq architecture and remove accidental complexity",
+      "summary": "Why this issue exists: recent code appears to have grown fragmented paths for columns, ranking, rendering, cache...",
+      "labels": [],
+      "priority": 0
+    },
+    {
+      "id": "brewq-1xx.5",
+      "title": "Decide and implement deprecated/disabled package filtering",
+      "summary": "Why this issue exists: deprecated and disabled packages can clutter or mislead normal search results, but hiding...",
+      "labels": [],
+      "priority": 0
+    },
+    {
+      "id": "brewq-1xx.6",
+      "title": "Redesign cache-age disclosure and stale-cache UX",
+      "summary": "Why this issue exists: leading every result with a prominent red stale-cache warning feels hostile and makes rout...",
+      "labels": [],
+      "priority": 0
+    },
+    {
+      "id": "brewq-4it",
+      "title": "Replace public popularity metrics with trending",
+      "summary": "Why this issue exists: the public install-count popularity surface should not expose proprietary/raw metrics as t...",
+      "labels": [],
+      "priority": 0
+    },
+    {
+      "id": "brewq-d78",
+      "title": "Design terminal-window-capped default output",
+      "summary": "Figure out the right default output cap for brewq search based on the terminal window view. User intent: limit ou...",
+      "labels": [],
+      "priority": 0
     }
   ],
   "active": [],
   "workstreams": [
     {
-      "name": "CLI and output",
-      "count": 6
-    },
-    {
-      "name": "Analytics metadata",
-      "count": 2
+      "name": "Other",
+      "count": 16
     },
     {
       "name": "Docs and README",
+      "count": 2
+    },
+    {
+      "name": "Analytics metadata",
+      "count": 1
+    },
+    {
+      "name": "CLI and output",
       "count": 1
     },
     {
@@ -590,48 +658,40 @@
     {
       "name": "Help and CLI UX",
       "count": 1
-    },
-    {
-      "name": "Performance",
-      "count": 1
-    },
-    {
-      "name": "Script-friendly output",
-      "count": 1
     }
   ],
   "commits": [
     {
-      "sha": "086a676",
-      "subject": "chore(beads): record dashboard refinements"
+      "sha": "e35c878",
+      "subject": "docs: mark cache lifecycle plan complete"
     },
     {
-      "sha": "faf6b29",
-      "subject": "docs: make status dashboard live"
+      "sha": "0157cf4",
+      "subject": "chore(beads): close cache lifecycle work"
     },
     {
-      "sha": "e7828ab",
-      "subject": "chore(beads): record output task split"
+      "sha": "cd79f55",
+      "subject": "docs: describe automatic cache lifecycle"
     },
     {
-      "sha": "4aed7b6",
-      "subject": "chore(beads): record dashboard task closure"
+      "sha": "5523146",
+      "subject": "fix(cache): keep scheduler checks nonblocking"
     },
     {
-      "sha": "218c467",
-      "subject": "docs: add project status dashboard"
+      "sha": "ff0021c",
+      "subject": "build(cache): bundle release seed"
     },
     {
-      "sha": "eb384b7",
-      "subject": "chore(beads): record search bug closure"
+      "sha": "f025147",
+      "subject": "feat(cli): automate cache bootstrap and refresh"
     },
     {
-      "sha": "56ca830",
-      "subject": "fix(search): include tapped live results"
+      "sha": "fd7d70b",
+      "subject": "feat(cache): schedule low-load refreshes"
     },
     {
-      "sha": "d2b0db6",
-      "subject": "fix(search): reject loose fuzzy matches"
+      "sha": "cca0fee",
+      "subject": "feat(cache): load bundled seed data"
     }
   ],
   "signals": [
@@ -651,9 +711,9 @@
       "body": "Tracker and git data refresh live; test count is a recorded verification value, not rerun by the dashboard refresh."
     },
     {
-      "kind": "warn",
-      "title": "Repo hygiene note",
-      "body": "uv.lock is untracked and intentionally left out until lockfile policy is decided."
+      "kind": "good",
+      "title": "Working tree clean",
+      "body": "No uncommitted files are currently reported by git status."
     }
   ],
   "notes": [

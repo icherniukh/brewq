@@ -78,6 +78,8 @@ def _build_search_parser() -> argparse.ArgumentParser:
                         help="Show top N by installs")
     parser.add_argument("-r", "--refresh", action="store_true",
                         help="Refresh cache before searching")
+    parser.add_argument("--all", action="store_true",
+                        help="Include deprecated and disabled packages")
     parser.add_argument("--colors", type=int, choices=_COLOR_SCHEMES, metavar="N",
                         help="Temporary formula/cask palette: 0..9")
     parser.add_argument("--tsv", action="store_true",
@@ -192,7 +194,7 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
             packages,
             col_defs,
             out=sys.stdout,
-            color_scheme=getattr(args, "colors", None) or 0,
+            color_scheme=getattr(args, "colors", None) or 3,
         )
     _finish_cache_command(loaded, cfg)
     return 0
@@ -288,8 +290,9 @@ def _cmd_random(args: argparse.Namespace, cfg: dict) -> int:
         columns=columns,
         top=top,
         refresh=False,
-        colors=0,
+        colors=3,
         tsv=False,
+        all=False,
     )
     return _cmd_search(search_args, cfg)
 
@@ -354,7 +357,7 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
             col_defs,
             out=sys.stdout,
             sorted_col=opts.sort,
-            color_scheme=getattr(args, "colors", None) or 0,
+            color_scheme=getattr(args, "colors", None) or 3,
         )
     _finish_cache_command(loaded, cfg)
     return 0

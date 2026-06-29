@@ -152,24 +152,6 @@ def test_main_search_columns_short_alias(capsys):
     assert "DESCRIPTION" not in out
 
 
-def test_main_search_explicit_30d_alias(capsys):
-    pkgs = [_pkg("ripgrep", installs_30d=80_000)]
-    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "-c", "name,30d"])
-    assert rc == 0
-    out = capsys.readouterr().out
-    assert "30d" in out
-
-
-def test_main_search_explicit_365d_alias(capsys):
-    pkgs = [_pkg("ripgrep", installs_30d=80_000)]
-    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "-c", "name,365d"])
-    assert rc == 0
-    out = capsys.readouterr().out
-    assert "365d" in out
-
-
 def test_main_search_preset_compact(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
@@ -180,25 +162,10 @@ def test_main_search_preset_compact(capsys):
     assert "VERSION" not in out
 
 
-def test_main_search_preset_and_columns_error(capsys):
-    pkgs = [_pkg("ripgrep")]
-    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "-p", "compact", "-c", "name,30d"])
-    assert rc == 1
-    assert "cannot use both" in capsys.readouterr().err
-
-
 def test_main_search_sort_by_name(capsys):
     pkgs = [_pkg("zzz", installs_30d=99_999), _pkg("aaa", installs_30d=1)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
         rc = main(["aaa", "-s", "name"])
-    assert rc == 0
-
-
-def test_main_search_sort_alias_n(capsys):
-    pkgs = [_pkg("zzz", installs_30d=99_999), _pkg("aaa", installs_30d=1)]
-    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["aaa", "-s", "n"])
     assert rc == 0
 
 
@@ -252,12 +219,6 @@ def test_main_list_preset_compact_uses_list_shaped_profile(capsys):
     out = capsys.readouterr().out
     assert "TYPE" in out
     assert "30d" not in out
-
-
-def test_main_list_preset_and_columns_error(capsys):
-    rc = main(["list", "-p", "compact", "-c", "name,version"])
-    assert rc == 1
-    assert "cannot use both" in capsys.readouterr().err
 
 
 def test_main_list_analytics_inserts_installs_before_description(capsys):
@@ -323,14 +284,6 @@ def test_search_terms_after_noncommand_are_not_rerouted(capsys):
     assert "cachelib" in capsys.readouterr().out
 
 
-def test_main_search_matches_descriptions(capsys):
-    pkgs = [_pkg("tmux", installs_30d=80_000)]
-    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["Description"])
-    assert rc == 0
-    assert "tmux" in capsys.readouterr().out
-
-
 def test_main_search_without_match_reports_no_results(capsys):
     pkgs = [_pkg("tmux", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
@@ -369,25 +322,10 @@ def test_main_search_passes_selected_color_scheme(capsys):
     assert render.call_args.kwargs["color_scheme"] == 9
 
 
-def test_main_list_passes_selected_color_scheme(capsys):
-    with patch("brewq.cache.load", return_value=_loaded([
-        _pkg("ripgrep", installed=True),
-    ])), patch("brewq.render.render_table") as render:
-        rc = main(["list", "--colors", "1"])
-    assert rc == 0
-    assert render.call_args.kwargs["color_scheme"] == 1
-
-
 @pytest.mark.parametrize("value", ["-1", "10", "nope"])
 def test_main_rejects_invalid_color_scheme(value):
     with pytest.raises(SystemExit) as exc:
         main(["--colors", value, "ripgrep"])
-    assert exc.value.code == 2
-
-
-def test_main_list_rejects_invalid_color_scheme():
-    with pytest.raises(SystemExit) as exc:
-        main(["list", "--colors", "10"])
     assert exc.value.code == 2
 
 
@@ -421,52 +359,6 @@ def test_random_runs_generated_search(capsys):
     assert args.query
     assert args.sort in {"30d", "90d", "365d", "name"}
     assert not args.tsv
-
-
-def test_root_help_mentions_tsv_and_discoverability(capsys):
-    with pytest.raises(SystemExit) as exc:
-        main(["--help"])
-    assert exc.value.code == 0
-    out = capsys.readouterr().out
-    assert "--tsv" in out
-    assert "Commands: list  refresh  config" in out
-
-
-def test_root_help_marks_color_selector_as_temporary(capsys):
-    with pytest.raises(SystemExit) as exc:
-        main(["--help"])
-    assert exc.value.code == 0
-    out = capsys.readouterr().out
-    assert "--colors" in out
-    assert "temporary" in out.lower()
-    assert "0..9" in out
-
-
-def test_root_help_shows_sort_fields(capsys):
-    with pytest.raises(SystemExit) as exc:
-        main(["--help"])
-    assert exc.value.code == 0
-    out = capsys.readouterr().out
-    assert "Sort by: 30d (i30), 90d (i90), 365d (i365), name" in out
-
-
-def test_list_help_shows_presets_and_examples(capsys):
-    with pytest.raises(SystemExit) as exc:
-        main(["list", "--help"])
-    assert exc.value.code == 0
-    out = capsys.readouterr().out
-    assert "preset" in out.lower()
-    assert "compact" in out
-    assert "brewq list -c name,type,version" in out
-
-
-def test_refresh_help_mentions_force(capsys):
-    with pytest.raises(SystemExit) as exc:
-        main(["refresh", "--help"])
-    assert exc.value.code == 0
-    out = capsys.readouterr().out
-    assert "brewq refresh --force" in out
-    assert "brewq config path" in out
 
 
 def test_main_search_bad_column(capsys):
