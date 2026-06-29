@@ -16,11 +16,18 @@ def _brew_path() -> str:
     return path
 
 
-def info_all() -> dict[str, Any]:
+def info_all(timeout: float | None = None) -> dict[str, Any]:
     """Return parsed output of `brew info --json=v2 --eval-all`."""
+    kwargs: dict[str, Any] = {
+        "capture_output": True,
+        "text": True,
+        "check": True,
+    }
+    if timeout is not None:
+        kwargs["timeout"] = timeout
     result = subprocess.run(
         [_brew_path(), "info", "--json=v2", "--eval-all"],
-        capture_output=True, text=True, check=True,
+        **kwargs,
     )
     return json.loads(result.stdout)
 

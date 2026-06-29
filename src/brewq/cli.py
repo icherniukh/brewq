@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from collections.abc import Sequence
 
@@ -10,11 +9,11 @@ from brewq import columns as columns_mod
 from brewq import config as config_mod
 from brewq import options as options_mod
 from brewq import render as render_mod
+from brewq import scheduler as scheduler_mod
+from brewq import seed as seed_mod
 
 _COMMANDS = frozenset({"list", "refresh", "config", "random"})
 _FORMATTER = argparse.RawDescriptionHelpFormatter
-_COLOR_RED = "\033[31m"
-_RESET = "\033[0m"
 _COLOR_SCHEMES = range(10)
 
 _SEARCH_EPILOG = """\
@@ -178,8 +177,10 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     if opts.with_analytics:
         col_defs = _ensure_list_analytics_column(col_defs)
 
-    _print_cache_age(cfg)
-    packages = [p for p in cache_mod.load_packages() if p.installed]
+    loaded = _load_cache()
+    if loaded is None:
+        return 1
+    packages = [p for p in loaded.packages if p.installed]
 
     packages = options_mod.rank_installed(packages, opts)
 
@@ -192,6 +193,7 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
             out=sys.stdout,
             color_scheme=getattr(args, "colors", None) or 0,
         )
+    _finish_cache_command(loaded, cfg)
     return 0
 
 
@@ -210,16 +212,31 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
     force = getattr(args, "force", False)
     print("Refreshing cache...", file=sys.stderr)
     try:
-        cache_mod.refresh(force=force)
-        s = cache_mod.status()
-        print(
-            f"cache: {_format_age(s.get('age_seconds'))} old; "
-            f"{s['formula_count']} formulae, {s['cask_count']} casks",
-            file=sys.stderr,
-        )
+        result = cache_mod.refresh(force=force)
     except Exception as exc:
         print(f"brewq: cache refresh failed: {exc}", file=sys.stderr)
         return 1
+    return _report_refresh_result(result)
+
+
+def _report_refresh_result(result: cache_mod.RefreshResult) -> int:
+    if result.outcome is cache_mod.RefreshOutcome.FRESH:
+        print("cache: already fresh", file=sys.stderr)
+        return 0
+    if result.outcome is cache_mod.RefreshOutcome.LOCKED:
+        print("cache: refresh already in progress", file=sys.stderr)
+        return 1
+    if result.outcome is cache_mod.RefreshOutcome.METADATA_ONLY:
+        print(
+            f"cache: metadata refreshed; analytics incomplete ({result.analytics_error})",
+            file=sys.stderr,
+        )
+        return 1
+    status = cache_mod.status()
+    print(
+        f"cache: refreshed; {status['formula_count']} formulae, {status['cask_count']} casks",
+        file=sys.stderr,
+    )
     return 0
 
 
@@ -302,25 +319,29 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
     if getattr(args, "refresh", False):
         try:
             print("Refreshing cache...", file=sys.stderr)
-            cache_mod.refresh(force=True)
+            result = cache_mod.refresh(force=True)
         except Exception as exc:
             print(f"brewq: cache refresh failed: {exc}", file=sys.stderr)
             return 1
+        if result.outcome is cache_mod.RefreshOutcome.LOCKED:
+            print("cache: refresh already in progress; using available data", file=sys.stderr)
+        elif result.outcome is cache_mod.RefreshOutcome.METADATA_ONLY:
+            print(
+                f"cache: metadata refreshed; analytics incomplete ({result.analytics_error})",
+                file=sys.stderr,
+            )
 
-    _print_cache_age(cfg)
-    packages = cache_mod.load_packages()
-
-    if not packages:
-        print(
-            "Cache not built yet. Run `brewq refresh`.",
-            file=sys.stderr,
-        )
+    loaded = _load_cache()
+    if loaded is None:
+        return 1
+    packages = loaded.packages
 
     ranked = options_mod.rank(packages, opts)
 
     if not ranked:
         query_str = " ".join(opts.query) if opts.query else "(installed filter)"
         print(f"No results for: {query_str}", file=sys.stderr)
+        _finish_cache_command(loaded, cfg)
         return 0
 
     if opts.tsv_output:
@@ -333,7 +354,34 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
             sorted_col=opts.sort,
             color_scheme=getattr(args, "colors", None) or 0,
         )
+    _finish_cache_command(loaded, cfg)
     return 0
+
+
+def _load_cache() -> cache_mod.CacheLoad | None:
+    try:
+        return cache_mod.load()
+    except seed_mod.SeedError:
+        print("Initializing local package metadata...", file=sys.stderr)
+        try:
+            return cache_mod.foreground_bootstrap(timeout=60)
+        except Exception as exc:
+            print(f"brewq: initial cache bootstrap failed: {exc}", file=sys.stderr)
+            return None
+
+
+def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict) -> None:
+    max_age = int(cfg["cache"]["max_age_seconds"])
+    scheduler_state = scheduler_mod.schedule_if_needed(loaded, max_age)
+    if loaded.source == "seed":
+        suffix = "refresh scheduled" if scheduler_state == "scheduled" else "refresh pending"
+        print(f"cache: bundled seed; {suffix}", file=sys.stderr)
+        return
+    if loaded.requires_refresh or loaded.age_seconds >= max_age:
+        suffix = "refresh scheduled" if scheduler_state == "scheduled" else "refresh pending"
+        print(f"cache: stale; {suffix}", file=sys.stderr)
+        return
+    print(f"cache: {_format_age(loaded.age_seconds)} old", file=sys.stderr)
 
 
 def _format_age(age_seconds: object) -> str:
@@ -347,32 +395,6 @@ def _format_age(age_seconds: object) -> str:
     if age < 172800:
         return f"{age // 3600}h"
     return f"{age // 86400}d"
-
-
-def _stderr_uses_color() -> bool:
-    return (
-        not os.environ.get("NO_COLOR")
-        and hasattr(sys.stderr, "isatty")
-        and sys.stderr.isatty()
-    )
-
-
-def _print_cache_age(cfg: dict) -> None:
-    age = cache_mod.age_seconds()
-    if age is None:
-        print("cache: missing; run `brewq refresh`", file=sys.stderr)
-        return
-
-    max_age = int(cfg["cache"]["max_age_seconds"])
-    age_text = _format_age(age)
-    if int(age) >= max_age:
-        text = f"cache: stale, {age_text} old; run `brewq refresh`"
-        if _stderr_uses_color():
-            text = f"{_COLOR_RED}{text}{_RESET}"
-        print(text, file=sys.stderr)
-        return
-
-    print(f"cache: {age_text} old", file=sys.stderr)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

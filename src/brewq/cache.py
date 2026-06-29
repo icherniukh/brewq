@@ -40,6 +40,7 @@ class CacheLoad:
     source: Literal["user", "seed"]
     packages: list[Package]
     age_seconds: float
+    requires_refresh: bool = False
 
 
 def _dir() -> Path:
@@ -194,6 +195,7 @@ def load(now: float | None = None) -> CacheLoad:
         source="seed",
         packages=packages,
         age_seconds=max(0.0, current_time - metadata.generated_at),
+        requires_refresh=True,
     )
 
 
@@ -203,3 +205,18 @@ def load_packages() -> list[Package]:
         return []
     raw = json.loads(p.read_text())
     return _packages_from_data(raw)
+
+
+def foreground_bootstrap(timeout: float = 60) -> CacheLoad:
+    data = brew_mod.info_all(timeout=timeout)
+    d = _dir()
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / (_CACHE_FILE + ".tmp")
+    tmp.write_text(json.dumps(data))
+    os.replace(tmp, cache_path())
+    return CacheLoad(
+        source="user",
+        packages=_packages_from_data(data),
+        age_seconds=0,
+        requires_refresh=True,
+    )

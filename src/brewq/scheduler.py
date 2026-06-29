@@ -73,7 +73,7 @@ def schedule_if_needed(
     now: float | None = None,
 ) -> str:
     current_time = time.time() if now is None else now
-    if load.source == "user" and load.age_seconds < max_age:
+    if not load.requires_refresh and load.source == "user" and load.age_seconds < max_age:
         return "fresh"
 
     path = lock_path()
