@@ -1,6 +1,6 @@
 # Automatic Cache Lifecycle Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Make first-run and stale-cache queries self-healing by loading a bundled seed, overlaying local installed state, and scheduling truthful low-load background refreshes.
 
@@ -34,17 +34,17 @@
 - Test: `tests/test_analytics.py`
 - Test: `tests/test_cache.py`
 
-- [ ] **Step 1: Write failing tests for feed failures and refresh outcomes**
+- [x] **Step 1: Write failing tests for feed failures and refresh outcomes**
 
 Add tests that require `_fetch()` to raise `AnalyticsFetchError`, `fetch_all()` to name the failed feed, and `refresh()` to return `FRESH`, `LOCKED`, `COMPLETE`, or `METADATA_ONLY`. The lock test must acquire `refresh.lock` with `fcntl.flock` before calling `refresh()`; the partial test must make `fetch_all()` raise `AnalyticsFetchError("formula_30d", "offline")` and assert that metadata is still written.
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
 Run: `uv run pytest tests/test_analytics.py tests/test_cache.py -q`
 
 Expected: failures because `AnalyticsFetchError`, `RefreshOutcome`, and `RefreshResult` do not exist and `refresh()` returns `None`.
 
-- [ ] **Step 3: Implement typed boundaries**
+- [x] **Step 3: Implement typed boundaries**
 
 Implement these public types and behavior:
 
@@ -70,13 +70,13 @@ class RefreshResult:
 
 `analytics._fetch(feed, url)` must convert URL, JSON, and schema errors into `AnalyticsFetchError`. `fetch_all()` must fail on the first incomplete feed. `_do_refresh()` catches only `AnalyticsFetchError`, writes metadata atomically, and returns `METADATA_ONLY`; all six feeds succeeding returns `COMPLETE`. Lock contention returns `LOCKED`; a fresh skip returns `FRESH`.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run: `uv run pytest tests/test_analytics.py tests/test_cache.py -q`
 
 Expected: all focused tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/brewq/analytics.py src/brewq/cache.py tests/test_analytics.py tests/test_cache.py
@@ -90,17 +90,17 @@ git commit -m "fix(cache): report refresh outcomes truthfully"
 - Modify: `src/brewq/brew.py`
 - Test: `tests/test_inventory.py`
 
-- [ ] **Step 1: Write fixture-driven inventory tests**
+- [x] **Step 1: Write fixture-driven inventory tests**
 
 Build temporary Cellar and Caskroom trees. Formula receipts must include `time`, `source.tap`, and installed versions. Assert that `homebrew/core/ripgrep` maps to `ripgrep`, `acme/tools/widget` maps to `acme/tools/widget`, the newest receipt wins, cask dot-directories are ignored, and unreadable/malformed receipts do not abort other entries.
 
-- [ ] **Step 2: Run the new tests and verify RED**
+- [x] **Step 2: Run the new tests and verify RED**
 
 Run: `uv run pytest tests/test_inventory.py -q`
 
 Expected: import failure because `brewq.inventory` does not exist.
 
-- [ ] **Step 3: Implement the inventory boundary**
+- [x] **Step 3: Implement the inventory boundary**
 
 Create `InstalledRecord` exactly as follows, then implement `scan(cellar,
 caskroom)` and `overlay(packages, records)` with the selection rules in this
@@ -117,13 +117,13 @@ class InstalledRecord:
 
 Add `brew.storage_roots()` using two bounded five-second subprocess calls to `brew --cellar` and `brew --caskroom`. Formula canonical names come from receipt `source.tap`; casks use their token directory. Formula versions select the receipt with greatest integer `time`; cask versions select the non-dot directory with greatest `st_mtime`. `overlay()` sets `installed`, replaces `version`, and calls the existing local binary discovery for installed formulae.
 
-- [ ] **Step 4: Verify inventory tests and lint**
+- [x] **Step 4: Verify inventory tests and lint**
 
 Run: `uv run pytest tests/test_inventory.py -q && uv run ruff check src/brewq/inventory.py src/brewq/brew.py tests/test_inventory.py`
 
 Expected: tests pass and ruff reports no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/brewq/inventory.py src/brewq/brew.py tests/test_inventory.py
@@ -139,17 +139,17 @@ git commit -m "feat(cache): overlay local installed state"
 - Modify: `src/brewq/cache.py`
 - Modify: `pyproject.toml`
 
-- [ ] **Step 1: Write failing seed tests**
+- [x] **Step 1: Write failing seed tests**
 
 Tests must cover deterministic gzip bytes, rejection of missing formulae/casks/analytics, package-resource fallback when the user cache is absent, preference for a valid user cache, installed overlay only for seed loads, and `CacheLoad` values whose source is either `"seed"` or `"user"`.
 
-- [ ] **Step 2: Run seed tests and verify RED**
+- [x] **Step 2: Run seed tests and verify RED**
 
 Run: `uv run pytest tests/test_seed.py -q`
 
 Expected: import failure because `brewq.seed` and `CacheLoad` do not exist.
 
-- [ ] **Step 3: Implement seed APIs and cache selection**
+- [x] **Step 3: Implement seed APIs and cache selection**
 
 Create these data contracts, then implement `validate(data)`,
 `encode(data, generated_at)`, and `load_resource()` with the deterministic
@@ -177,13 +177,13 @@ Add setuptools package data:
 brewq = ["data/*.json.gz"]
 ```
 
-- [ ] **Step 4: Verify seed tests**
+- [x] **Step 4: Verify seed tests**
 
 Run: `uv run pytest tests/test_seed.py tests/test_cache.py -q`
 
 Expected: all focused tests pass.
 
-- [ ] **Step 5: Commit code before the generated artifact**
+- [x] **Step 5: Commit code before the generated artifact**
 
 ```bash
 git add src/brewq/seed.py src/brewq/cache.py scripts/build-seed-cache.py tests/test_seed.py pyproject.toml
@@ -196,17 +196,17 @@ git commit -m "feat(cache): load bundled seed data"
 - Create: `src/brewq/scheduler.py`
 - Test: `tests/test_scheduler.py`
 
-- [ ] **Step 1: Write failing scheduler tests with injected clock/load/spawn**
+- [x] **Step 1: Write failing scheduler tests with injected clock/load/spawn**
 
 Cover fresh no-op, seed/stale scheduling, exclusive scheduler lock, one worker for repeated calls, five-minute initial delay, five-minute load retries, 30-minute maximum deferral, one-hour failure cooldown, stale-state recovery, atomic state JSON, and worker mapping of every `RefreshOutcome`.
 
-- [ ] **Step 2: Run scheduler tests and verify RED**
+- [x] **Step 2: Run scheduler tests and verify RED**
 
 Run: `uv run pytest tests/test_scheduler.py -q`
 
 Expected: import failure because `brewq.scheduler` does not exist.
 
-- [ ] **Step 3: Implement scheduler and worker**
+- [x] **Step 3: Implement scheduler and worker**
 
 Expose these constants. Implement `schedule_if_needed(load, max_age)` and
 `run_worker(now=time.time, sleep=time.sleep, loadavg=os.getloadavg)` with the
@@ -223,13 +223,13 @@ LOAD_LIMIT = 0.75
 
 State lives in `refresh-state.json`; scheduling exclusion uses `schedule.lock`. `schedule_if_needed()` uses `subprocess.Popen([sys.executable, "-m", "brewq.scheduler"], start_new_session=True, stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL, close_fds=True)` only for seed or stale loads outside cooldown. The worker holds `schedule.lock`, records state atomically, sleeps and gates on `loadavg()[0] / max(os.cpu_count() or 1, 1)`, then calls `cache.refresh(force=True)`. Its module entry point exits with `run_worker()`.
 
-- [ ] **Step 4: Verify scheduler tests and lint**
+- [x] **Step 4: Verify scheduler tests and lint**
 
 Run: `uv run pytest tests/test_scheduler.py -q && uv run ruff check src/brewq/scheduler.py tests/test_scheduler.py`
 
 Expected: all tests pass and ruff reports no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/brewq/scheduler.py tests/test_scheduler.py
@@ -242,27 +242,27 @@ git commit -m "feat(cache): schedule low-load refreshes"
 - Modify: `src/brewq/cli.py`
 - Modify: `tests/test_cli.py`
 
-- [ ] **Step 1: Replace obsolete CLI expectations with failing lifecycle tests**
+- [x] **Step 1: Replace obsolete CLI expectations with failing lifecycle tests**
 
 Require seed-backed search and list to render installed overlays, stale user cache to render before `schedule_if_needed()`, fresh cache to avoid spawning, stderr disclosures to say `refresh scheduled` without instructing users to run a command, TSV stdout to remain raw, and manual refresh to render truthful fresh/locked/complete/metadata-only outcomes. Retain `-r` as an explicit force escape hatch.
 
-- [ ] **Step 2: Run CLI tests and verify RED**
+- [x] **Step 2: Run CLI tests and verify RED**
 
 Run: `uv run pytest tests/test_cli.py -q`
 
 Expected: failures because CLI still calls `load_packages()`, requires explicit refresh, and ignores refresh results.
 
-- [ ] **Step 3: Integrate one load-render-schedule flow**
+- [x] **Step 3: Integrate one load-render-schedule flow**
 
 Both `_cmd_search()` and `_cmd_list()` call `cache.load()`, print disclosure from the returned source/age plus scheduler state, render results, then call `scheduler.schedule_if_needed()` after rendering. Missing seed and user cache invokes `cache.foreground_bootstrap(timeout=60)` and retries `cache.load()` once. `_cmd_refresh()` and `-r` switch on `RefreshOutcome`; `LOCKED` and `METADATA_ONLY` never print complete-success language.
 
-- [ ] **Step 4: Verify CLI tests**
+- [x] **Step 4: Verify CLI tests**
 
 Run: `uv run pytest tests/test_cli.py -q`
 
 Expected: all CLI tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/brewq/cli.py tests/test_cli.py
@@ -275,25 +275,25 @@ git commit -m "feat(cli): automate cache bootstrap and refresh"
 - Create: `src/brewq/data/brew-all.json.gz`
 - Modify: `tests/test_seed.py`
 
-- [ ] **Step 1: Generate a current seed**
+- [x] **Step 1: Generate a current seed**
 
 Run: `uv run python scripts/build-seed-cache.py src/brewq/data/brew-all.json.gz`
 
 Expected: script reports formula count, cask count, generation time, and compressed size; exit code 0.
 
-- [ ] **Step 2: Verify the artifact and built wheel**
+- [x] **Step 2: Verify the artifact and built wheel**
 
 Run: `uv build --wheel && uv run python -m zipfile -l dist/*.whl`
 
 Expected: wheel listing contains `brewq/data/brew-all.json.gz`.
 
-- [ ] **Step 3: Run the seed-only functional test**
+- [x] **Step 3: Run the seed-only functional test**
 
 Run: `BREWQ_CACHE_DIR=$(mktemp -d) uv run python -m brewq.cli ripgrep`
 
 Expected: result output includes `ripgrep`; stderr identifies bundled seed and scheduled refresh; command does not wait for refresh.
 
-- [ ] **Step 4: Commit the generated artifact**
+- [x] **Step 4: Commit the generated artifact**
 
 ```bash
 git add src/brewq/data/brew-all.json.gz tests/test_seed.py
@@ -309,27 +309,27 @@ git commit -m "build(cache): bundle release seed"
 - Modify: `docs/product-spec.md`
 - Modify: `docs/cli-design.md`
 
-- [ ] **Step 1: Update the current contract**
+- [x] **Step 1: Update the current contract**
 
 State consistently that installs include a seed, first use overlays local installed state, stale data renders immediately, refresh schedules after output, and manual `refresh` is only recovery/diagnostics. Remove all normal-flow instructions that say users must explicitly refresh.
 
-- [ ] **Step 2: Run documentation consistency checks**
+- [x] **Step 2: Run documentation consistency checks**
 
 Run: `rg -n 'run .brewq refresh.|explicit refresh|required.*refresh|Cache not built' AGENTS.md README.md docs src tests`
 
 Expected: no obsolete normal-flow requirement remains; intentional manual-command documentation is narrowly scoped.
 
-- [ ] **Step 3: Run full verification**
+- [x] **Step 3: Run full verification**
 
 Run: `uv run pytest -q && uv run ruff check . && python3 scripts/benchmark.py --iterations 1`
 
 Expected: all tests pass, ruff reports no errors, and every benchmark case reports zero failures.
 
-- [ ] **Step 4: Run beads preflight and close completed issues**
+- [x] **Step 4: Run beads preflight and close completed issues**
 
 Run: `bd preflight`, then close `brewq-asn` and `brewq-isb` only if every acceptance criterion is demonstrated by the fresh verification output.
 
-- [ ] **Step 5: Commit docs and tracker state**
+- [x] **Step 5: Commit docs and tracker state**
 
 ```bash
 git add AGENTS.md README.md docs/vision.md docs/product-spec.md docs/cli-design.md
