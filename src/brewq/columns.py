@@ -165,13 +165,5 @@ def resolve(
     return resolved
 
 
-def available_keys() -> list[str]:
-    return sorted(set(list(_COLUMN_REGISTRY) + list(_ALIASES)))
-
-
 def list_profiles() -> dict[str, list[str]]:
     return dict(_LIST_PROFILES)
-
-
-def search_profiles() -> dict[str, list[str]]:
-    return dict(_SEARCH_PROFILES)

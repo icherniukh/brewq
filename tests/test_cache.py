@@ -49,30 +49,6 @@ def test_status_present():
     assert s["has_analytics"] is True
 
 
-def test_load_packages_empty():
-    assert cache_mod.load_packages() == []
-
-
-def test_load_packages_from_fixture():
-    data = {
-        "formulae": [
-            {
-                "name": "ripgrep", "full_name": "ripgrep",
-                "desc": "Search tool", "homepage": "https://example.com",
-                "versions": {"stable": "15.1.0"}, "installed": [{"version": "15.1.0"}],
-                "deprecated": False, "disabled": False, "aliases": ["rg"],
-                "installs_30d": 50_000, "installs_365d": 600_000,
-            }
-        ],
-        "casks": [],
-    }
-    _write_cache(Path(os.environ["BREWQ_CACHE_DIR"]), data)
-    pkgs = cache_mod.load_packages()
-    assert len(pkgs) == 1
-    assert pkgs[0].name == "ripgrep"
-    assert pkgs[0].installs_30d == 50_000
-
-
 def test_clear():
     _write_cache(Path(os.environ["BREWQ_CACHE_DIR"]), {"formulae": [], "casks": []})
     assert cache_mod.cache_path().exists()

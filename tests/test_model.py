@@ -38,7 +38,6 @@ def test_from_formula_with_analytics(formula_raw):
     assert pkg.installs_30d == 50_000
     assert pkg.installs_90d == 150_000
     assert pkg.installs_365d == 600_000
-    assert pkg.installs == 50_000  # default metric is 30d
 
 
 def test_from_cask_basic(cask_raw):

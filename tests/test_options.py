@@ -1,11 +1,18 @@
 from __future__ import annotations
 
-import pytest
-
 import argparse
 
+import pytest
+
 from brewq.model import Package
-from brewq.options import ListOptions, SearchOptions, build_search_options, parse_sort, rank, rank_installed
+from brewq.options import (
+    ListOptions,
+    SearchOptions,
+    build_search_options,
+    parse_sort,
+    rank,
+    rank_installed,
+)
 
 
 def _pkg(name: str, type_: str = "formula", installs_30d: int = -1,
@@ -241,7 +248,7 @@ def test_rank_installed_sorts_by_type_then_name():
 # --- build_search_options limit precedence ---
 
 def _args(**kwargs):
-    defaults = dict(query=[], sort=None, top=None, preset=None, columns=None, tsv=False, installed=False)
+    defaults = {"query": [], "sort": None, "top": None, "preset": None, "columns": None, "tsv": False, "installed": False}
     return argparse.Namespace(**{**defaults, **kwargs})
 
 

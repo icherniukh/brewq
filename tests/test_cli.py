@@ -79,6 +79,7 @@ def test_main_search_non_tty_shows_all_results(capsys):
 
 def test_main_search_tty_caps_by_terminal_height():
     import os
+
     import brewq.options as opts_mod
 
     pkgs = [

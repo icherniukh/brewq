@@ -19,7 +19,6 @@ from brewq.model import Package, from_cask, from_formula
 
 _CACHE_FILE = "brew-all.json"
 _LOCK_FILE = "refresh.lock"
-_SCHEMA_VERSION = 1
 
 
 class RefreshOutcome(StrEnum):

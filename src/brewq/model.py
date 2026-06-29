@@ -32,10 +32,6 @@ class Package:
         return ""
 
     @property
-    def installs(self) -> int:
-        return self.installs_30d
-
-    @property
     def popularity_score(self) -> int:
         """Composite 0-100 score: log-weighted install volume + trend momentum."""
         i30 = max(self.installs_30d, 0)
