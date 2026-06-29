@@ -28,9 +28,11 @@ Goal: finish implementation and cut a usable release within a few days.
 
 ## Day 3 - Fallbacks and Local Install
 
-- Implement cold-cache guidance that keeps normal commands quick and points users to explicit refresh.
+- Bundle a release-time seed cache for immediate first use.
+- Overlay installed state from local Homebrew storage when the seed is used.
+- Render stale data immediately and schedule delayed low-load refresh afterward.
 - Add useful errors for missing `brew`, invalid cache JSON, and interrupted refreshes.
-- Add explicit `refresh` command and keep `update-cache` as a compatibility alias.
+- Keep `refresh` as optional recovery behavior and `update-cache` as a compatibility alias.
 - Add install docs and shell alias docs.
 - Validate in a fresh shell.
 

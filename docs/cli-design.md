@@ -14,8 +14,9 @@ brewq config path
 brewq random [--seed N]
 ```
 
-Search is the default command. There is no public `search` subcommand. Normal
-search is cache-only and does not shell out to Homebrew.
+Search is the default command. There is no public `search` subcommand. A valid
+user cache is cache-only. When no user cache exists, brewq reads the bundled seed
+and briefly inspects local Homebrew storage for installed state.
 
 `list` is the installed-package view. It uses the same column and TSV model as search, but its defaults are shaped for installed formulae and casks.
 
@@ -56,8 +57,9 @@ Rules:
 - `-t N` overrides the default row cap for normal "top results" use.
 - `-p` and `-c` are mutually exclusive.
 - Disabled and deprecated packages remain visible, but rank after active packages.
-- Search uses the local cache by default; use `brewq refresh` or `brewq -r QUERY`
-  when live Homebrew data should be fetched first.
+- Search uses the user cache or bundled seed by default. Stale data renders first,
+  then schedules background repair.
+- `brewq refresh` and `brewq -r QUERY` force foreground work only when explicitly requested.
 - Search prints a concise cache-age disclosure to stderr. Stale cache is called
   out more visibly than fresh cache.
 
@@ -174,8 +176,13 @@ brewq refresh --force
 brewq -r ripgrep
 ```
 
-Normal commands are quick by default and do not schedule or perform refresh work.
-Explicit refresh is the foreground Homebrew boundary.
+Fresh commands do not schedule or perform refresh work. Seed-backed and stale
+commands render first, then schedule one detached worker. The worker waits five
+minutes, gates on normalized system load, and avoids duplicate work through cache
+state and locks.
+
+Explicit refresh is an optional foreground Homebrew boundary for recovery and
+diagnostics. It is not part of installation or normal cache maintenance.
 
 `update-cache` is kept as a compatibility alias for `refresh`.
 

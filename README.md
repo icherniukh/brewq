@@ -25,9 +25,11 @@ PYTHONPATH=src python -m brewq.cli list --tsv -c name,type,version
 PYTHONPATH=src python -m brewq.cli refresh
 ```
 
-Normal search and list commands use the local cache only and disclose cache age
-on stderr. Use `brewq refresh` or `brewq -r QUERY` when you want to refresh
-before rendering.
+Releases include a seed cache, so the first command can render immediately. On
+first use, `brewq` overlays installed state from the local Homebrew Cellar and
+Caskroom. Fresh queries stay cache-only; stale data renders immediately and
+schedules one delayed, low-load background refresh. Cache state is disclosed on
+stderr. `brewq refresh` and `brewq -r QUERY` are optional recovery controls.
 
 For a visual project snapshot, open `docs/status-dashboard.html`. For fresh data every time the page loads, run:
 

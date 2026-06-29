@@ -71,8 +71,10 @@ Expected behavior:
 - Normal query should not require network access.
 - Refresh should be atomic and lock-protected.
 - Normal search/list should disclose cache age concisely.
-- Cache older than the configured max age should be called out more visibly.
-- Missing/stale cache refresh is explicit for now; deferred low-CPU scheduling is a separate design decision.
+- Releases should include a seed cache so first use does not block on refresh.
+- Seed-backed first use should overlay installed state from local Homebrew storage.
+- Stale cache should render immediately, then schedule one delayed low-load refresh.
+- Manual refresh should remain optional recovery and diagnostics behavior.
 
 ## Output
 

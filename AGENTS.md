@@ -37,9 +37,10 @@ The current implementation and docs intentionally settle these first-release cho
 - `list --limit` is the installed-list cap.
 - `-p` selects built-in presets; `-c` selects explicit comma-joined columns.
 - `--tsv` is the only public machine-readable output mode.
-- Normal search and list paths are cache-only and do not shell out to Homebrew.
-- Every normal search/list run prints a concise cache-age disclosure; stale cache is more visible.
-- `refresh` refreshes the cache explicitly; `-r` / `--refresh` refreshes before a root search.
+- Releases bundle a seed cache so the first query does not block on a full refresh.
+- When the seed is used, brewq overlays installed state from the local Cellar/Caskroom before rendering.
+- Fresh cache paths are cache-only. Stale cache renders immediately and schedules one detached, delayed, low-load refresh.
+- `refresh` and `-r` remain optional foreground recovery controls, not setup requirements.
 - `list --analytics` exposes analytics already present in the cache.
 - `random` is a local layout lab command. It is not a product-level random browser.
 
@@ -56,7 +57,6 @@ The current implementation and docs intentionally settle these first-release cho
 
 Treat these as open until a later spec resolves them:
 
-- Deferred refresh scheduling: whether to use launchd, a Homebrew update hook, or another low-CPU delayed job mechanism.
 - Grouping behavior: whether formulae and casks are mixed by relevance by default, with grouping deferred or exposed.
 - Status filtering: whether deprecated and disabled packages are hidden by default,
   and whether exact matches or an explicit override still show them.

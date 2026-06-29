@@ -157,17 +157,21 @@ MVP cache behavior:
 - cache refresh should be atomic and lock-protected
 - stale cache should remain usable without blocking normal commands
 - normal output should concisely disclose cache age
-- stale cache disclosure should be more visible than fresh-cache disclosure
-- refresh should be explicit through `brewq refresh` or `brewq -r QUERY`
+- releases should bundle a seed cache for non-blocking first use
+- seed-backed queries should overlay local installed state before rendering
+- stale cache should schedule one detached refresh after rendering
+- background refresh should wait briefly and run only under acceptable load
+- manual `brewq refresh` and `brewq -r QUERY` should be optional recovery controls
 
-Potential cache strategies:
+Current cache lifecycle:
 
-- `manual`: only refresh on explicit `brewq refresh`
-- `delayed-low-load`: schedule refresh a few minutes after use, gated on low CPU/load
-- `brew-update-hook`: refresh after Homebrew itself updates metadata
-- `blocking-when-requested`: `brewq -r QUERY` refreshes before rendering
+- `bundled-seed`: release-time metadata and analytics make an empty user cache usable
+- `local-overlay`: Cellar/Caskroom metadata supplies installed names and versions on first use
+- `stale-while-refresh`: stale results render before one delayed worker is scheduled
+- `blocking-when-requested`: optional `brewq -r QUERY` refreshes before rendering
 
-The default should stay quick. Normal command startup should not pay refresh or scheduler cost.
+The default stays quick. Fresh commands do not spawn work; seed-backed and stale
+commands only pay the small detached-worker scheduling cost after rendering.
 
 ## Future Direction: Smarter Search
 

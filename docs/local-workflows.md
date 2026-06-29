@@ -49,8 +49,6 @@ The existing `brew_installed` function:
 ```bash
 brewq list
 brewq list --analytics
-brewq refresh
-brewq list --analytics
 brewq list --columns name,type,version,description
 brewq list --tsv
 ```
@@ -59,5 +57,5 @@ Implementation note:
 
 - Reuse the main `brewq` cache when possible instead of keeping a separate `brew-installed` cache.
 - Keep `--analytics` cache-only by default.
-- Require explicit `brewq refresh` before rendering when fresh analytics are needed.
+- Render available analytics immediately and schedule background repair when stale.
 - Do not add install/uninstall/upgrade behavior.
