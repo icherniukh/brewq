@@ -4,6 +4,8 @@ import fcntl
 import json
 import os
 import time
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,20 @@ from brewq.model import Package, from_cask, from_formula
 _CACHE_FILE = "brew-all.json"
 _LOCK_FILE = "refresh.lock"
 _SCHEMA_VERSION = 1
+
+
+class RefreshOutcome(StrEnum):
+    FRESH = "fresh"
+    LOCKED = "locked"
+    COMPLETE = "complete"
+    METADATA_ONLY = "metadata_only"
+
+
+@dataclass(frozen=True)
+class RefreshResult:
+    outcome: RefreshOutcome
+    path: Path
+    analytics_error: str | None = None
 
 
 def _dir() -> Path:
@@ -68,13 +84,13 @@ def status() -> dict[str, Any]:
     return data
 
 
-def refresh(force: bool = False, max_age: int | None = None) -> None:
+def refresh(force: bool = False, max_age: int | None = None) -> RefreshResult:
     cfg = config_mod.load()
     if max_age is None:
         max_age = cfg["cache"]["max_age_seconds"]
 
     if not force and not is_stale(max_age):
-        return
+        return RefreshResult(RefreshOutcome.FRESH, cache_path())
 
     d = _dir()
     d.mkdir(parents=True, exist_ok=True)
@@ -85,27 +101,35 @@ def refresh(force: bool = False, max_age: int | None = None) -> None:
         fcntl.flock(lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         lock_fh.close()
-        return  # another process is refreshing
+        return RefreshResult(RefreshOutcome.LOCKED, cache_path())
 
     try:
-        _do_refresh(d)
+        return _do_refresh(d)
     finally:
         fcntl.flock(lock_fh, fcntl.LOCK_UN)
         lock_fh.close()
         lock.unlink(missing_ok=True)
 
 
-def _do_refresh(d: Path) -> None:
+def _do_refresh(d: Path) -> RefreshResult:
     brew_data = brew_mod.info_all()
+    analytics_error = None
     try:
         all_analytics = analytics_mod.fetch_all()
         analytics_mod.merge_into_brew_data(brew_data, all_analytics)
-    except Exception:
-        pass  # analytics are best-effort; write cache without them
+    except analytics_mod.AnalyticsFetchError as exc:
+        analytics_error = str(exc)
 
     tmp = d / (_CACHE_FILE + ".tmp")
     tmp.write_text(json.dumps(brew_data))
     os.replace(tmp, d / _CACHE_FILE)  # atomic on POSIX
+    if analytics_error is not None:
+        return RefreshResult(
+            RefreshOutcome.METADATA_ONLY,
+            d / _CACHE_FILE,
+            analytics_error=analytics_error,
+        )
+    return RefreshResult(RefreshOutcome.COMPLETE, d / _CACHE_FILE)
 
 
 def clear() -> None:

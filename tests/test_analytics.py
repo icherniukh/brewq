@@ -1,9 +1,19 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 from pathlib import Path
+from unittest.mock import patch
 
-from brewq.analytics import _parse_count, merge_into_brew_data
+import pytest
+
+from brewq.analytics import (
+    AnalyticsFetchError,
+    _fetch,
+    _parse_count,
+    fetch_all,
+    merge_into_brew_data,
+)
 
 FIXTURES = Path(__file__).parent
 
@@ -18,6 +28,24 @@ def test_parse_count_int_passthrough():
 
 def test_parse_count_invalid():
     assert _parse_count("n/a") == -1
+
+
+def test_fetch_names_transport_failure():
+    with patch(
+        "brewq.analytics.urllib.request.urlopen",
+        side_effect=urllib.error.URLError("offline"),
+    ), pytest.raises(AnalyticsFetchError, match="formula_30d: offline"):
+        _fetch("formula_30d", "https://example.test/analytics.json")
+
+
+def test_fetch_all_stops_on_failed_feed():
+    with patch(
+        "brewq.analytics._fetch",
+        side_effect=AnalyticsFetchError("formula_30d", "offline"),
+    ), pytest.raises(AnalyticsFetchError) as exc:
+        fetch_all()
+
+    assert exc.value.feed == "formula_30d"
 
 
 def test_merge_into_brew_data():

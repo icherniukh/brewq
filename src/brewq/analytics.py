@@ -19,19 +19,34 @@ _URLS = {
 _TIMEOUT = 15
 
 
-def _fetch(url: str) -> list[dict]:
+class AnalyticsFetchError(RuntimeError):
+    """One analytics feed could not be retrieved or decoded."""
+
+    def __init__(self, feed: str, detail: str):
+        super().__init__(f"{feed}: {detail}")
+        self.feed = feed
+        self.detail = detail
+
+
+def _fetch(feed: str, url: str) -> list[dict]:
     try:
         with urllib.request.urlopen(url, timeout=_TIMEOUT) as resp:
-            return json.loads(resp.read())["items"]
-    except (urllib.error.URLError, KeyError, json.JSONDecodeError):
-        return []
+            payload = json.loads(resp.read())
+        items = payload["items"]
+        if not isinstance(items, list):
+            raise TypeError("items is not a list")
+        return items
+    except urllib.error.URLError as exc:
+        raise AnalyticsFetchError(feed, str(exc.reason)) from exc
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise AnalyticsFetchError(feed, f"invalid response: {exc}") from exc
 
 
 def fetch_all() -> dict[str, dict[str, int]]:
     """Fetch all six analytics feeds. Returns nested dict: {key: {name: count}}."""
     result: dict[str, dict[str, int]] = {}
     for key, url in _URLS.items():
-        items = _fetch(url)
+        items = _fetch(key, url)
         if "formula" in key:
             result[key] = {
                 item["formula"]: _parse_count(item["count"])

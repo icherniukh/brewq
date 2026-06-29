@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -82,8 +83,9 @@ def test_clear():
 def test_refresh_skips_when_fresh():
     _write_cache(Path(os.environ["BREWQ_CACHE_DIR"]), {"formulae": [], "casks": []})
     with patch.object(cache_mod.brew_mod, "info_all") as mock_info:
-        cache_mod.refresh(force=False, max_age=86400)
+        result = cache_mod.refresh(force=False, max_age=86400)
         mock_info.assert_not_called()
+    assert result.outcome is cache_mod.RefreshOutcome.FRESH
 
 
 def test_refresh_force_calls_brew():
@@ -91,5 +93,27 @@ def test_refresh_force_calls_brew():
     with patch.object(cache_mod.brew_mod, "info_all", return_value=fake_data), \
          patch.object(cache_mod.analytics_mod, "fetch_all", return_value={}), \
          patch.object(cache_mod.analytics_mod, "merge_into_brew_data", return_value=fake_data):
-        cache_mod.refresh(force=True)
+        result = cache_mod.refresh(force=True)
     assert cache_mod.cache_path().exists()
+    assert result.outcome is cache_mod.RefreshOutcome.COMPLETE
+
+
+def test_refresh_reports_lock_contention():
+    cache_mod.cache_path().parent.mkdir(parents=True, exist_ok=True)
+    with cache_mod.lock_path().open("w") as lock_fh:
+        fcntl.flock(lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        result = cache_mod.refresh(force=True)
+
+    assert result.outcome is cache_mod.RefreshOutcome.LOCKED
+
+
+def test_refresh_writes_metadata_and_reports_analytics_failure():
+    fake_data = {"formulae": [{"name": "ripgrep"}], "casks": []}
+    error = cache_mod.analytics_mod.AnalyticsFetchError("formula_30d", "offline")
+    with patch.object(cache_mod.brew_mod, "info_all", return_value=fake_data), \
+         patch.object(cache_mod.analytics_mod, "fetch_all", side_effect=error):
+        result = cache_mod.refresh(force=True)
+
+    assert result.outcome is cache_mod.RefreshOutcome.METADATA_ONLY
+    assert result.analytics_error == "formula_30d: offline"
+    assert json.loads(cache_mod.cache_path().read_text())["formulae"][0]["name"] == "ripgrep"
