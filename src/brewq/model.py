@@ -64,7 +64,7 @@ class Package:
         return base
 
 
-def _formula_binaries(name: str, installed: bool) -> list[str]:
+def formula_binaries(name: str, installed: bool) -> list[str]:
     if not installed:
         return []
     simple = name.split("/")[-1]
@@ -123,7 +123,7 @@ def from_formula(
         deprecated=bool(raw.get("deprecated")),
         disabled=bool(raw.get("disabled")),
         aliases=list(raw.get("aliases") or []),
-        binaries=_formula_binaries(name, is_installed),
+        binaries=formula_binaries(name, is_installed),
     )
 
 
