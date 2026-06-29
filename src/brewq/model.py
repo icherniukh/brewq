@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from pathlib import Path
 
 
 @dataclass
@@ -60,20 +59,6 @@ class Package:
         return base
 
 
-def formula_binaries(name: str, installed: bool) -> list[str]:
-    if not installed:
-        return []
-    simple = name.split("/")[-1]
-    for prefix in ("/opt/homebrew/opt", "/usr/local/opt"):
-        bin_dir = Path(f"{prefix}/{simple}/bin")
-        if bin_dir.exists():
-            try:
-                return sorted(f.name for f in bin_dir.iterdir())
-            except OSError:
-                pass
-    return []
-
-
 def _cask_binaries(raw: dict) -> list[str]:
     result = []
     for artifact in raw.get("artifacts", []):
@@ -119,7 +104,6 @@ def from_formula(
         deprecated=bool(raw.get("deprecated")),
         disabled=bool(raw.get("disabled")),
         aliases=list(raw.get("aliases") or []),
-        binaries=formula_binaries(name, is_installed),
     )
 
 

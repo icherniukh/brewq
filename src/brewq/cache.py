@@ -175,9 +175,17 @@ def load(now: float | None = None) -> CacheLoad:
             raw = json.loads(p.read_text())
             if not isinstance(raw, dict):
                 raise TypeError("cache root is not an object")
+            packages = _packages_from_data(raw)
+            # Populate binaries for installed formulae; installed/version already set by brew JSON.
+            try:
+                cellar, caskroom = brew_mod.storage_roots()
+                records = inventory_mod.scan(cellar, caskroom)
+                inventory_mod.overlay(packages, records)
+            except (OSError, ValueError):
+                pass
             return CacheLoad(
                 source="user",
-                packages=_packages_from_data(raw),
+                packages=packages,
                 age_seconds=max(0.0, current_time - p.stat().st_mtime),
             )
         except (OSError, TypeError, json.JSONDecodeError) as exc:

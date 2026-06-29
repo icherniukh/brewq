@@ -5,7 +5,20 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from brewq.model import Package, formula_binaries
+from brewq.model import Package
+
+
+def formula_binaries(name: str) -> list[str]:
+    """Return sorted binary names from the installed formula's bin/ directory."""
+    simple = name.split("/")[-1]
+    for prefix in ("/opt/homebrew/opt", "/usr/local/opt"):
+        bin_dir = Path(f"{prefix}/{simple}/bin")
+        if bin_dir.exists():
+            try:
+                return sorted(f.name for f in bin_dir.iterdir())
+            except OSError:
+                pass
+    return []
 
 
 @dataclass(frozen=True)
@@ -71,4 +84,4 @@ def overlay(
         package.installed = True
         package.version = record.version
         if package.type == "formula":
-            package.binaries = formula_binaries(package.name, installed=True)
+            package.binaries = formula_binaries(package.name)
