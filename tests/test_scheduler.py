@@ -39,6 +39,15 @@ def test_seed_schedules_once_and_repeated_command_sees_pending():
     assert state["pid"] == 123
 
 
+def test_foreground_command_never_waits_for_worker_lock():
+    with patch("brewq.scheduler.fcntl.flock", side_effect=BlockingIOError), \
+         patch("brewq.scheduler.subprocess.Popen") as spawn:
+        outcome = scheduler.schedule_if_needed(_load("seed"), max_age=100, now=1_000)
+
+    assert outcome == "pending"
+    spawn.assert_not_called()
+
+
 def test_failed_attempt_observes_retry_cooldown():
     scheduler.write_state({"state": "failed", "completed_at": 900, "detail": "offline"})
 

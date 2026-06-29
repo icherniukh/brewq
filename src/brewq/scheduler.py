@@ -79,7 +79,10 @@ def schedule_if_needed(
     path = lock_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as lock_fh:
-        fcntl.flock(lock_fh, fcntl.LOCK_EX)
+        try:
+            fcntl.flock(lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return "pending"
         decision = _schedule_decision(read_state(), current_time)
         if decision is not None:
             return decision
