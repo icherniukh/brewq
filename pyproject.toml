@@ -17,6 +17,9 @@ brewq = "brewq.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+brewq = ["data/*.json.gz"]
+
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
 

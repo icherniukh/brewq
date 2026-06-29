@@ -7,11 +7,13 @@ import time
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from brewq import analytics as analytics_mod
 from brewq import brew as brew_mod
 from brewq import config as config_mod
+from brewq import inventory as inventory_mod
+from brewq import seed as seed_mod
 from brewq.model import Package, from_cask, from_formula
 
 _CACHE_FILE = "brew-all.json"
@@ -31,6 +33,13 @@ class RefreshResult:
     outcome: RefreshOutcome
     path: Path
     analytics_error: str | None = None
+
+
+@dataclass(frozen=True)
+class CacheLoad:
+    source: Literal["user", "seed"]
+    packages: list[Package]
+    age_seconds: float
 
 
 def _dir() -> Path:
@@ -138,11 +147,7 @@ def clear() -> None:
         p.unlink()
 
 
-def load_packages() -> list[Package]:
-    p = cache_path()
-    if not p.exists():
-        return []
-    raw = json.loads(p.read_text())
+def _packages_from_data(raw: dict[str, Any]) -> list[Package]:
     packages: list[Package] = []
     for f in raw.get("formulae", []):
         packages.append(from_formula(
@@ -159,3 +164,42 @@ def load_packages() -> list[Package]:
             installs_365d=c.get("installs_365d", -1),
         ))
     return packages
+
+
+def load(now: float | None = None) -> CacheLoad:
+    current_time = time.time() if now is None else now
+    p = cache_path()
+    if p.exists():
+        try:
+            raw = json.loads(p.read_text())
+            if not isinstance(raw, dict):
+                raise TypeError("cache root is not an object")
+            return CacheLoad(
+                source="user",
+                packages=_packages_from_data(raw),
+                age_seconds=max(0.0, current_time - p.stat().st_mtime),
+            )
+        except (OSError, TypeError, json.JSONDecodeError):
+            pass
+
+    raw, metadata = seed_mod.load_resource()
+    packages = _packages_from_data(raw)
+    try:
+        cellar, caskroom = brew_mod.storage_roots()
+        records = inventory_mod.scan(cellar, caskroom)
+        inventory_mod.overlay(packages, records)
+    except (OSError, ValueError):
+        pass
+    return CacheLoad(
+        source="seed",
+        packages=packages,
+        age_seconds=max(0.0, current_time - metadata.generated_at),
+    )
+
+
+def load_packages() -> list[Package]:
+    p = cache_path()
+    if not p.exists():
+        return []
+    raw = json.loads(p.read_text())
+    return _packages_from_data(raw)
