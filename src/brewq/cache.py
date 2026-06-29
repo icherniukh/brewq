@@ -203,6 +203,8 @@ def load(now: float | None = None) -> CacheLoad:
 
 
 def load_packages() -> list[Package]:
+    """Return packages from the user cache file only — no seed fallback, no installed-state overlay.
+    Intended for benchmarks and isolated performance tests; not suitable for production code paths."""
     p = cache_path()
     if not p.exists():
         return []

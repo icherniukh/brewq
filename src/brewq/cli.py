@@ -200,11 +200,12 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     if opts.tsv_output:
         render_mod.render_tsv(packages, col_defs, out=sys.stdout)
     else:
+        _c = getattr(args, "colors", None)
         render_mod.render_table(
             packages,
             col_defs,
             out=sys.stdout,
-            color_scheme=getattr(args, "colors", None) or 3,
+            color_scheme=_c if _c is not None else 3,
         )
     return 0
 
@@ -361,12 +362,13 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
     if opts.tsv_output:
         render_mod.render_tsv(ranked, col_defs, out=sys.stdout)
     else:
+        _c = getattr(args, "colors", None)
         render_mod.render_table(
             ranked,
             col_defs,
             out=sys.stdout,
             sorted_col=opts.sort,
-            color_scheme=getattr(args, "colors", None) or 3,
+            color_scheme=_c if _c is not None else 3,
         )
     return 0
 

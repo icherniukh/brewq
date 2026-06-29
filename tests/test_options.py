@@ -46,7 +46,7 @@ def test_parse_sort_canonical():
 
 
 def test_parse_sort_30d_aliases():
-    for alias in ("30", "30d", "i30", "installs", "popularity"):
+    for alias in ("30", "30d", "i30", "installs"):
         assert parse_sort(alias) == "installs_30d", f"alias {alias!r} failed"
 
 

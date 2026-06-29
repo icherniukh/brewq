@@ -11,8 +11,6 @@ _SORT_ALIASES: dict[str, str] = {
     # installs_30d
     "installs_30d": "installs_30d",
     "installs": "installs_30d",
-    "popularity": "installs_30d",
-    "pop": "installs_30d",
     "install": "installs_30d",
     "30": "installs_30d",
     "30d": "installs_30d",
@@ -40,9 +38,6 @@ _SORT_ALIASES: dict[str, str] = {
     "az": "name",
     "a-z": "name",
 }
-
-_VALID_SORT_FIELDS = {"installs_30d", "installs_90d", "installs_365d", "name"}
-
 
 def parse_sort(raw: str) -> str:
     """Resolve a sort alias to a canonical sort field."""
@@ -210,16 +205,18 @@ def rank(
     if opts.installed_only:
         packages = [p for p in packages if p.installed]
 
+    cached_fuzzy: set[str] | None = None
     if not opts.show_all:
         # Filter deprecated/disabled only when a view limit exists and results would overflow it.
         # No view limit (piped/non-TTY) means no constraint — include all.
         if opts.limit > 0:
-            _fuzzy_all = _formula_fuzzy_names(packages, query_terms)
-            _total = sum(1 for p in packages if _matches(p, query_terms) or p.name in _fuzzy_all)
+            cached_fuzzy = _formula_fuzzy_names(packages, query_terms)
+            _total = sum(1 for p in packages if _matches(p, query_terms) or p.name in cached_fuzzy)
             if _total > opts.limit:
                 packages = [p for p in packages if not p.deprecated and not p.disabled]
+                cached_fuzzy = None  # stale after filter; recompute below
 
-    formula_fuzzy_names = _formula_fuzzy_names(packages, query_terms)
+    formula_fuzzy_names = cached_fuzzy if cached_fuzzy is not None else _formula_fuzzy_names(packages, query_terms)
     packages = [
         p for p in packages
         if _matches(p, query_terms) or p.name in formula_fuzzy_names

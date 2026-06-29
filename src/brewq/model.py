@@ -129,9 +129,6 @@ def from_cask(
     installs_90d: int = -1,
     installs_365d: int = -1,
 ) -> Package:
-    name_field = raw.get("name") or []
-    display_name = name_field[0] if isinstance(name_field, list) and name_field else raw["token"]
-
     return Package(
         name=raw["token"],
         type="cask",
@@ -144,6 +141,5 @@ def from_cask(
         installed=bool(raw.get("installed")),
         deprecated=bool(raw.get("deprecated")),
         disabled=bool(raw.get("disabled")),
-        aliases=[display_name] if display_name != raw["token"] else [],
         binaries=_cask_binaries(raw),
     )

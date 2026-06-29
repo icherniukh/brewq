@@ -48,10 +48,6 @@ def _terminal_width() -> int:
     return shutil.get_terminal_size((100, 24)).columns
 
 
-def _terminal_height() -> int:
-    return shutil.get_terminal_size((100, 24)).lines
-
-
 def _wrap(text: str, width: int) -> list[str]:
     if not text or width <= 0:
         return [text or ""]
@@ -160,15 +156,14 @@ def render_table(
         # Clip description to column width; wrap only when columns overflow the terminal.
         # Status prefix is embedded before clip/wrap so word boundaries are respected.
         if desc_idx is not None:
-            desc_text = (_plain_status_prefix(pkg) if show_status_in_description else "") + row[desc_idx]
+            plain_prefix = _plain_status_prefix(pkg) if show_status_in_description else ""
+            desc_text = plain_prefix + row[desc_idx]
             if columns_overflow:
                 desc_lines = _wrap(desc_text, widths[desc_idx])
             else:
                 desc_lines = [_clip(desc_text, widths[desc_idx])]
-            if show_status_in_description and desc_lines:
-                plain_prefix = _plain_status_prefix(pkg)
-                if plain_prefix and desc_lines[0].startswith(plain_prefix):
-                    desc_lines[0] = _status_prefix(pkg, color) + desc_lines[0][len(plain_prefix):]
+            if plain_prefix and desc_lines and desc_lines[0].startswith(plain_prefix):
+                desc_lines[0] = _status_prefix(pkg, color) + desc_lines[0][len(plain_prefix):]
         else:
             desc_lines = None
 
