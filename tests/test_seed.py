@@ -46,6 +46,14 @@ def test_encode_is_deterministic_and_valid():
     assert metadata.generated_at == 1_700_000_000
 
 
+def test_packaged_seed_is_present_and_populated():
+    data, metadata = seed.load_resource()
+
+    assert metadata.schema_version == 1
+    assert len(data["formulae"]) > 8_000
+    assert len(data["casks"]) > 7_000
+
+
 def test_validate_rejects_missing_analytics():
     data = _data()
     del data["formulae"][0]["installs_90d"]
