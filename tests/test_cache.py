@@ -49,6 +49,26 @@ def test_status_present():
     assert s["has_analytics"] is True
 
 
+def test_load_computes_age_from_real_file_mtime():
+    """cache.load() derives age_seconds from the cache file's real mtime.
+
+    Every other cache-age test injects age_seconds directly via a mocked
+    CacheLoad, so none of them exercise this file-timestamp arithmetic.
+    """
+    data = {"formulae": [{"name": "ripgrep", "full_name": "ripgrep", "desc": "",
+                           "homepage": "", "versions": {"stable": "1.0"},
+                           "deprecated": False, "disabled": False, "aliases": []}],
+            "casks": []}
+    _write_cache(Path(os.environ["BREWQ_CACHE_DIR"]), data)
+    stamp = cache_mod.cache_path().stat().st_mtime - 90
+    os.utime(cache_mod.cache_path(), (stamp, stamp))
+
+    loaded = cache_mod.load()
+
+    assert loaded.source == "user"
+    assert 89 <= loaded.age_seconds <= 91
+
+
 def test_clear():
     _write_cache(Path(os.environ["BREWQ_CACHE_DIR"]), {"formulae": [], "casks": []})
     assert cache_mod.cache_path().exists()
