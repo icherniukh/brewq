@@ -14,10 +14,10 @@ except ImportError:
 
 DEFAULTS: dict[str, Any] = {
     "search": {
-        "sort": "installs_30d",
+        "sort": "trending",
     },
     "output": {
-        "columns": ["name", "installs", "description"],
+        "columns": ["name", "trending", "auto", "description"],
         "limit": 0,
     },
     "list": {

@@ -78,10 +78,34 @@ def test_parse_sort_unknown_raises():
 
 # --- rank ---
 
-def test_rank_by_popularity_default():
+def test_rank_by_installs_30d():
     opts = SearchOptions(query=["ripgrep"], sort="installs_30d")
     result = rank(list(pkgs), opts)
     assert result[0].name == "ripgrep"
+
+
+def test_rank_by_trending_prefers_higher_trend_score():
+    local = [
+        _pkg("declining-tool", installs_30d=50, installs_90d=600, installs_365d=3_000),
+        _pkg("growing-tool", installs_30d=5_000, installs_90d=6_000, installs_365d=6_500),
+    ]
+    opts = SearchOptions(query=[], sort="trending")
+    result = rank(local, opts)
+    assert result[0].name == "growing-tool"
+
+
+def test_rank_by_trending_sorts_unknown_trend_last():
+    local = [
+        _pkg("no-history", installs_30d=100, installs_90d=-1, installs_365d=-1),
+        _pkg("has-history", installs_30d=100, installs_90d=50, installs_365d=200),
+    ]
+    opts = SearchOptions(query=[], sort="trending")
+    result = rank(local, opts)
+    assert result[-1].name == "no-history"
+
+
+def test_default_search_options_sort_is_trending():
+    assert SearchOptions().sort == "trending"
 
 
 def test_rank_by_90d():

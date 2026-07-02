@@ -61,3 +61,62 @@ def test_status_property():
         deprecated=False, disabled=True,
     )
     assert pkg2.status == "disabled"
+
+
+def _pkg(installs_30d: int, installs_90d: int, installs_365d: int) -> Package:
+    return Package(
+        name="x", type="formula", description="", url="", version="",
+        installs_30d=installs_30d, installs_90d=installs_90d, installs_365d=installs_365d,
+        installed=False, deprecated=False, disabled=False,
+    )
+
+
+def test_trending_none_without_any_analytics():
+    assert _pkg(-1, -1, -1).trending is None
+
+
+def test_trending_none_with_only_recent_window():
+    assert _pkg(500, -1, -1).trending is None
+
+
+def test_trending_above_one_when_recent_rate_exceeds_history():
+    pkg = _pkg(installs_30d=5_000, installs_90d=6_000, installs_365d=6_500)
+    assert pkg.trending is not None
+    assert pkg.trending > 1.0
+
+
+def test_trending_below_one_when_recent_rate_falls_below_history():
+    pkg = _pkg(installs_30d=50, installs_90d=600, installs_365d=3_000)
+    assert pkg.trending is not None
+    assert pkg.trending < 1.0
+
+
+def test_trending_uses_pseudocount_when_baseline_is_zero():
+    # A brand-new package with zero measurable history shouldn't be hidden as
+    # None — the pseudocount still yields a meaningful "how hot right now" value.
+    pkg = _pkg(installs_30d=100, installs_90d=0, installs_365d=0)
+    assert pkg.trending == pytest.approx(6.0)
+
+
+def test_trending_falls_back_to_90d_only_history():
+    pkg = _pkg(installs_30d=100, installs_90d=200, installs_365d=-1)
+    assert pkg.trending is not None
+
+
+def test_trending_falls_back_to_365d_only_history():
+    pkg = _pkg(installs_30d=100, installs_90d=-1, installs_365d=1_000)
+    assert pkg.trending is not None
+
+
+def test_trending_low_volume_is_damped_toward_neutral():
+    # Same underlying growth ratio (~2x recent vs. baseline), scaled up 1000x for
+    # the high-volume case, to isolate the pseudocount-smoothing effect. 1.0 is
+    # neutral under the new multiplier scale, so "damped" means pulled toward 1.0.
+    low_volume = _pkg(installs_30d=10, installs_90d=20, installs_365d=66)
+    high_volume = _pkg(installs_30d=10_000, installs_90d=20_000, installs_365d=66_000)
+    assert abs(low_volume.trending - 1.0) < abs(high_volume.trending - 1.0)
+
+
+def test_trending_has_no_hard_ceiling():
+    pkg = _pkg(installs_30d=1_000_000, installs_90d=1_000_001, installs_365d=1_000_002)
+    assert pkg.trending > 1000

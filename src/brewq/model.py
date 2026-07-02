@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 
 
@@ -30,33 +29,48 @@ class Package:
             return "deprecated"
         return ""
 
+    # Added to both the recent and baseline monthly rate before dividing (Laplace/
+    # DESeq2-style pseudocount smoothing). A raw ratio blows up whenever the
+    # baseline is near zero — which happens constantly for packages whose
+    # installs_90d/365d are barely bigger than installs_30d — producing numbers
+    # like 200x-300x that are indistinguishable noise once anything gets capped.
+    # Adding a fixed count to both sides damps that noise in proportion to how
+    # small the counts are, while barely touching packages with real volume
+    # (tens of thousands of installs/month). Calibrated against the live seed
+    # cache: at alpha=20, single/double-digit-install packages get pulled down
+    # to single-digit multipliers instead of pegging a hard ceiling, while
+    # household-name tools (jq, git, ripgrep) land within ~50% of neutral.
+    _TREND_PSEUDOCOUNT = 20.0
+
     @property
-    def popularity_score(self) -> int:
-        """Composite 0-100 score: log-weighted install volume + trend momentum."""
-        i30 = max(self.installs_30d, 0)
-        i365 = max(self.installs_365d, 0)
-        if i30 == 0 and i365 == 0:
-            return -1
-        if i365 > 0 and i30 > 0:
-            annual = i30 * 12 * 0.6 + i365 * 0.4
-        elif i30 > 0:
-            annual = i30 * 12
-        else:
-            annual = i365
-        base = min(100, int(math.log10(annual + 1) * 16.7))
-        if i365 > 0 and i30 > 0:
-            monthly_hist = i365 / 12
-            if monthly_hist > 0:
-                trend = i30 / monthly_hist
-                if trend > 1.5:
-                    base = min(100, int(base * 1.15))
-                elif trend > 1.2:
-                    base = min(100, int(base * 1.07))
-                elif trend < 0.5:
-                    base = max(0, int(base * 0.85))
-                elif trend < 0.8:
-                    base = max(0, int(base * 0.93))
-        return base
+    def trending(self) -> float | None:
+        """Growth signal: the most recent monthly install rate as a multiple of this
+        package's own span-weighted historical monthly rate, e.g. 4.1 == "4.1x its
+        own historical rate", 1.0 == unchanged, 0.5 == half its usual rate. None
+        when there isn't enough analytics data to measure a baseline at all.
+        """
+        if self.installs_30d < 0:
+            return None
+        recent_rate = float(self.installs_30d)
+
+        history_total = 0.0
+        history_days = 0.0
+        if self.installs_90d >= 0:
+            history_total += max(0.0, self.installs_90d - self.installs_30d)
+            history_days += 60.0
+            if self.installs_365d >= 0:
+                history_total += max(0.0, self.installs_365d - self.installs_90d)
+                history_days += 275.0
+        elif self.installs_365d >= 0:
+            history_total += max(0.0, self.installs_365d - self.installs_30d)
+            history_days += 335.0
+
+        if history_days == 0:
+            return None  # no older window to compare the recent rate against
+
+        baseline_rate = history_total / history_days * 30.0
+        alpha = self._TREND_PSEUDOCOUNT
+        return (recent_rate + alpha) / (baseline_rate + alpha)
 
 
 def _cask_binaries(raw: dict) -> list[str]:

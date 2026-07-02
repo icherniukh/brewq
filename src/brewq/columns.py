@@ -29,9 +29,11 @@ def _fmt(val: int) -> str:
     return "-" if val < 0 else f"{val:,}"
 
 
-def _fmt_popularity(p: Package) -> str:
-    s = p.popularity_score
-    return "-" if s < 0 else str(s)
+def _fmt_trending(p: Package) -> str:
+    t = p.trending
+    if t is None:
+        return "-"
+    return f"{t:.1f}x"
 
 
 def _fmt_binaries(p: Package) -> str:
@@ -57,10 +59,10 @@ _COLUMN_REGISTRY: dict[str, ColumnDef] = {
         lambda p: _fmt(p.installs_365d),
         lambda p: "" if p.installs_365d < 0 else p.installs_365d,
     ),
-    "popularity": ColumnDef(
-        "popularity", "POP", "right",
-        _fmt_popularity,
-        lambda p: "" if p.popularity_score < 0 else p.popularity_score,
+    "trending": ColumnDef(
+        "trending", "TREND", "right",
+        _fmt_trending,
+        lambda p: "" if p.trending is None else p.trending,
     ),
     "binaries": ColumnDef(
         "binaries", "BINARIES", "left",
@@ -105,10 +107,13 @@ _ALIASES: dict[str, str] = {
     "i365": "installs_365d",
     "y": "installs_365d",
     "year": "installs_365d",
-    # popularity (composite score)
-    "pop": "popularity",
-    "score": "popularity",
-    "rank": "popularity",
+    # trending (recent rate vs own historical baseline)
+    "trend": "trending",
+    "hot": "trending",
+    "pop": "trending",
+    "popularity": "trending",
+    "score": "trending",
+    "rank": "trending",
     # binaries
     "bin": "binaries",
     "bins": "binaries",
@@ -137,10 +142,25 @@ _LIST_PROFILES: dict[str, list[str]] = {
 # "default" is driven by config, not hardcoded here
 
 
+_RAW_METRIC_KEYS = ("installs_30d", "installs_90d", "installs_365d")
+
+
+def pick_representative_metric(pkg: Package | None) -> str:
+    """Pick whichever raw install-count window has data for the top result, so the
+    default table can show one concrete number next to TRENDING without exposing
+    all three windows. Prefers the freshest window that isn't a -1 (unknown)."""
+    if pkg is not None:
+        for key in _RAW_METRIC_KEYS:
+            if getattr(pkg, key) >= 0:
+                return key
+    return "installs_30d"
+
+
 def resolve(
     spec: str | list[str],
     default_columns: list[str],
     profiles: dict[str, list[str]] | None = None,
+    representative_metric: str | None = None,
 ) -> list[ColumnDef]:
     """Expand a column spec (profile name or comma-joined key list) into ColumnDef list."""
     if profiles is None:
@@ -156,7 +176,10 @@ def resolve(
 
     resolved = []
     for key in keys:
-        canonical = _ALIASES.get(key, key)
+        if key == "auto":
+            canonical = representative_metric or "installs_30d"
+        else:
+            canonical = _ALIASES.get(key, key)
         col = _COLUMN_REGISTRY.get(canonical)
         if col is None:
             valid = sorted(set(list(_COLUMN_REGISTRY) + list(_ALIASES)))

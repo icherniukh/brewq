@@ -8,6 +8,11 @@ from brewq.model import Package
 
 # Sort aliases map user input to canonical sort fields.
 _SORT_ALIASES: dict[str, str] = {
+    # trending
+    "trending": "trending",
+    "trend": "trending",
+    "hot": "trending",
+    "default": "trending",
     # installs_30d
     "installs_30d": "installs_30d",
     "installs": "installs_30d",
@@ -15,7 +20,6 @@ _SORT_ALIASES: dict[str, str] = {
     "30": "installs_30d",
     "30d": "installs_30d",
     "i30": "installs_30d",
-    "default": "installs_30d",
     # installs_90d
     "installs_90d": "installs_90d",
     "90": "installs_90d",
@@ -44,7 +48,7 @@ def parse_sort(raw: str) -> str:
     normalized = raw.strip().lower()
     result = _SORT_ALIASES.get(normalized)
     if result is None:
-        valid = "30d (i30, installs), 90d (i90), 365d (i365, y), name (n)"
+        valid = "trending (trend, hot), 30d (i30, installs), 90d (i90), 365d (i365, y), name (n)"
         raise ValueError(f"Unknown sort field {raw!r}. Valid: {valid}")
     return result
 
@@ -52,7 +56,7 @@ def parse_sort(raw: str) -> str:
 @dataclass
 class SearchOptions:
     query: list[str] = field(default_factory=list)
-    sort: str = "installs_30d"
+    sort: str = "trending"
     columns_spec: str = "default"
     limit: int = 0
     tsv_output: bool = False
@@ -75,9 +79,9 @@ def build_search_options(args: Any, cfg: dict, *, tty_rows: int | None = None) -
     if raw_sort:
         sort = parse_sort(raw_sort)  # raises ValueError on unknown input
     elif top:
-        sort = "installs_30d"  # --top implies popularity ranking
+        sort = "trending"  # --top implies trending ranking
     else:
-        cfg_sort = cfg["search"].get("sort", "installs_30d")
+        cfg_sort = cfg["search"].get("sort", "trending")
         sort = parse_sort(cfg_sort)
 
     cfg_limit = cfg["output"]["limit"]
@@ -230,17 +234,19 @@ def rank(
         normal.sort(key=lambda p: p.name.lower())
         degraded.sort(key=lambda p: p.name.lower())
     else:
-        installs_key = (
-            (lambda p: p.installs_365d) if opts.sort == "installs_365d"
-            else (lambda p: p.installs_90d) if opts.sort == "installs_90d"
-            else (lambda p: p.installs_30d)
-        )
+        def metric_key(p: Package) -> float:
+            if opts.sort == "trending":
+                return p.trending if p.trending is not None else float("-inf")
+            if opts.sort == "installs_365d":
+                return max(p.installs_365d, -1)
+            if opts.sort == "installs_90d":
+                return max(p.installs_90d, -1)
+            return max(p.installs_30d, -1)
 
-        def sort_key(p: Package) -> tuple[int, int, int, str]:
-            installs = max(installs_key(p), -1)
+        def sort_key(p: Package) -> tuple[int, float, int, str]:
             return (
                 -_exact_match_score(p, query_terms),
-                -installs,
+                -metric_key(p),
                 -_match_score(p, query_terms),
                 p.name.lower(),
             )

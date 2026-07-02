@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from brewq.columns import resolve
+from brewq.columns import pick_representative_metric, resolve
 from brewq.model import Package
 
 
@@ -53,9 +53,34 @@ def test_version_raw_keeps_full_version():
     assert cols[0].raw_getter(pkg) == "20240203-110809,5046fc22"
 
 
-def test_resolve_alias_popularity():
+def test_resolve_alias_trending():
+    cols = resolve("trending", ["name"])
+    assert cols[0].key == "trending"
+
+
+def test_resolve_alias_trend():
+    cols = resolve("trend", ["name"])
+    assert cols[0].key == "trending"
+
+
+def test_resolve_alias_hot():
+    cols = resolve("hot", ["name"])
+    assert cols[0].key == "trending"
+
+
+def test_resolve_alias_popularity_maps_to_trending():
     cols = resolve("popularity", ["name"])
-    assert cols[0].key == "popularity"
+    assert cols[0].key == "trending"
+
+
+def test_resolve_auto_uses_representative_metric():
+    cols = resolve(["name", "auto"], [], representative_metric="installs_90d")
+    assert [c.key for c in cols] == ["name", "installs_90d"]
+
+
+def test_resolve_auto_without_metric_falls_back_to_30d():
+    cols = resolve(["auto"], [])
+    assert cols[0].key == "installs_30d"
 
 
 def test_resolve_alias_installs():
@@ -176,3 +201,41 @@ def test_installs_30d_header():
 def test_resolve_default_uses_config():
     cols = resolve("default", ["name", "type"])
     assert [c.key for c in cols] == ["name", "type"]
+
+
+def test_trending_display_formats_as_multiplier():
+    pkg = _pkg(installs_30d=200, installs_90d=200, installs_365d=800)
+    cols = resolve("trending", [])
+    text = cols[0].getter(pkg)
+    assert text.endswith("x")
+    assert text[:-1].replace(".", "", 1).isdigit()
+
+
+def test_trending_display_unknown_when_no_history():
+    pkg = _pkg(installs_30d=200, installs_90d=-1, installs_365d=-1)
+    cols = resolve("trending", [])
+    assert cols[0].getter(pkg) == "-"
+
+
+def test_pick_representative_metric_prefers_30d():
+    pkg = _pkg(installs_30d=100, installs_90d=300, installs_365d=1_000)
+    assert pick_representative_metric(pkg) == "installs_30d"
+
+
+def test_pick_representative_metric_falls_back_to_90d():
+    pkg = _pkg(installs_30d=-1, installs_90d=300, installs_365d=1_000)
+    assert pick_representative_metric(pkg) == "installs_90d"
+
+
+def test_pick_representative_metric_falls_back_to_365d():
+    pkg = _pkg(installs_30d=-1, installs_90d=-1, installs_365d=1_000)
+    assert pick_representative_metric(pkg) == "installs_365d"
+
+
+def test_pick_representative_metric_defaults_when_no_data_at_all():
+    pkg = _pkg(installs_30d=-1, installs_90d=-1, installs_365d=-1)
+    assert pick_representative_metric(pkg) == "installs_30d"
+
+
+def test_pick_representative_metric_handles_none_package():
+    assert pick_representative_metric(None) == "installs_30d"
