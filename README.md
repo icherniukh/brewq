@@ -25,6 +25,15 @@ PYTHONPATH=src python -m brewq.cli list --tsv -c name,type,version
 PYTHONPATH=src python -m brewq.cli refresh
 ```
 
+Installed via `uv tool install .` or a future Homebrew formula, `brewq` ships a
+short `bq` alias binary (same idea as `ripgrep` installing `rg`), so day-to-day
+use is just:
+
+```bash
+bq ripgrep
+bq -t 10 json
+```
+
 Releases include a seed cache, so the first command can render immediately. On
 first use, `brewq` overlays installed state from the local Homebrew Cellar and
 Caskroom. Fresh queries stay cache-only; stale data renders immediately and

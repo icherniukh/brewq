@@ -130,12 +130,20 @@ Initial useful metrics:
 - 90-day installs
 - 365-day installs
 
-Possible later metrics:
+`trending` (recent 30d rate as a multiplier of a span-weighted 90d/365d baseline,
+e.g. `4.1x`) is the default public ranking/column signal — see brewq-4it.
+Raw install counts remain available as explicit, opt-in sort/columns. A composite
+"popularity buckets" score was considered and rejected in favor of trending: an
+opaque 0-100 blend was harder to justify than a directly interpretable
+recent-vs-history multiplier.
 
-- trend score
-- popularity buckets
-
-Trend score is explicitly undecided. It should be explored after the first useful version exists.
+The multiplier uses pseudocount smoothing (add a fixed count to both the recent
+and baseline rate before dividing) rather than a post-hoc confidence discount
+plus hard clamp — see brewq-sbe. The earlier clamp-based version tied dozens of
+unrelated packages at an identical `+300%` ceiling and hid packages with zero
+measurable history entirely; the same instability that RNA-seq differential
+expression tools (DESeq2/apeglm) solve with fold-change shrinkage for low-count
+genes, applied here to low-volume packages.
 
 ## Brew Alias Support
 

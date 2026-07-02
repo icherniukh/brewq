@@ -13,6 +13,7 @@ dependencies = []
 
 [project.scripts]
 brewq = "brewq.cli:main"
+bq = "brewq.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

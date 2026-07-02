@@ -70,22 +70,30 @@ The central discovery operation is:
 brewq -t 10 QUERY
 ```
 
-`-t N` should mean "show the top N most relevant, most installed results." It applies after matching, scoring, and analytics-aware ranking.
+`-t N` should mean "show the top N most relevant, most trending results." It applies after matching, scoring, and analytics-aware ranking.
 
 `--limit N` remains list-specific output capping.
 
 Sort fields:
 
-- `30d` by default
-- `90d` when requested
-- `365d` when requested
+- `trending` by default (recent 30d install rate as a multiplier of a package's
+  own 90d/365d historical baseline, e.g. `4.1x`; pseudocount-smoothed so a
+  handful of installs can't read as a wild swing)
+- `30d`, `90d`, `365d` when requested — raw install counts, still fully available,
+  no longer the public default
 - `name` for alphabetical output
 
-Potential future metric:
+Superseded: this section originally deferred a trend metric past MVP and kept raw
+install counts as the default signal. That direction changed — see brewq-4it —
+because raw install counts alone over- or under-represent packages that are
+simply old or new rather than currently relevant.
 
-- trend score based on 7d/30d/365d dynamics, if the data source supports it cleanly
-
-Trend score is not MVP. It should not block the first release.
+Superseded: the first `trending` implementation expressed growth as a signed
+percent (`+25%`) clamped to `±300%`. That clamp tied dozens of unrelated
+packages at an identical ceiling and hid brand-new packages entirely (no
+history meant no signal). Replaced — see brewq-sbe — with a pseudocount-smoothed
+multiplier that has no hard ceiling and naturally damps low-volume noise
+instead of capping it after the fact.
 
 ## Output Model
 

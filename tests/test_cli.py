@@ -140,7 +140,23 @@ def test_main_search_default_columns_omit_type(capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "TYPE" not in out
+    assert "TREND" in out
     assert "30d" in out
+
+
+def test_main_search_default_columns_pick_available_window_via_top_result(capsys):
+    pkg = Package(
+        name="no-recent-data", type="formula", description="", url="", version="1.0",
+        installs_30d=-1, installs_90d=-1, installs_365d=40_000,
+        installed=False, deprecated=False, disabled=False,
+    )
+    with patch("brewq.cache.load", return_value=_loaded([pkg])):
+        rc = main(["no-recent-data"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "TREND" in out
+    assert "365d" in out
+    assert "30d" not in out
 
 
 def test_main_search_columns_short_alias(capsys):
@@ -358,7 +374,7 @@ def test_random_runs_generated_search(capsys):
     assert generated.startswith("brewq -t ")
     args = search.call_args.args[0]
     assert args.query
-    assert args.sort in {"30d", "90d", "365d", "name"}
+    assert args.sort in {"trending", "30d", "90d", "365d", "name"}
     assert not args.tsv
 
 

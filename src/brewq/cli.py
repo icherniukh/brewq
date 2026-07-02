@@ -76,15 +76,15 @@ def _build_search_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("query", nargs="*", help="Search terms")
     parser.add_argument("-s", "--sort", metavar="FIELD",
-                        help="Sort by: 30d (i30), 90d (i90), 365d (i365), name  [default: 30d]")
+                        help="Sort by: trending (hot), 30d (i30), 90d (i90), 365d (i365), name  [default: trending]")
     parser.add_argument("-l", "--installed", action="store_true",
                         help="Filter to installed packages")
     parser.add_argument("-p", "--preset", metavar="NAME",
                         help="Column preset: compact, full")
     parser.add_argument("-c", "--columns", metavar="KEYS",
-                        help="Columns: name (n), 30d, 90d, 365d, pop, bin, type (t), version (v), desc (d), inst (i), status, url (h)")
+                        help="Columns: name (n), trending (hot), 30d (i30), 90d (i90), 365d (i365), bin, type (t), version (v), desc (d), inst (i), status, url (h)")
     parser.add_argument("-t", "--top", type=_positive_int, metavar="N",
-                        help="Show top N by installs")
+                        help="Show top N by trending rank")
     parser.add_argument("-r", "--refresh", action="store_true",
                         help="Refresh cache before searching")
     parser.add_argument("--all", action="store_true",
@@ -109,16 +109,17 @@ def _build_command_parser() -> argparse.ArgumentParser:
         formatter_class=_FORMATTER,
     )
     lst.add_argument("--analytics", action="store_true",
-                     help="Include analytics columns (cache-backed)")
+                     help="Add a 30d install-count column")
     lst.add_argument("-p", "--preset", metavar="NAME",
                      help="Column preset: compact, full")
     lst.add_argument("-c", "--columns", metavar="KEYS",
-                     help="Explicit columns: comma-joined keys")
-    lst.add_argument("--limit", type=_positive_int, metavar="N")
+                     help="Columns: name (n), type (t), version (v), trending (hot), 30d (i30), 90d (i90), 365d (i365), desc (d), status, bin, url (h)")
+    lst.add_argument("--limit", type=_positive_int, metavar="N",
+                     help="Cap installed rows shown")
     lst.add_argument("--colors", type=int, choices=_COLOR_SCHEMES, metavar="N",
                      help="Temporary formula/cask palette: 0..9")
     lst.add_argument("--tsv", action="store_true",
-                     help="Output raw tab-separated rows for shell scripting")
+                     help="Tab-separated output for scripting")
 
     # refresh
     refresh_p = subparsers.add_parser(
@@ -139,7 +140,8 @@ def _build_command_parser() -> argparse.ArgumentParser:
         epilog=_CONFIG_EPILOG,
         formatter_class=_FORMATTER,
     )
-    config_p.add_argument("config_sub_cmd", nargs="?", choices=["path"], default="path")
+    config_p.add_argument("config_sub_cmd", nargs="?", choices=["path"], default="path",
+                          help="Print the config file path")
 
     # random
     rand_p = subparsers.add_parser(
@@ -264,7 +266,7 @@ _RANDOM_TERMS = (
     "search", "diff", "sync", "backup", "proxy", "log", "parser",
     "fuzzy", "render", "stream", "lint", "format", "test",
 )
-_RANDOM_SORTS = ("30d", "30d", "365d", "90d", "name")
+_RANDOM_SORTS = ("trending", "trending", "30d", "365d", "90d", "name")
 _RANDOM_LAYOUTS = (
     ("default", None, None),
     ("compact", "compact", None),
@@ -325,11 +327,15 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         return 2
 
     default_cols = cfg["output"]["columns"]
-    try:
-        col_defs = columns_mod.resolve(opts.columns_spec, default_cols)
-    except ValueError as exc:
-        print(f"brewq: {exc}", file=sys.stderr)
-        return 1
+    col_defs = None
+    if opts.columns_spec != "default":
+        # "default" is resolved after ranking: it may contain "auto", which needs
+        # the top result to pick a representative raw metric column.
+        try:
+            col_defs = columns_mod.resolve(opts.columns_spec, default_cols)
+        except ValueError as exc:
+            print(f"brewq: {exc}", file=sys.stderr)
+            return 1
 
     if getattr(args, "refresh", False):
         try:
@@ -358,6 +364,14 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         query_str = " ".join(opts.query) if opts.query else "(installed filter)"
         print(f"No results for: {query_str}", file=sys.stderr)
         return 0
+
+    if col_defs is None:
+        metric = columns_mod.pick_representative_metric(ranked[0])
+        try:
+            col_defs = columns_mod.resolve(default_cols, default_cols, representative_metric=metric)
+        except ValueError as exc:
+            print(f"brewq: {exc}", file=sys.stderr)
+            return 1
 
     if opts.tsv_output:
         render_mod.render_tsv(ranked, col_defs, out=sys.stdout)
