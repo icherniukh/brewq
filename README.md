@@ -1,81 +1,106 @@
 # brewq
 
-`brewq` is a read-only Homebrew query and analytics tool for users who want more useful package search results without opening formula pages one by one.
+`brewq` is a read-only Homebrew query and analytics tool. It answers a narrow question well: *what does Homebrew know about this package, and what should I trust?*
 
-It is designed around a small set of workflows:
+Install analytics are surfaced at the exact moment you search, compare, or review installed packages — so you can judge trust and quality without opening formula pages one by one.
 
-- search packages by name and description
-- compare matches with install analytics as a trust signal
-- choose table columns or raw TSV output for scripts
-- list installed formulae and casks with richer metadata
-
-`brewq` is not a Homebrew manager. It does not install, uninstall, upgrade, manage services, or replace Brewfile workflows.
-
-## Status
-
-The historical shell prototype is preserved in `legacy/bsx-prototype.zsh` until replacement behavior is implemented and verified.
-
-The Python entry point already covers the current core workflows:
+## Install
 
 ```bash
-PYTHONPATH=src python -m brewq.cli ripgrep
-PYTHONPATH=src python -m brewq.cli -t 10 -s 365d rust
-PYTHONPATH=src python -m brewq.cli --tsv -c name,30d,url ripgrep
-PYTHONPATH=src python -m brewq.cli list --tsv -c name,type,version
-PYTHONPATH=src python -m brewq.cli refresh
+uv tool install .
 ```
 
-Installed via `uv tool install .` or a future Homebrew formula, `brewq` ships a
-short `bq` alias binary (same idea as `ripgrep` installing `rg`), so day-to-day
-use is just:
+Ships two entry points: `brewq` and `bq` (same as `ripgrep`/`rg`).
+
+## Usage
+
+Search is the root command:
 
 ```bash
-bq ripgrep
-bq -t 10 json
+brewq ripgrep
+brewq terminal multiplexer
+brewq -t 10 json
+brewq -s 365d rust
 ```
 
-Releases include a seed cache, so the first command can render immediately. On
-first use, `brewq` overlays installed state from the local Homebrew Cellar and
-Caskroom. Fresh queries stay cache-only; stale data renders immediately and
-schedules one delayed, low-load background refresh. Cache state is disclosed on
-stderr. `brewq refresh` and `brewq -r QUERY` are optional recovery controls.
+Sort by raw 90-day install volume by default (most trustworthy signal), or switch to `30d`, `365d`, `trending`, or `name`.
 
-For a visual project snapshot, open `docs/status-dashboard.html`. For fresh data every time the page loads, run:
+### Presets
+
+Three built-in column presets, accessible by name or single digit:
 
 ```bash
-python3 scripts/serve-status-dashboard.py
+brewq -p 1 ripgrep       # compact: name, 90d, description
+brewq -p 2 ripgrep       # full: all columns
+brewq -p 3 ripgrep       # links: name, url, description
 ```
 
-Then open `http://127.0.0.1:8765/`. To refresh the embedded static fallback, run:
+Or pick exact columns:
 
 ```bash
-python3 scripts/update-status-dashboard.py
+brewq -c name,90d,trending,url ripgrep
 ```
 
-## Benchmarks
-
-Run the lightweight benchmark harness before performance work:
+### Installed packages
 
 ```bash
-python3 scripts/benchmark.py --iterations 3
-python3 scripts/benchmark.py --list
+brewq list               # installed formulae and casks
+brewq list --analytics   # add 90d install counts
+brewq list -p 2          # full preset
 ```
 
-The output is a markdown table covering cache load, ranking/filtering, table rendering, TSV rendering, and installed-list paths.
+### Scripting
+
+```bash
+brewq --tsv -c name,90d,url ripgrep
+brewq list --tsv -c name,type,version
+```
+
+### Cache
+
+Releases bundle a seed cache, so the first query renders immediately. On first use, `brewq` overlays installed state from the local Cellar and Caskroom. Stale cache renders instantly and schedules one delayed background refresh. Cache age is shown on stderr.
+
+```bash
+brewq refresh            # force cache refresh
+brewq -r ripgrep         # refresh before searching
+brewq config path        # show config file location
+```
+
+## Config
+
+Optional `config.toml` at `~/.config/brewq/config.toml` (or `$BREWQ_CONFIG`):
+
+```toml
+[search]
+sort = "90d"
+
+[output]
+columns = ["name", "installs_90d", "trending", "description"]
+limit = 0
+
+[list]
+columns = ["name", "type", "version", "description"]
+
+[cache]
+max_age_seconds = 86400
+```
+
+Environment: `BREWQ_CONFIG`, `BREWQ_CACHE_DIR`, `BREWQ_CACHE_MAX_AGE`, `NO_COLOR`.
+
+## What it's not
+
+`brewq` is not a package manager. It does not install, uninstall, upgrade, manage services, or replace Brewfile workflows. It is read-only.
 
 ## Documentation
 
-- `docs/vision.md` - product goals and non-goals.
-- `docs/product-spec.md` - requirements and first-release scope.
-- `docs/cli-design.md` - command surface, options, columns, and config model.
-- `docs/status-dashboard.html` - static project status dashboard.
-- `docs/local-workflows.md` - dotfiles aliases/functions this tool should absorb.
-- `docs/stack.md` - stack decision and implementation shape.
-- `docs/roadmap.md` - implementation and release plan.
-- `docs/migration.md` - provenance and cleanup notes for existing copies.
+- `docs/vision.md` — product goals and non-goals
+- `docs/product-spec.md` — requirements and first-release scope
+- `docs/cli-design.md` — command surface, options, columns, config model
+- `docs/local-workflows.md` — dotfiles aliases/functions this tool absorbs
 
 ## Repository Layout
 
-- `legacy/bsx-prototype.zsh` - shell prototype migrated from dotfiles.
-- `src/brewq/` - Python package scaffold.
-- `tests/` - test directory for the implementation.
+- `src/brewq/` — Python package
+- `tests/` — test suite
+- `scripts/` — verify, bump, benchmark, seed cache build
+- `legacy/bsx-prototype.zsh` — shell prototype (provenance)
