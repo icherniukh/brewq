@@ -26,7 +26,6 @@ DEFAULTS: dict[str, Any] = {
     "cache": {
         "max_age_seconds": 86400,
     },
-    "presets": {},
 }
 
 
@@ -81,44 +80,3 @@ def cache_dir() -> Path:
 
 def config_path() -> Path:
     return _config_path()
-
-
-_SECTION_ORDER = ("search", "output", "list", "cache", "presets")
-
-
-def _serialize_value(val: Any) -> str:
-    if isinstance(val, bool):
-        return "true" if val else "false"
-    if isinstance(val, int):
-        return str(val)
-    if isinstance(val, str):
-        return f'"{val}"'
-    if isinstance(val, list):
-        return "[" + ", ".join(f'"{v}"' for v in val) + "]"
-    raise TypeError(f"Cannot serialize {type(val).__name__} to TOML")
-
-
-def _serialize_toml(cfg: dict[str, Any]) -> str:
-    lines: list[str] = []
-    ordered = list(_SECTION_ORDER)
-    for key in cfg:
-        if key not in _SECTION_ORDER:
-            ordered.append(key)
-    for section in ordered:
-        if section not in cfg:
-            continue
-        data = cfg[section]
-        if not isinstance(data, dict) or not data:
-            continue
-        lines.append(f"[{section}]")
-        for k, v in data.items():
-            lines.append(f"{k} = {_serialize_value(v)}")
-        lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def save(cfg: dict[str, Any]) -> None:
-    """Write config dict back to config.toml."""
-    path = _config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_serialize_toml(cfg), encoding="utf-8")

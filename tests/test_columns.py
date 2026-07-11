@@ -2,13 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from brewq.columns import (
-    _merge_user_presets,
-    list_profiles,
-    pick_representative_metric,
-    resolve,
-    search_profiles,
-)
+from brewq.columns import pick_representative_metric, resolve
 from brewq.model import Package
 
 
@@ -245,64 +239,3 @@ def test_pick_representative_metric_defaults_when_no_data_at_all():
 
 def test_pick_representative_metric_handles_none_package():
     assert pick_representative_metric(None) == "installs_90d"
-
-
-class TestMergeUserPresets:
-    def test_no_user_presets_returns_builtins(self):
-        assert _merge_user_presets({"a": ["name"]}, {}) == {"a": ["name"]}
-
-    def test_user_override_beats_builtin(self):
-        builtin = {"compact": ["name", "installs_90d"]}
-        user = {"compact": ["name", "trending"]}
-        assert _merge_user_presets(builtin, user) == {"compact": ["name", "trending"]}
-
-    def test_user_adds_new_preset(self):
-        builtin = {"compact": ["name"]}
-        user = {"ops": ["name", "type", "version"]}
-        merged = _merge_user_presets(builtin, user)
-        assert merged["compact"] == ["name"]
-        assert merged["ops"] == ["name", "type", "version"]
-
-    def test_skips_non_list_values(self):
-        merged = _merge_user_presets({"compact": ["name"]}, {"bad": "string"})
-        assert "bad" not in merged
-
-    def test_skips_empty_list(self):
-        merged = _merge_user_presets({"compact": ["name"]}, {"empty": []})
-        assert "empty" not in merged
-
-    def test_skips_mixed_list_with_non_strings(self):
-        merged = _merge_user_presets({"compact": ["name"]}, {"bad": ["name", 42]})
-        assert "bad" not in merged
-
-    def test_preserves_builtin_when_user_has_non_list(self):
-        merged = _merge_user_presets({"compact": ["name"]}, {"compact": "not-a-list"})
-        assert merged["compact"] == ["name"]
-
-    def test_empty_user_dict_returns_same_keys(self):
-        merged = _merge_user_presets({"x": ["y"]}, {})
-        assert list(merged) == ["x"]
-
-
-class TestSearchProfiles:
-    def test_returns_search_profiles_with_no_user_presets(self):
-        profiles = search_profiles()
-        assert "compact" in profiles
-        assert "full" in profiles
-
-    def test_merges_user_presets_into_search_profiles(self):
-        profiles = search_profiles({"ops": ["name", "type"]})
-        assert profiles["ops"] == ["name", "type"]
-        assert "compact" in profiles
-
-
-class TestListProfiles:
-    def test_returns_list_profiles_with_no_user_presets(self):
-        profiles = list_profiles()
-        assert "compact" in profiles
-        assert "full" in profiles
-
-    def test_merges_user_presets_into_list_profiles(self):
-        profiles = list_profiles({"links": ["name", "url"]})
-        assert profiles["links"] == ["name", "url"]
-        assert "compact" in profiles

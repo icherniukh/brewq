@@ -131,36 +131,31 @@ _ALIASES: dict[str, str] = {
 
 # Named profiles for search output.
 _SEARCH_PROFILES: dict[str, list[str]] = {
+    "1": ["name", "installs_90d", "description"],
     "compact": ["name", "installs_90d", "description"],
+    "2": ["name", "type", "version", "installs_30d", "installs_90d", "installs_365d", "installed", "status", "description"],
     "full": ["name", "type", "version", "installs_30d", "installs_90d", "installs_365d", "installed", "status", "description"],
+    "3": ["name", "url", "description"],
+    "links": ["name", "url", "description"],
 }
 # Named profiles for installed-package output.
 _LIST_PROFILES: dict[str, list[str]] = {
+    "1": ["name", "type", "description"],
     "compact": ["name", "type", "description"],
+    "2": ["name", "type", "version", "installs_90d", "installed", "status", "description"],
     "full": ["name", "type", "version", "installs_90d", "installed", "status", "description"],
+    "3": ["name", "type", "url", "description"],
+    "links": ["name", "type", "url", "description"],
 }
 # "default" is driven by config, not hardcoded here
 
 
-def _merge_user_presets(profiles: dict[str, list[str]], user_presets: dict) -> dict[str, list[str]]:
-    """Merge user-defined presets into profiles. User presets override built-ins
-    of the same name. Non-list values and lists containing non-strings are
-    silently skipped."""
-    if not user_presets:
-        return profiles
-    merged = dict(profiles)
-    for name, columns in user_presets.items():
-        if isinstance(columns, list) and columns and all(isinstance(c, str) for c in columns):
-            merged[name] = list(columns)
-    return merged
+def search_profiles() -> dict[str, list[str]]:
+    return dict(_SEARCH_PROFILES)
 
 
-def search_profiles(user_presets: dict | None = None) -> dict[str, list[str]]:
-    return _merge_user_presets(dict(_SEARCH_PROFILES), user_presets or {})
-
-
-def list_profiles(user_presets: dict | None = None) -> dict[str, list[str]]:
-    return _merge_user_presets(dict(_LIST_PROFILES), user_presets or {})
+def list_profiles() -> dict[str, list[str]]:
+    return dict(_LIST_PROFILES)
 
 
 _RAW_METRIC_KEYS = ("installs_90d", "installs_30d", "installs_365d")

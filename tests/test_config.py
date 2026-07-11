@@ -63,32 +63,3 @@ def test_corrupt_config_warns_and_uses_defaults(monkeypatch, tmp_path, capsys):
     assert str(toml) in err
     assert conf["search"]["sort"] == "90d"
     assert conf["output"]["limit"] == 0
-
-
-def test_save_writes_toml_and_round_trips(monkeypatch, tmp_path):
-    toml = tmp_path / "config.toml"
-    monkeypatch.setenv("BREWQ_CONFIG", str(toml))
-    cfg = cfg_mod.load()
-    cfg["presets"]["ops"] = ["name", "type", "90d"]
-    cfg_mod.save(cfg)
-    loaded = cfg_mod.load()
-    assert loaded["presets"]["ops"] == ["name", "type", "90d"]
-
-
-def test_save_creates_parent_dirs(monkeypatch, tmp_path):
-    toml = tmp_path / "deep" / "nest" / "config.toml"
-    monkeypatch.setenv("BREWQ_CONFIG", str(toml))
-    cfg_mod.save(cfg_mod.load())
-    assert toml.exists()
-
-
-def test_save_preserves_non_preset_sections(monkeypatch, tmp_path):
-    toml = tmp_path / "config.toml"
-    toml.write_text('[search]\nsort = "365d"\n')
-    monkeypatch.setenv("BREWQ_CONFIG", str(toml))
-    cfg = cfg_mod.load()
-    cfg["presets"]["ops"] = ["name"]
-    cfg_mod.save(cfg)
-    loaded = cfg_mod.load()
-    assert loaded["search"]["sort"] == "365d"
-    assert loaded["presets"]["ops"] == ["name"]
