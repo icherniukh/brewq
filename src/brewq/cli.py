@@ -6,6 +6,7 @@ import shutil
 import sys
 from collections.abc import Sequence
 
+from brewq import __version__
 from brewq import cache as cache_mod
 from brewq import columns as columns_mod
 from brewq import config as config_mod
@@ -93,6 +94,8 @@ def _build_search_parser() -> argparse.ArgumentParser:
                         help="Temporary formula/cask palette: 0..9")
     parser.add_argument("--tsv", action="store_true",
                         help="Tab-separated output for scripting")
+    parser.add_argument("--version", action="version",
+                        version=f"brewq {__version__}")
     return parser
 
 
