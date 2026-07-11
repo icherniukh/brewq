@@ -185,7 +185,7 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
         col_defs = columns_mod.resolve(
             opts.columns_spec,
             list_cols_cfg,
-            profiles=columns_mod.list_profiles(),
+            profiles=columns_mod.list_profiles(cfg.get("presets")),
         )
     except ValueError as exc:
         print(f"brewq: {exc}", file=sys.stderr)
@@ -335,7 +335,10 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         # "default" is resolved after ranking: it may contain "auto", which needs
         # the top result to pick a representative raw metric column.
         try:
-            col_defs = columns_mod.resolve(opts.columns_spec, default_cols)
+            col_defs = columns_mod.resolve(
+                opts.columns_spec, default_cols,
+                profiles=columns_mod.search_profiles(cfg.get("presets")),
+            )
         except ValueError as exc:
             print(f"brewq: {exc}", file=sys.stderr)
             return 1

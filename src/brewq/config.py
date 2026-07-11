@@ -26,6 +26,7 @@ DEFAULTS: dict[str, Any] = {
     "cache": {
         "max_age_seconds": 86400,
     },
+    "presets": {},
 }
 
 
