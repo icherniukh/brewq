@@ -56,8 +56,12 @@ Use `brewq config path` to find the config file.
 _CONFIG_EPILOG = """\
 Examples:
   brewq config path
+  brewq config preset list
+  brewq config preset add ops name,type,90d,desc
+  brewq config preset duplicate compact my-compact
+  brewq config preset remove ops
 
-The config file controls default columns and cache freshness.
+The config file controls default columns, cache freshness, and presets.
 """
 
 
@@ -138,13 +142,35 @@ def _build_command_parser() -> argparse.ArgumentParser:
     # config
     config_p = subparsers.add_parser(
         "config",
-        help="Show configuration info",
-        description="Show where brewq reads configuration.",
+        help="Show configuration info and manage presets",
+        description="Show config path and manage column presets.",
         epilog=_CONFIG_EPILOG,
         formatter_class=_FORMATTER,
     )
-    config_p.add_argument("config_sub_cmd", nargs="?", choices=["path"], default="path",
-                          help="Print the config file path")
+    config_sub = config_p.add_subparsers(dest="config_action")
+
+    config_sub.add_parser("path", help="Print the config file path")
+
+    preset_p = config_sub.add_parser(
+        "preset",
+        help="Manage column presets",
+        description="Create, remove, duplicate, and list column presets.",
+        formatter_class=_FORMATTER,
+    )
+    preset_sub = preset_p.add_subparsers(dest="preset_action")
+
+    preset_sub.add_parser("list", help="List all presets (built-in and user)")
+
+    add_p = preset_sub.add_parser("add", help="Create or overwrite a preset")
+    add_p.add_argument("name", help="Preset name")
+    add_p.add_argument("columns", help="Comma-joined column keys (e.g. name,90d,desc)")
+
+    rm_p = preset_sub.add_parser("remove", help="Remove a user preset")
+    rm_p.add_argument("name", help="Preset name to remove")
+
+    dup_p = preset_sub.add_parser("duplicate", help="Create a new preset from an existing one")
+    dup_p.add_argument("source", help="Existing preset to duplicate (built-in or user)")
+    dup_p.add_argument("dest", help="New preset name")
 
     # random
     rand_p = subparsers.add_parser(
@@ -258,8 +284,87 @@ def _report_refresh_result(result: cache_mod.RefreshResult) -> int:
     return 0
 
 
-def _cmd_config(args: argparse.Namespace) -> int:
+def _cmd_config(args: argparse.Namespace, cfg: dict) -> int:
+    action = getattr(args, "config_action", None)
+    if action is None or action == "path":
+        print(config_mod.config_path())
+        return 0
+    if action == "preset":
+        return _cmd_preset(args, cfg)
     print(config_mod.config_path())
+    return 0
+
+
+def _cmd_preset(args: argparse.Namespace, cfg: dict) -> int:
+    action = getattr(args, "preset_action", None)
+    if action == "list":
+        return _cmd_preset_list(cfg)
+    if action == "add":
+        return _cmd_preset_add(args, cfg)
+    if action == "remove":
+        return _cmd_preset_remove(args, cfg)
+    if action == "duplicate":
+        return _cmd_preset_duplicate(args, cfg)
+    print("brewq: no preset action specified. See: brewq config preset --help", file=sys.stderr)
+    return 2
+
+
+def _cmd_preset_list(cfg: dict) -> int:
+    user_presets = cfg.get("presets", {})
+    builtins = columns_mod.search_profiles()
+
+    print("Built-in presets:")
+    for name, cols in builtins.items():
+        print(f"  {name:<12} {', '.join(cols)}")
+
+    if user_presets:
+        print()
+        print("User presets:")
+        for name, cols in user_presets.items():
+            tag = " (overrides built-in)" if name in builtins else ""
+            print(f"  {name:<12} {', '.join(cols)}{tag}")
+    return 0
+
+
+def _cmd_preset_add(args: argparse.Namespace, cfg: dict) -> int:
+    name = args.name
+    keys = [k.strip() for k in args.columns.split(",")]
+    for key in keys:
+        canonical = columns_mod._ALIASES.get(key, key)
+        if canonical not in columns_mod._COLUMN_REGISTRY and key != "auto":
+            valid = sorted(set(list(columns_mod._COLUMN_REGISTRY) + list(columns_mod._ALIASES)))
+            print(f"brewq: unknown column {key!r}. Valid: {', '.join(valid)}", file=sys.stderr)
+            return 1
+    cfg.setdefault("presets", {})[name] = keys
+    config_mod.save(cfg)
+    print(f"Saved preset {name!r}: {', '.join(keys)}", file=sys.stderr)
+    return 0
+
+
+def _cmd_preset_remove(args: argparse.Namespace, cfg: dict) -> int:
+    name = args.name
+    user_presets = cfg.get("presets", {})
+    if name not in user_presets:
+        print(f"brewq: preset {name!r} is not defined in your config", file=sys.stderr)
+        return 1
+    del user_presets[name]
+    config_mod.save(cfg)
+    print(f"Removed preset {name!r}", file=sys.stderr)
+    return 0
+
+
+def _cmd_preset_duplicate(args: argparse.Namespace, cfg: dict) -> int:
+    src = args.source
+    dst = args.dest
+    user_presets = cfg.get("presets", {})
+    profiles = columns_mod.search_profiles(user_presets)
+    if src not in profiles:
+        print(f"brewq: preset {src!r} not found", file=sys.stderr)
+        return 1
+    cols = list(profiles[src])
+    cfg.setdefault("presets", {})[dst] = cols
+    config_mod.save(cfg)
+    print(f"Duplicated {src!r} -> {dst!r}: {', '.join(cols)}", file=sys.stderr)
     return 0
 
 
@@ -452,7 +557,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "refresh":
             return _cmd_refresh(args)
         if args.command == "config":
-            return _cmd_config(args)
+            return _cmd_config(args, cfg)
         if args.command == "random":
             return _cmd_random(args, cfg)
 

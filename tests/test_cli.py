@@ -423,6 +423,96 @@ def test_main_config_path(capsys):
     assert out.endswith("config.toml")
 
 
+def test_main_config_no_action_shows_path(capsys):
+    rc = main(["config"])
+    assert rc == 0
+    out = capsys.readouterr().out.strip()
+    assert out.endswith("config.toml")
+
+
+def test_config_preset_add_creates_new(capsys):
+    rc = main(["config", "preset", "add", "ops", "name,type,90d,desc"])
+    assert rc == 0
+    from brewq import config as cfg_mod
+    cfg = cfg_mod.load()
+    assert cfg["presets"]["ops"] == ["name", "type", "90d", "desc"]
+
+
+def test_config_preset_add_overrides_builtin(capsys):
+    rc = main(["config", "preset", "add", "compact", "name,url"])
+    assert rc == 0
+    from brewq import config as cfg_mod
+    cfg = cfg_mod.load()
+    assert cfg["presets"]["compact"] == ["name", "url"]
+
+
+def test_config_preset_add_validates_columns(capsys):
+    rc = main(["config", "preset", "add", "bad", "name,bogus"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "unknown column" in err
+
+
+def test_config_preset_add_creates_config_file(capsys, tmp_path, monkeypatch):
+    config_file = tmp_path / "sub" / "config.toml"
+    monkeypatch.setenv("BREWQ_CONFIG", str(config_file))
+    assert not config_file.exists()
+    rc = main(["config", "preset", "add", "ops", "name,desc"])
+    assert rc == 0
+    assert config_file.exists()
+
+
+def test_config_preset_remove_user_preset(capsys):
+    main(["config", "preset", "add", "ops", "name,desc"])
+    rc = main(["config", "preset", "remove", "ops"])
+    assert rc == 0
+    from brewq import config as cfg_mod
+    cfg = cfg_mod.load()
+    assert "ops" not in cfg.get("presets", {})
+
+
+def test_config_preset_remove_not_in_config(capsys):
+    rc = main(["config", "preset", "remove", "compact"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "not defined in your config" in err
+
+
+def test_config_preset_duplicate_from_builtin(capsys):
+    rc = main(["config", "preset", "duplicate", "compact", "my-compact"])
+    assert rc == 0
+    from brewq import config as cfg_mod
+    cfg = cfg_mod.load()
+    assert cfg["presets"]["my-compact"] == ["name", "installs_90d", "description"]
+
+
+def test_config_preset_duplicate_from_user(capsys):
+    main(["config", "preset", "add", "ops", "name,type"])
+    rc = main(["config", "preset", "duplicate", "ops", "ops2"])
+    assert rc == 0
+    from brewq import config as cfg_mod
+    cfg = cfg_mod.load()
+    assert cfg["presets"]["ops2"] == ["name", "type"]
+
+
+def test_config_preset_duplicate_unknown_source(capsys):
+    rc = main(["config", "preset", "duplicate", "nonexistent", "copy"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "not found" in err
+
+
+def test_config_preset_list_shows_builtins_and_user(capsys):
+    main(["config", "preset", "add", "ops", "name,type"])
+    rc = main(["config", "preset", "list"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Built-in presets:" in out
+    assert "compact" in out
+    assert "User presets:" in out
+    assert "ops" in out
+
+
 def test_seed_search_renders_before_scheduling(capsys):
     events = []
     loaded = _loaded([_pkg("ripgrep")], source="seed", age=100)
