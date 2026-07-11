@@ -76,7 +76,7 @@ def _build_search_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("query", nargs="*", help="Search terms")
     parser.add_argument("-s", "--sort", metavar="FIELD",
-                        help="Sort by: trending (hot), 30d (i30), 90d (i90), 365d (i365), name  [default: trending]")
+                        help="Sort by: 90d (i90), 30d (i30), 365d (i365), trending (hot), name  [default: 90d]")
     parser.add_argument("-l", "--installed", action="store_true",
                         help="Filter to installed packages")
     parser.add_argument("-p", "--preset", metavar="NAME",
@@ -84,7 +84,7 @@ def _build_search_parser() -> argparse.ArgumentParser:
     parser.add_argument("-c", "--columns", metavar="KEYS",
                         help="Columns: name (n), trending (hot), 30d (i30), 90d (i90), 365d (i365), bin, type (t), version (v), desc (d), inst (i), status, url (h)")
     parser.add_argument("-t", "--top", type=_positive_int, metavar="N",
-                        help="Show top N by trending rank")
+                        help="Show top N by the active sort field")
     parser.add_argument("-r", "--refresh", action="store_true",
                         help="Refresh cache before searching")
     parser.add_argument("--all", action="store_true",
@@ -109,7 +109,7 @@ def _build_command_parser() -> argparse.ArgumentParser:
         formatter_class=_FORMATTER,
     )
     lst.add_argument("--analytics", action="store_true",
-                     help="Add a 30d install-count column")
+                     help="Add a 90d install-count column")
     lst.add_argument("-p", "--preset", metavar="NAME",
                      help="Column preset: compact, full")
     lst.add_argument("-c", "--columns", metavar="KEYS",
@@ -216,7 +216,7 @@ def _ensure_list_analytics_column(col_defs: list) -> list:
     keys = {c.key for c in col_defs}
     if keys & {"installs_30d", "installs_90d", "installs_365d"}:
         return col_defs
-    installs_col = columns_mod.resolve("installs_30d", [])[0]
+    installs_col = columns_mod.resolve("installs_90d", [])[0]
     desc_idx = next((i for i, col in enumerate(col_defs) if col.key == "description"), None)
     if desc_idx is None:
         return [*col_defs, installs_col]

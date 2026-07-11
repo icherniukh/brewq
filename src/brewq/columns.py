@@ -131,29 +131,30 @@ _ALIASES: dict[str, str] = {
 
 # Named profiles for search output.
 _SEARCH_PROFILES: dict[str, list[str]] = {
-    "compact": ["name", "installs_30d", "description"],
+    "compact": ["name", "installs_90d", "description"],
     "full": ["name", "type", "version", "installs_30d", "installs_90d", "installs_365d", "installed", "status", "description"],
 }
 # Named profiles for installed-package output.
 _LIST_PROFILES: dict[str, list[str]] = {
     "compact": ["name", "type", "description"],
-    "full": ["name", "type", "version", "installs_30d", "installed", "status", "description"],
+    "full": ["name", "type", "version", "installs_90d", "installed", "status", "description"],
 }
 # "default" is driven by config, not hardcoded here
 
 
-_RAW_METRIC_KEYS = ("installs_30d", "installs_90d", "installs_365d")
+_RAW_METRIC_KEYS = ("installs_90d", "installs_30d", "installs_365d")
 
 
 def pick_representative_metric(pkg: Package | None) -> str:
-    """Pick whichever raw install-count window has data for the top result, so the
-    default table can show one concrete number next to TRENDING without exposing
-    all three windows. Prefers the freshest window that isn't a -1 (unknown)."""
+    """Pick whichever raw install-count window has data for the top result, so an
+    explicit `auto` column can show one concrete number without exposing all
+    three windows. Prefers the standard 90d window, falling back to whichever
+    window isn't a -1 (unknown)."""
     if pkg is not None:
         for key in _RAW_METRIC_KEYS:
             if getattr(pkg, key) >= 0:
                 return key
-    return "installs_30d"
+    return "installs_90d"
 
 
 def resolve(
@@ -177,7 +178,7 @@ def resolve(
     resolved = []
     for key in keys:
         if key == "auto":
-            canonical = representative_metric or "installs_30d"
+            canonical = representative_metric or "installs_90d"
         else:
             canonical = _ALIASES.get(key, key)
         col = _COLUMN_REGISTRY.get(canonical)

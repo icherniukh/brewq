@@ -17,9 +17,9 @@ This repo is the new home for `brewq`: a read-only Homebrew query and analytics 
 The core shape is query + analytics:
 
 - query packages by name and description
-- surface a trending signal (recent install rate vs. a package's own historical
-  baseline) as the default trust/discovery signal; raw install counts remain
-  available as an explicit, opt-in metric
+- surface raw 90-day install volume as the default trust/discovery signal —
+  see brewq-253; a trending signal (recent install rate vs. a package's own
+  historical baseline) remains available as an explicit, demoted metric
 - show useful configurable columns
 - provide script-friendly output
 - list installed formulae/casks with richer metadata
@@ -37,17 +37,29 @@ The current implementation and docs intentionally settle these first-release cho
   out of the box without requiring `brew alias` setup — the same pattern
   ripgrep uses for `rg`.
 - Default search matches package names, formula aliases, and descriptions.
-- Search defaults to trending ranking: `Package.trending` returns the most recent
-  30-day install rate as a multiplier of a span-weighted baseline from the
-  90d/365d windows (`4.1x`, `1.0x` = unchanged), using pseudocount smoothing
-  (`_TREND_PSEUDOCOUNT`, calibrated at 20) rather than a post-hoc confidence
-  discount + hard clamp — see brewq-sbe. There is no ceiling; low-volume noise
-  is damped by the pseudocount itself. The default table also shows one raw
-  install-count column (`auto`, picked from whichever of 30d/90d/365d has data
-  for the top result) alongside `TREND`.
-- `-s` / `--sort` selects `trending` (default), `30d`, `90d`, `365d`, or `name`.
-  Raw install counts stay fully available via `-s 30d`/`-c 30d` etc.; they are no
-  longer the default public ranking signal.
+- Search defaults to raw 90-day install volume ranking — see brewq-253. Reversed
+  from an earlier trending-by-default direction (see brewq-4it/brewq-sbe)
+  because a self-relative growth ratio lets low-volume "new package" artifacts
+  (recently added to Homebrew analytics tracking, not genuinely adopted)
+  outrank widely-used packages. The default table shows a literal
+  `installs_90d` column alongside `TREND`, not the old `auto` picked-window
+  column.
+- `Package.trending` returns a recent installation rate, anchored on the 90d
+  window (`installs_90d / 3`, a several-week smoothed rate) rather than the
+  raw 30d snapshot, as a multiplier of a span-weighted baseline from the
+  365d window (`4.1x`, `1.0x` = unchanged), using pseudocount smoothing
+  (`_TREND_PSEUDOCOUNT`, calibrated at 30) rather than a post-hoc confidence
+  discount + hard clamp — see brewq-sbe. The pseudocount also scales up to 3x
+  (`_TREND_MATURITY_BOOST`) when a package has few installs recorded before
+  its most recent 90d window, tapering to 1x by `_TREND_MATURITY_THRESHOLD`
+  (1500) — see brewq-4o0 (bun/sdl2-compat-style tracking artifacts otherwise
+  read as 150-270x). There is no ceiling; low-volume noise and thin history
+  are both damped by the pseudocount, not clamped. It remains available as an
+  explicit, demoted sort/column.
+- `-s` / `--sort` selects `90d` (default), `30d`, `365d`, `trending`, or `name`.
+  `auto` remains a config-only pseudo-column (not selectable via `-s`/`-c`) for
+  a user's own `output.columns` list, resolving to whichever of
+  90d/30d/365d has data for the top-ranked result.
 - Search defaults to the top 15 matches; `-t` / `--top` overrides the cap.
 - `list --limit` is the installed-list cap.
 - `-p` selects built-in presets; `-c` selects explicit comma-joined columns.

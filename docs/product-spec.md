@@ -130,12 +130,20 @@ Initial useful metrics:
 - 90-day installs
 - 365-day installs
 
-`trending` (recent 30d rate as a multiplier of a span-weighted 90d/365d baseline,
-e.g. `4.1x`) is the default public ranking/column signal — see brewq-4it.
-Raw install counts remain available as explicit, opt-in sort/columns. A composite
-"popularity buckets" score was considered and rejected in favor of trending: an
-opaque 0-100 blend was harder to justify than a directly interpretable
-recent-vs-history multiplier.
+Raw 90-day install volume (`installs_90d`) is the default public ranking/column
+signal — see brewq-253. `trending` (a 90d-anchored installation rate as a
+multiplier of a span-weighted 365d baseline, e.g. `4.1x`) remains available as
+an explicit, demoted sort/column, alongside the other raw install-count
+windows.
+
+Superseded: `trending` was briefly the default ranking/column signal — see
+brewq-4it. A composite "popularity buckets" score was considered and rejected
+in favor of it at the time: an opaque 0-100 blend was harder to justify than a
+directly interpretable recent-vs-history multiplier. That default changed back
+— see brewq-253 — because a self-relative growth ratio rewards packages that
+are merely new to analytics tracking (a handful of installs can read as a
+~250x multiplier) over packages with a large, trustworthy install base, which
+is the opposite of what a default sort should optimize for.
 
 The multiplier uses pseudocount smoothing (add a fixed count to both the recent
 and baseline rate before dividing) rather than a post-hoc confidence discount
@@ -144,6 +152,19 @@ unrelated packages at an identical `+300%` ceiling and hid packages with zero
 measurable history entirely; the same instability that RNA-seq differential
 expression tools (DESeq2/apeglm) solve with fold-change shrinkage for low-count
 genes, applied here to low-volume packages.
+
+Superseded: even with pseudocount smoothing, packages new to Homebrew analytics
+tracking (near-zero installs recorded before their most recent 90d window)
+still read as huge, misleading spikes — e.g. bun at 156-271x, sdl2-compat at
+271x on a single pre-90d install — see brewq-4o0. Two changes fixed this
+without reintroducing a hard clamp: the "recent" rate is now anchored on the
+90d window (`installs_90d / 3`, a several-week smoothed rate) instead of the
+raw 30d snapshot, which dampens any burst concentrated entirely in the last 30
+days regardless of whether the package is new or established; and the
+pseudocount itself scales up (to 3x at zero pre-90d installs, tapering back to
+1x by 1,500 pre-90d installs) rather than staying fixed, so packages with thin
+history are pulled toward neutral in proportion to how thin it is, not
+collapsed flat to 1.0x. Calibrated interactively against live cache data.
 
 ## Brew Alias Support
 

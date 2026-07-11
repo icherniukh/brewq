@@ -20,7 +20,7 @@ def _pkg(**kw) -> Package:
 def test_resolve_profile():
     cols = resolve("compact", [])
     keys = [c.key for c in cols]
-    assert keys == ["name", "installs_30d", "description"]
+    assert keys == ["name", "installs_90d", "description"]
 
 
 def test_resolve_full_profile_includes_all_windows():
@@ -78,9 +78,9 @@ def test_resolve_auto_uses_representative_metric():
     assert [c.key for c in cols] == ["name", "installs_90d"]
 
 
-def test_resolve_auto_without_metric_falls_back_to_30d():
+def test_resolve_auto_without_metric_falls_back_to_90d():
     cols = resolve(["auto"], [])
-    assert cols[0].key == "installs_30d"
+    assert cols[0].key == "installs_90d"
 
 
 def test_resolve_alias_installs():
@@ -217,14 +217,14 @@ def test_trending_display_unknown_when_no_history():
     assert cols[0].getter(pkg) == "-"
 
 
-def test_pick_representative_metric_prefers_30d():
+def test_pick_representative_metric_prefers_90d():
     pkg = _pkg(installs_30d=100, installs_90d=300, installs_365d=1_000)
-    assert pick_representative_metric(pkg) == "installs_30d"
-
-
-def test_pick_representative_metric_falls_back_to_90d():
-    pkg = _pkg(installs_30d=-1, installs_90d=300, installs_365d=1_000)
     assert pick_representative_metric(pkg) == "installs_90d"
+
+
+def test_pick_representative_metric_falls_back_to_30d():
+    pkg = _pkg(installs_30d=300, installs_90d=-1, installs_365d=1_000)
+    assert pick_representative_metric(pkg) == "installs_30d"
 
 
 def test_pick_representative_metric_falls_back_to_365d():
@@ -234,8 +234,8 @@ def test_pick_representative_metric_falls_back_to_365d():
 
 def test_pick_representative_metric_defaults_when_no_data_at_all():
     pkg = _pkg(installs_30d=-1, installs_90d=-1, installs_365d=-1)
-    assert pick_representative_metric(pkg) == "installs_30d"
+    assert pick_representative_metric(pkg) == "installs_90d"
 
 
 def test_pick_representative_metric_handles_none_package():
-    assert pick_representative_metric(None) == "installs_30d"
+    assert pick_representative_metric(None) == "installs_90d"

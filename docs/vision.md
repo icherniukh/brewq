@@ -70,17 +70,20 @@ The central discovery operation is:
 brewq -t 10 QUERY
 ```
 
-`-t N` should mean "show the top N most relevant, most trending results." It applies after matching, scoring, and analytics-aware ranking.
+`-t N` should mean "show the top N highest-ranked results." It applies after matching, scoring, and analytics-aware ranking, ranked by whatever sort field is in effect.
 
 `--limit N` remains list-specific output capping.
 
 Sort fields:
 
-- `trending` by default (recent 30d install rate as a multiplier of a package's
-  own 90d/365d historical baseline, e.g. `4.1x`; pseudocount-smoothed so a
-  handful of installs can't read as a wild swing)
-- `30d`, `90d`, `365d` when requested — raw install counts, still fully available,
-  no longer the public default
+- `90d` by default — raw `installs_90d`, the most trustworthy default trust
+  signal for a query result list (see brewq-253)
+- `30d`, `365d` when requested — raw install counts, other windows
+- `trending` (a 90d-anchored installation rate as a multiplier of a package's
+  own 365d historical baseline, e.g. `4.1x`; pseudocount-smoothed, with the
+  pseudocount itself scaling up for packages with little pre-90d history, so
+  neither a handful of installs nor a new-to-tracking package can read as a
+  wild swing — see brewq-4o0) remains available as an explicit, demoted signal
 - `name` for alphabetical output
 
 Superseded: this section originally deferred a trend metric past MVP and kept raw
@@ -94,6 +97,23 @@ packages at an identical ceiling and hid brand-new packages entirely (no
 history meant no signal). Replaced — see brewq-sbe — with a pseudocount-smoothed
 multiplier that has no hard ceiling and naturally damps low-volume noise
 instead of capping it after the fact.
+
+Superseded: trending (recent-vs-historical-baseline ratio) then became the
+default ranking signal — see brewq-4it/brewq-sbe. That reversed — see
+brewq-253 — because a self-relative growth ratio is a new-package artifact
+magnet: a package recently added to Homebrew analytics tracking can show a
+~250x multiplier on a handful of installs, ranking it ahead of packages with
+genuinely large, trustworthy install bases. Raw 90d install volume is the
+default again; trending remains available as a demoted, opt-in signal.
+
+Superseded: brewq-253 demoted trending from the default sort but didn't fix
+the underlying multiplier — the TREND column itself still showed the same
+150-270x new-package artifacts. brewq-4o0 recalibrated the formula: the
+"recent" rate anchors on the 90d window instead of the raw 30d snapshot (so a
+burst concentrated in the last 30 days is dampened whether the package is new
+or established), and the pseudocount scales up for packages with little
+pre-90d history instead of staying fixed, pulling them toward neutral in
+proportion to how little history they have rather than collapsing them flat.
 
 ## Output Model
 

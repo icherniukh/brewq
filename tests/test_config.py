@@ -5,8 +5,8 @@ from brewq import config as cfg_mod
 
 def test_defaults_are_complete():
     conf = cfg_mod.load()
-    assert conf["search"]["sort"] == "trending"
-    assert conf["output"]["columns"] == ["name", "trending", "auto", "description"]
+    assert conf["search"]["sort"] == "90d"
+    assert conf["output"]["columns"] == ["name", "installs_90d", "trending", "description"]
     assert conf["list"]["columns"] == ["name", "type", "version", "description"]
     assert conf["cache"]["max_age_seconds"] == 86400
 
@@ -28,7 +28,7 @@ def test_loaded_config_can_be_mutated_without_changing_defaults():
     conf = cfg_mod.load()
     conf["output"]["columns"].append("url")
     assert cfg_mod.load()["output"]["columns"] == [
-        "name", "trending", "auto", "description",
+        "name", "installs_90d", "trending", "description",
     ]
 
 
@@ -39,7 +39,7 @@ def test_env_override_config_path(monkeypatch, tmp_path):
     conf = cfg_mod.load()
     assert conf["output"]["columns"] == ["name"]
     # defaults for untouched sections still present
-    assert conf["search"]["sort"] == "trending"
+    assert conf["search"]["sort"] == "90d"
 
 
 def test_cache_dir_env(monkeypatch, tmp_path):
@@ -61,5 +61,5 @@ def test_corrupt_config_warns_and_uses_defaults(monkeypatch, tmp_path, capsys):
     err = capsys.readouterr().err
     assert "config error" in err
     assert str(toml) in err
-    assert conf["search"]["sort"] == "trending"
+    assert conf["search"]["sort"] == "90d"
     assert conf["output"]["limit"] == 0

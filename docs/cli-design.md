@@ -41,20 +41,23 @@ brewq -r ripgrep
 
 Options:
 
-- `-s`, `--sort FIELD`: sort by `trending` (default), `30d`, `90d`, `365d`, or `name`.
+- `-s`, `--sort FIELD`: sort by `90d` (default), `30d`, `365d`, `trending`, or `name`.
 - `-l`, `--installed`: filter search results to packages known to be installed.
 - `-p`, `--preset NAME`: use `compact` or `full`.
 - `-c`, `--columns KEYS`: use an explicit comma-joined column list.
-- `-t`, `--top N`: show the top N matches by trending rank.
+- `-t`, `--top N`: show the top N matches by the active sort field.
 - `-r`, `--refresh`: refresh cache before searching.
 - `--tsv`: emit raw tab-separated rows with no header.
 
 Rules:
 
 - Query text matches package names, formula aliases, and descriptions.
-- Trending (recent install rate vs. a package's own historical baseline) is the
-  default ranking signal. Raw install counts remain available as an explicit,
-  opt-in sort/column (`-s 30d`/`-c 30d`, etc.) but are not the public default.
+- Raw 90-day install volume is the default ranking signal — see brewq-253. It's
+  a more trustworthy default than a self-relative growth ratio, which lets
+  low-volume "new package" artifacts outrank genuinely widely-used packages.
+  `trending` (recent install rate vs. a package's own historical baseline)
+  remains available as an explicit, demoted sort/column (`-s trending`), and
+  `30d`/`365d` remain available as explicit, opt-in raw-count windows.
 - Search defaults to the top 15 matches.
 - `-t N` overrides the default row cap for normal "top results" use.
 - `-p` and `-c` are mutually exclusive.
@@ -69,13 +72,13 @@ Rules:
 
 Sort fields resolve through short aliases:
 
-- `trending`: aliases `trend`, `hot`.
-- `30d`: aliases `30`, `i30`, `installs`.
 - `90d`: aliases `90`, `i90`.
+- `30d`: aliases `30`, `i30`, `installs`.
 - `365d`: aliases `365`, `i365`, `y`, `year`.
+- `trending`: aliases `trend`, `hot`.
 - `name`: aliases `n`, `alpha`, `az`.
 
-Default search sort is `trending`.
+Default search sort is `90d` (raw `installs_90d`).
 
 The table header marks the active sort column when that column is visible, for example `30d ↓`.
 
@@ -105,10 +108,12 @@ installed.
 
 `trending` displays as a multiplier of a package's own historical rate (`4.1x` =
 4.1 times its usual monthly installs, `1.0x` = unchanged, `0.5x` = half its usual
-rate). There is no hard ceiling — see `Package.trending` in `model.py` for the
-pseudocount-smoothing that keeps low-volume noise from reading as a huge swing
-without capping genuinely large, real ratios (e.g. a brand-new package's first
-popular month).
+rate). The "recent" side is anchored on the 90d window rather than a raw 30d
+snapshot. There is no hard ceiling — see `Package.trending` in `model.py` for
+the pseudocount smoothing that keeps low-volume noise from reading as a huge
+swing, and the maturity-scaled pseudocount that keeps packages new to
+Homebrew analytics tracking (little or no install history before their most
+recent 90d window) from reading as a real adoption spike.
 
 Useful aliases:
 
@@ -125,21 +130,22 @@ Useful aliases:
 - `h`, `home`, `homepage` -> `url`
 
 `auto` is a config-only pseudo-column: at render time it resolves to whichever of
-`installs_30d`/`installs_90d`/`installs_365d` has data for the top-ranked result.
-It only exists to let the built-in default show one meaningful raw metric next to
-`trending` without hardcoding a single window.
+`installs_90d`/`installs_30d`/`installs_365d` has data for the top-ranked result.
+The built-in default no longer needs it (it shows a literal `installs_90d`
+column), but it remains available for a user's own `config.toml` `output.columns`
+list.
 
 Search presets:
 
-- `default`: config-backed, built in as `name,trending,auto,description`
-- `compact`: `name,installs_30d,description`
+- `default`: config-backed, built in as `name,installs_90d,trending,description`
+- `compact`: `name,installs_90d,description`
 - `full`: `name,type,version,installs_30d,installs_90d,installs_365d,installed,status,description`
 
 List presets:
 
 - `default`: config-backed, built in as `name,type,version,description`
 - `compact`: `name,type,description`
-- `full`: `name,type,version,installs_30d,installed,status,description`
+- `full`: `name,type,version,installs_90d,installed,status,description`
 
 ## TSV
 
@@ -185,7 +191,7 @@ Default behavior:
 - installed formulae and casks are shown together
 - rows sort by type, then name
 - no Homebrew subprocess or network fetch
-- `--analytics` inserts `30d` before `DESCRIPTION` if no install metric column is already selected
+- `--analytics` inserts `90d` before `DESCRIPTION` if no install metric column is already selected
 - cache age is disclosed on stderr
 
 ## Refresh
@@ -220,10 +226,10 @@ Built-in defaults:
 
 ```toml
 [search]
-sort = "trending"
+sort = "90d"
 
 [output]
-columns = ["name", "trending", "auto", "description"]
+columns = ["name", "installs_90d", "trending", "description"]
 limit = 15
 
 [list]

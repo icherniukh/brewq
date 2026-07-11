@@ -141,10 +141,16 @@ def test_main_search_default_columns_omit_type(capsys):
     out = capsys.readouterr().out
     assert "TYPE" not in out
     assert "TREND" in out
-    assert "30d" in out
+    assert "90d" in out
 
 
-def test_main_search_default_columns_pick_available_window_via_top_result(capsys):
+def test_config_auto_column_picks_available_window_via_top_result(capsys, tmp_path):
+    # "auto" is a config-only pseudo-column (not selectable via -c); the
+    # built-in default no longer uses it now that installs_90d is a literal
+    # default column, but a user can still opt into it via config.toml.
+    (tmp_path / "config.toml").write_text(
+        '[output]\ncolumns = ["name", "trending", "auto", "description"]\n'
+    )
     pkg = Package(
         name="no-recent-data", type="formula", description="", url="", version="1.0",
         installs_30d=-1, installs_90d=-1, installs_365d=40_000,
@@ -157,6 +163,7 @@ def test_main_search_default_columns_pick_available_window_via_top_result(capsys
     assert "TREND" in out
     assert "365d" in out
     assert "30d" not in out
+    assert "90d" not in out
 
 
 def test_main_search_columns_short_alias(capsys):
@@ -245,7 +252,7 @@ def test_main_list_analytics_inserts_installs_before_description(capsys):
         rc = main(["list", "--analytics"])
     assert rc == 0
     header = next(line for line in capsys.readouterr().out.splitlines() if "NAME" in line)
-    assert header.index("30d") < header.index("DESCRIPTION")
+    assert header.index("90d") < header.index("DESCRIPTION")
 
 
 def test_main_list_analytics_respects_explicit_metric_column(capsys):

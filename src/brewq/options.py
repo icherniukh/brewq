@@ -12,7 +12,7 @@ _SORT_ALIASES: dict[str, str] = {
     "trending": "trending",
     "trend": "trending",
     "hot": "trending",
-    "default": "trending",
+    "default": "installs_90d",
     # installs_30d
     "installs_30d": "installs_30d",
     "installs": "installs_30d",
@@ -56,7 +56,7 @@ def parse_sort(raw: str) -> str:
 @dataclass
 class SearchOptions:
     query: list[str] = field(default_factory=list)
-    sort: str = "trending"
+    sort: str = "installs_90d"
     columns_spec: str = "default"
     limit: int = 0
     tsv_output: bool = False
@@ -78,10 +78,8 @@ def build_search_options(args: Any, cfg: dict, *, tty_rows: int | None = None) -
 
     if raw_sort:
         sort = parse_sort(raw_sort)  # raises ValueError on unknown input
-    elif top:
-        sort = "trending"  # --top implies trending ranking
     else:
-        cfg_sort = cfg["search"].get("sort", "trending")
+        cfg_sort = cfg["search"].get("sort", "90d")
         sort = parse_sort(cfg_sort)
 
     cfg_limit = cfg["output"]["limit"]

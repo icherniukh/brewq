@@ -94,8 +94,22 @@ def test_trending_below_one_when_recent_rate_falls_below_history():
 def test_trending_uses_pseudocount_when_baseline_is_zero():
     # A brand-new package with zero measurable history shouldn't be hidden as
     # None — the pseudocount still yields a meaningful "how hot right now" value.
-    pkg = _pkg(installs_30d=100, installs_90d=0, installs_365d=0)
-    assert pkg.trending == pytest.approx(6.0)
+    pkg = _pkg(installs_30d=100, installs_90d=100, installs_365d=100)
+    assert pkg.trending == pytest.approx(1.3703703703703705)
+
+
+def test_trending_new_to_tracking_is_damped_more_than_established_growth():
+    # Same underlying recent-vs-older-window growth ratio (~2x) in both cases,
+    # but "fresh" has almost no installs before its most recent 90d window (a
+    # package new to analytics tracking, or a burst entirely within the last
+    # 30 days -- see brewq-253's bun ~250x case) while "established" has a
+    # much larger pre-90d install count. The maturity penalty should pull
+    # "fresh" much closer to neutral (1.0x) than "established".
+    fresh = _pkg(installs_30d=65, installs_90d=65, installs_365d=165)  # pre-90d=100
+    established = _pkg(installs_30d=3_273, installs_90d=3_273, installs_365d=8_273)  # pre-90d=5,000
+    assert fresh.trending is not None
+    assert established.trending is not None
+    assert abs(fresh.trending - 1.0) < abs(established.trending - 1.0)
 
 
 def test_trending_falls_back_to_90d_only_history():

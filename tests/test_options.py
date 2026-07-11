@@ -104,8 +104,8 @@ def test_rank_by_trending_sorts_unknown_trend_last():
     assert result[-1].name == "no-history"
 
 
-def test_default_search_options_sort_is_trending():
-    assert SearchOptions().sort == "trending"
+def test_default_search_options_sort_is_installs_90d():
+    assert SearchOptions().sort == "installs_90d"
 
 
 def test_rank_by_90d():
@@ -303,3 +303,10 @@ def test_build_search_options_config_limit_overrides_tty():
 def test_build_search_options_top_flag_overrides_all():
     opts = build_search_options(_args(query=["git"], top=5), _cfg(limit=20), tty_rows=24)
     assert opts.limit == 5
+
+
+def test_build_search_options_top_without_explicit_sort_uses_config_default():
+    # --top used to hardcode "trending" regardless of config; it should now
+    # just follow whatever sort is otherwise in effect.
+    opts = build_search_options(_args(query=["git"], top=5), _cfg(), tty_rows=None)
+    assert opts.sort == "installs_30d"
