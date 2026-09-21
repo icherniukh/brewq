@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from difflib import get_close_matches
 from typing import Any
 
+from brewq import columns as columns_mod
 from brewq.model import Package
 
 # Sort aliases map user input to canonical sort fields.
@@ -57,7 +58,7 @@ def parse_sort(raw: str) -> str:
 class SearchOptions:
     query: list[str] = field(default_factory=list)
     sort: str = "installs_90d"
-    columns_spec: str = "default"
+    columns_spec: str | list = "default"
     limit: int = 0
     tsv_output: bool = False
     installed_only: bool = False
@@ -67,7 +68,7 @@ class SearchOptions:
 @dataclass
 class ListOptions:
     with_analytics: bool = False
-    columns_spec: str = "default"
+    columns_spec: str | list = "default"
     limit: int = 0
     tsv_output: bool = False
 
@@ -92,9 +93,9 @@ def build_search_options(args: Any, cfg: dict, *, tty_rows: int | None = None) -
     else:
         limit = 0
 
-    columns_spec = (
+    columns_spec: str | list = (
         getattr(args, "columns", None)
-        or getattr(args, "preset", None)
+        or (list(columns_mod.FULL_COLUMNS) if getattr(args, "verbose", False) else None)
         or "default"
     )
 
@@ -110,9 +111,9 @@ def build_search_options(args: Any, cfg: dict, *, tty_rows: int | None = None) -
 
 
 def build_list_options(args: Any, cfg: dict) -> ListOptions:
-    columns_spec = (
+    columns_spec: str | list = (
         getattr(args, "columns", None)
-        or getattr(args, "preset", None)
+        or (list(columns_mod.FULL_COLUMNS) if getattr(args, "verbose", False) else None)
         or "default"
     )
     return ListOptions(

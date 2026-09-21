@@ -3,8 +3,6 @@ from __future__ import annotations
 import io
 import re
 
-import pytest
-
 from brewq.columns import resolve
 from brewq.model import Package
 from brewq.render import render_table, render_tsv
@@ -113,24 +111,7 @@ def test_render_table_non_tty_keeps_plain_installed_marker(monkeypatch):
     assert "\033[" not in out.getvalue()
 
 
-@pytest.mark.parametrize(
-    ("scheme", "formula", "cask"),
-    [
-        (0, 75, 215),
-        (1, 179, 215),
-        (2, 115, 116),
-        (3, 189, 183),
-        (4, 147, 153),
-        (5, 183, 115),
-        (6, 117, 116),
-        (7, 75, 81),
-        (8, 141, 147),
-        (9, 121, 115),
-    ],
-)
-def test_render_table_selects_indexed_formula_cask_colors(
-    monkeypatch, scheme, formula, cask,
-):
+def test_render_table_uses_theme_formula_cask_colors(monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     out = TtyStringIO()
     cols = resolve("name", [])
@@ -138,24 +119,24 @@ def test_render_table_selects_indexed_formula_cask_colors(
         [_pkg("ripgrep"), _pkg("google-chrome", type_="cask")],
         cols,
         out=out,
-        color_scheme=scheme,
     )
     text = out.getvalue()
-    assert f"\033[38;5;{formula}mripgrep" in text
-    assert f"\033[38;5;{cask}mgoogle-chrome" in text
+    # Standard 16-color codes so package colors follow the terminal theme.
+    assert "\033[36mripgrep" in text        # formula: cyan
+    assert "\033[35mgoogle-chrome" in text  # cask: magenta
 
 
-def test_render_table_selected_colors_still_respect_no_color(monkeypatch):
+def test_render_table_theme_colors_still_respect_no_color(monkeypatch):
     monkeypatch.setenv("NO_COLOR", "1")
     out = TtyStringIO()
-    render_table([_pkg()], resolve("name", []), out=out, color_scheme=9)
+    render_table([_pkg()], resolve("name", []), out=out)
     assert "\033[" not in out.getvalue()
 
 
-def test_render_table_selected_colors_stay_plain_when_not_a_tty(monkeypatch):
+def test_render_table_theme_colors_stay_plain_when_not_a_tty(monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     out = io.StringIO()
-    render_table([_pkg()], resolve("name", []), out=out, color_scheme=9)
+    render_table([_pkg()], resolve("name", []), out=out)
     assert "\033[" not in out.getvalue()
 
 
@@ -241,7 +222,6 @@ def test_render_table_installed_marker_keeps_columns_aligned(monkeypatch):
         ],
         cols,
         out=out,
-        color_scheme=9,
     )
 
     lines = [_strip_ansi(line) for line in out.getvalue().splitlines()]

@@ -176,14 +176,33 @@ def test_main_search_columns_short_alias(capsys):
     assert "DESCRIPTION" not in out
 
 
-def test_main_search_preset_compact(capsys):
+def test_main_search_verbose_shows_all_fields(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "-p", "compact"])
+        rc = main(["ripgrep", "-v"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "ripgrep" in out
-    assert "VERSION" not in out
+    for header in ("TYPE", "VERSION", "INST", "STATUS", "30d", "90d", "365d", "TREND", "URL"):
+        assert header in out
+
+
+def test_main_search_url_flag_adds_url_column(capsys):
+    pkgs = [_pkg("ripgrep", installs_30d=80_000)]
+    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
+        rc = main(["ripgrep", "-u"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "URL" in out
+    assert "https://example.com" in out
+
+
+def test_main_search_rejects_columns_with_verbose(capsys):
+    pkgs = [_pkg("ripgrep")]
+    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
+        rc = main(["ripgrep", "-c", "name", "-v"])
+    assert rc == 1
+    assert "cannot use both" in capsys.readouterr().err
 
 
 def test_main_search_sort_by_name(capsys):
@@ -234,15 +253,15 @@ def test_main_list_columns_short_alias(capsys):
     assert "DESCRIPTION" not in out
 
 
-def test_main_list_preset_compact_uses_list_shaped_profile(capsys):
+def test_main_list_url_flag_adds_url_column(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True),
     ])):
-        rc = main(["list", "-p", "compact"])
+        rc = main(["list", "-u"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "TYPE" in out
-    assert "30d" not in out
+    assert "URL" in out
+    assert "https://example.com" in out
 
 
 def test_main_list_analytics_inserts_installs_before_description(capsys):
@@ -338,26 +357,11 @@ def test_main_search_tsv(capsys):
     assert capsys.readouterr().out == "ripgrep\t80000\tfalse\n"
 
 
-def test_main_search_passes_selected_color_scheme(capsys):
-    with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])), \
-         patch("brewq.render.render_table") as render:
-        rc = main(["--colors", "9", "ripgrep"])
-    assert rc == 0
-    assert render.call_args.kwargs["color_scheme"] == 9
-
-
-@pytest.mark.parametrize("value", ["-1", "10", "nope"])
-def test_main_rejects_invalid_color_scheme(value):
-    with pytest.raises(SystemExit) as exc:
-        main(["--colors", value, "ripgrep"])
-    assert exc.value.code == 2
-
-
-def test_main_tsv_accepts_color_scheme_without_ansi(capsys):
+def test_main_tsv_url_flag_adds_url_field(capsys):
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])):
-        rc = main(["--colors", "9", "--tsv", "-c", "name", "ripgrep"])
+        rc = main(["-u", "--tsv", "-c", "name", "ripgrep"])
     assert rc == 0
-    assert capsys.readouterr().out == "ripgrep\n"
+    assert capsys.readouterr().out == "ripgrep\thttps://example.com\n"
 
 
 def test_stale_cache_warning_respects_no_color(monkeypatch):

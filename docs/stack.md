@@ -36,7 +36,7 @@ Python gives us:
 - `brewq.cache` - cache paths, freshness, refresh, atomic writes, locks.
 - `brewq.analytics` - Homebrew analytics fetch and merge.
 - `brewq.model` - formula/cask result records.
-- `brewq.columns` - column definitions, aliases, profile expansion, validation.
+- `brewq.columns` - column definitions, aliases, spec expansion, validation.
 - `brewq.render` - table rendering, wrapping, status markers, color policy.
 
 ## Output Columns
@@ -53,7 +53,7 @@ Built-in columns:
 - status
 - url
 
-The renderer should compute widths once from the selected columns and result set, then wrap description-like columns.
+The renderer should compute widths once from the selected columns and result set, then clip description-like columns with an ellipsis to fit the terminal (wrapping only when the other columns alone overflow).
 
 ## Release Shape
 

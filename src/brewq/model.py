@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
-@dataclass
+@dataclass(slots=True)
 class Package:
     """Normalized record for a formula or cask."""
 

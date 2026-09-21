@@ -32,7 +32,8 @@ brewq terminal multiplexer
 brewq -t 10 json
 brewq -s 365d rust
 brewq -s name ripgrep
-brewq -p full rust
+brewq -u rust
+brewq -v rust
 brewq -c name,30d,365d,url rust
 brewq --tsv -c name,30d,url ripgrep
 brewq -l python
@@ -42,11 +43,13 @@ brewq -r ripgrep
 Options:
 
 - `-s`, `--sort FIELD`: sort by `90d` (default), `30d`, `365d`, `trending`, or `name`.
-- `-l`, `--installed`: filter search results to packages known to be installed.
-- `-p`, `--preset NAME`: use `compact` or `full`.
-- `-c`, `--columns KEYS`: use an explicit comma-joined column list.
 - `-t`, `--top N`: show the top N matches by the active sort field.
+- `-c`, `--columns KEYS`: use an explicit comma-joined column list.
+- `-u`, `--url`: add the `url` column (before `description`) to the active column set.
+- `-v`, `--verbose`: show every package field (all canonical columns except `binaries`).
+- `-l`, `--installed`: filter search results to packages known to be installed.
 - `-r`, `--refresh`: refresh cache before searching.
+- `--all`: include deprecated and disabled packages.
 - `--tsv`: emit raw tab-separated rows with no header.
 
 Rules:
@@ -58,10 +61,12 @@ Rules:
   `trending` (recent install rate vs. a package's own historical baseline)
   remains available as an explicit, demoted sort/column (`-s trending`), and
   `30d`/`365d` remain available as explicit, opt-in raw-count windows.
-- Search defaults to the top 15 matches.
-- `-t N` overrides the default row cap for normal "top results" use.
-- `-p` and `-c` are mutually exclusive.
-- Disabled and deprecated packages remain visible, but rank after active packages.
+- Result cap precedence: `-t N`, then `output.limit` from config when > 0, then
+  terminal height on a TTY (`rows - 6`, minimum 5), then no cap when piped.
+- `-c` and `-v` are mutually exclusive.
+- Disabled and deprecated packages are hidden when results would overflow the
+  row cap; `--all` includes them. When there is no cap (piped output) they are
+  kept but rank after active packages.
 - Search uses the user cache or bundled seed by default. Stale data renders first,
   then schedules background repair.
 - `brewq refresh` and `brewq -r QUERY` force foreground work only when explicitly requested.
@@ -135,17 +140,20 @@ The built-in default no longer needs it (it shows a literal `installs_90d`
 column), but it remains available for a user's own `config.toml` `output.columns`
 list.
 
-Search presets:
+Column shortcuts:
 
-- `default`: config-backed, built in as `name,installs_90d,trending,description`
-- `compact`: `name,installs_90d,description`
-- `full`: `name,type,version,installs_30d,installs_90d,installs_365d,installed,status,description`
+- `-u` adds `url` to the active column set, inserted before `description`.
+- `-v` expands to the full field set: `name,type,version,installed,status,30d,90d,365d,trending,url,description`.
 
-List presets:
+Default column sets (config-backed):
 
-- `default`: config-backed, built in as `name,type,version,description`
-- `compact`: `name,type,description`
-- `full`: `name,type,version,installs_90d,installed,status,description`
+- Search: `name,installs_90d,trending,description`
+- List: `name,type,version,description`
+
+Colors are theme-relative: formula and cask names use standard 16-color ANSI
+codes (cyan / magenta) so they follow the user's terminal theme rather than
+pinned 256-color values. Color is disabled when output is not a TTY or when
+`NO_COLOR` is set.
 
 ## TSV
 
@@ -173,7 +181,8 @@ Examples:
 ```bash
 brewq list
 brewq list --analytics
-brewq list -p full
+brewq list -u
+brewq list -v
 brewq list -c name,type,version
 brewq list --tsv -c name,type,version
 ```
@@ -181,8 +190,9 @@ brewq list --tsv -c name,type,version
 Options:
 
 - `--analytics`: show cached analytics columns.
-- `-p`, `--preset NAME`: use `compact` or `full`.
 - `-c`, `--columns KEYS`: use an explicit comma-joined column list.
+- `-u`, `--url`: add the `url` column.
+- `-v`, `--verbose`: show every package field.
 - `--limit N`: cap installed rows.
 - `--tsv`: emit raw tab-separated rows with no header.
 
@@ -230,7 +240,7 @@ sort = "90d"
 
 [output]
 columns = ["name", "installs_90d", "trending", "description"]
-limit = 15
+limit = 0  # 0 = adaptive: terminal height on a TTY, no cap when piped
 
 [list]
 columns = ["name", "type", "version", "description"]
@@ -259,7 +269,7 @@ brewq random --seed 7
 
 - pick a query from a fixed term list
 - vary sort field and top count
-- vary preset or explicit column layout
+- vary explicit column layout
 - print the generated `brewq ...` command before rendering
 - use the normal search, rank, column, and renderer paths
 

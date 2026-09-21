@@ -21,19 +21,11 @@ brewq ripgrep
 brewq terminal multiplexer
 brewq -t 10 json
 brewq -s 365d rust
+brewq -u ripgrep          # add homepage URLs
+brewq -v ripgrep          # show all package fields
 ```
 
 Sort by raw 90-day install volume by default (most trustworthy signal), or switch to `30d`, `365d`, `trending`, or `name`.
-
-### Presets
-
-Three built-in column presets, accessible by name or single digit:
-
-```bash
-brewq -p 1 ripgrep       # compact: name, 90d, description
-brewq -p 2 ripgrep       # full: all columns
-brewq -p 3 ripgrep       # links: name, url, description
-```
 
 Or pick exact columns:
 
@@ -46,7 +38,7 @@ brewq -c name,90d,trending,url ripgrep
 ```bash
 brewq list               # installed formulae and casks
 brewq list --analytics   # add 90d install counts
-brewq list -p 2          # full preset
+brewq list -v            # all package fields
 ```
 
 ### Scripting
@@ -76,7 +68,7 @@ sort = "90d"
 
 [output]
 columns = ["name", "installs_90d", "trending", "description"]
-limit = 0
+limit = 0  # 0 = adaptive: terminal height on a TTY, no cap when piped
 
 [list]
 columns = ["name", "type", "version", "description"]

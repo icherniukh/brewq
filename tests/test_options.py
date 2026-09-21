@@ -272,7 +272,7 @@ def test_rank_installed_sorts_by_type_then_name():
 # --- build_search_options limit precedence ---
 
 def _args(**kwargs):
-    defaults = {"query": [], "sort": None, "top": None, "preset": None, "columns": None, "tsv": False, "installed": False}
+    defaults = {"query": [], "sort": None, "top": None, "columns": None, "verbose": False, "tsv": False, "installed": False}
     return argparse.Namespace(**{**defaults, **kwargs})
 
 

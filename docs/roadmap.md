@@ -46,6 +46,6 @@ Goal: finish implementation and cut a usable release within a few days.
 
 ## Open Decisions
 
-- Whether to show 365-day installs in the default preset or only through `-s 365d` / explicit columns.
+- Whether to show 365-day installs in the default columns or only through `-s 365d` / explicit columns.
 - Whether to keep `brew search` as the matching source or search directly in the cache.
 - Whether the first public release should be Python-only or include the zsh prototype as an unsupported legacy script.

@@ -9,25 +9,16 @@ from typing import TextIO
 from brewq.columns import ColumnDef
 from brewq.model import Package
 
-# ANSI escape sequences
+# ANSI escape sequences. Standard 16-color codes are used throughout so
+# package/status colors follow the user's terminal theme instead of pinning
+# fixed 256-color values.
 _BOLD = "\033[1m"
-_DIM = "\033[2m"
 _RESET = "\033[0m"
 _COLOR_GREEN = "\033[32m"
-_COLOR_DEPRECATED = "\033[38;5;208m"  # orange
-_COLOR_DISABLED = "\033[38;5;167m"    # red
-_COLOR_SCHEMES = (
-    (75, 215),   # sky blue / amber
-    (179, 215),  # soft amber / apricot
-    (115, 116),  # seafoam / pale aqua
-    (189, 183),  # current: periwinkle / lavender
-    (147, 153),  # periwinkle / pale blue
-    (183, 115),  # lavender / seafoam
-    (117, 116),  # ice blue / soft cyan
-    (75, 81),    # sky blue / bright cyan
-    (141, 147),  # violet / light violet
-    (121, 115),  # mint / seafoam
-)
+_COLOR_FORMULA = "\033[36m"  # cyan
+_COLOR_CASK = "\033[35m"     # magenta
+_COLOR_DEPRECATED = "\033[33m"  # yellow
+_COLOR_DISABLED = "\033[31m"    # red
 
 
 def _plain_status_prefix(pkg: Package) -> str:
@@ -80,16 +71,11 @@ def render_table(
     columns: list[ColumnDef],
     out: TextIO | None = None,
     sorted_col: str | None = None,
-    color_scheme: int = 0,
 ) -> None:
     if out is None:
         out = sys.stdout
     color = _use_color(out)
     term_width = _terminal_width()
-    formula_color, cask_color = (
-        f"\033[38;5;{code}m"
-        for code in _COLOR_SCHEMES[color_scheme]
-    )
 
     # Compute raw cell values
     rows: list[list[str]] = [
@@ -179,7 +165,7 @@ def render_table(
                 if line_no == 0 and i == name_idx:
                     marker_width = 2 if is_installed else 0
                     if color:
-                        pkg_color = cask_color if pkg_type == "cask" else formula_color
+                        pkg_color = _COLOR_CASK if pkg_type == "cask" else _COLOR_FORMULA
                         marker = (" " + _COLOR_GREEN + "✔" + _RESET) if is_installed else ""
                         styled = _BOLD + pkg_color + cell + _RESET + marker
                     else:

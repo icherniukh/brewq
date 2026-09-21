@@ -24,7 +24,7 @@ brewq terminal multiplexer
 brewq -t 10 json
 brewq list
 brewq list --analytics
-brewq -p compact rust
+brewq -u rust
 brewq --tsv rust
 ```
 
@@ -60,7 +60,7 @@ Current search ranking combines:
 
 - exact package or alias matches first
 - install volume across the remaining matches, using the selected analytics window
-- package state: disabled/deprecated packages are visibly marked and ranked after active packages
+- package state: disabled/deprecated packages are hidden from capped results unless `--all` is given; otherwise they are visibly marked and ranked after active packages
 
 ## Popularity And Top-N
 
@@ -122,16 +122,14 @@ Output customization should be universal, not a pile of bespoke flags.
 Columns are the extension point:
 
 ```bash
-brewq -p compact QUERY
-brewq -p full QUERY
+brewq -u QUERY          # add the homepage URL column
+brewq -v QUERY          # show every package field
 brewq -c name,type,30d,url QUERY
 ```
 
-Built-in column presets:
-
-- `compact`: small terminal view, likely `name,installs,description`
-- `default`: normal discovery view, from config
-- `full`: wide inspection view, likely `name,type,version,installs,installed,status,description`
+There are no named presets. Two shortcuts cover the common reach-fors: `-u`
+adds the `url` column to the active set, and `-v` expands to the full field
+set. Anything more specific is an explicit `-c` list.
 
 The exact default columns belong in config:
 
@@ -159,7 +157,7 @@ TSV should come from the same normalized records as table output. It should not 
 - list installed formulae and casks together
 - show descriptions
 - optionally show analytics
-- support the same column system, with list-shaped defaults and presets
+- support the same column system, with list-shaped defaults
 - support TSV
 - avoid network fetches by default
 
@@ -168,7 +166,7 @@ Examples:
 ```bash
 brewq list
 brewq list --analytics
-brewq list -p compact
+brewq list -u
 brewq list -c name,type,version,description
 ```
 

@@ -44,7 +44,7 @@ Do not hardcode a final scoring formula in this spec. Ranking should be implemen
 ```bash
 brewq list
 brewq list --analytics
-brewq list -p compact
+brewq list -u
 brewq list --tsv
 ```
 
@@ -83,8 +83,8 @@ Output should be compact by default and customizable without flag sprawl.
 Use columns as the primary extension mechanism:
 
 ```bash
-brewq -p compact rust
-brewq -p full rust
+brewq -u rust
+brewq -v rust
 brewq -c name,type,30d,url rust
 ```
 
@@ -93,11 +93,10 @@ First-class output forms:
 - table for humans
 - raw TSV for scripts
 
-Column presets should exist, but exact preset definitions may evolve:
+No named presets. Two column shortcuts cover the common cases:
 
-- `compact`
-- `default`
-- `full`
+- `-u`: add the homepage `url` column
+- `-v`: show every package field
 
 Defaults should come from config when present, with useful built-in defaults when absent.
 
@@ -213,6 +212,6 @@ These are plausible but not first-release requirements:
 - install counts are visible enough to support trust/quality judgment.
 - `brewq -t N QUERY` is useful for finding the most credible candidates.
 - `brewq list` replaces the existing installed-package function.
-- output presets are useful, but custom columns are still easy.
+- column shortcuts (`-u`, `-v`) are useful, but custom columns are still easy.
 - TSV output is stable enough for scripts.
 - first release remains compact and read-only.

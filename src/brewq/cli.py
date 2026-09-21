@@ -17,7 +17,6 @@ from brewq import seed as seed_mod
 
 _COMMANDS = frozenset({"list", "refresh", "config", "random"})
 _FORMATTER = argparse.RawDescriptionHelpFormatter
-_COLOR_SCHEMES = range(10)
 _COLOR_RED = "\033[31m"
 _RESET = "\033[0m"
 
@@ -29,10 +28,10 @@ def _use_color_stderr() -> bool:
 
 _SEARCH_EPILOG = """\
 Examples:
-  brewq ripgrep
-  brewq -t 10 json
-  brewq -s 365d rust
-  brewq terminal multiplexer
+  brewq ripgrep               search packages
+  brewq -u ripgrep            include homepage URLs
+  brewq -v git                show all package fields
+  brewq -t 10 -s 365d rust    top 10 by yearly installs
 
 Commands: list  refresh  config
 """
@@ -40,8 +39,8 @@ Commands: list  refresh  config
 _LIST_EPILOG = """\
 Examples:
   brewq list
-  brewq list -p full
-  brewq list -c name,type,version
+  brewq list --analytics
+  brewq list -u
 """
 
 _REFRESH_EPILOG = """\
@@ -60,12 +59,25 @@ Examples:
 The config file controls default columns and cache freshness.
 """
 
+_COLUMN_HELP = (
+    "columns: name, type, version, 30d, 90d, 365d, trending, "
+    "binaries, description, installed, status, url"
+)
+
 
 def _positive_int(raw: str) -> int:
     value = int(raw)
     if value < 1:
         raise argparse.ArgumentTypeError("must be at least 1")
     return value
+
+
+def _add_column_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("-c", "--columns", metavar="COLS", help=_COLUMN_HELP)
+    parser.add_argument("-u", "--url", action="store_true",
+                        help="add homepage URL column")
+    parser.add_argument("-v", "--verbose", action="store_true",
+                        help="show all package fields")
 
 
 def _build_search_parser() -> argparse.ArgumentParser:
@@ -75,25 +87,20 @@ def _build_search_parser() -> argparse.ArgumentParser:
         epilog=_SEARCH_EPILOG,
         formatter_class=_FORMATTER,
     )
-    parser.add_argument("query", nargs="*", help="Search terms")
+    parser.add_argument("query", nargs="*", help="search terms")
     parser.add_argument("-s", "--sort", metavar="FIELD",
-                        help="Sort by: 90d (i90), 30d (i30), 365d (i365), trending (hot), name  [default: 90d]")
-    parser.add_argument("-l", "--installed", action="store_true",
-                        help="Filter to installed packages")
-    parser.add_argument("-p", "--preset", metavar="NAME",
-                        help="Column preset: 1/compact, 2/full, 3/links")
-    parser.add_argument("-c", "--columns", metavar="KEYS",
-                        help="Columns: name (n), trending (hot), 30d (i30), 90d (i90), 365d (i365), bin, type (t), version (v), desc (d), inst (i), status, url (h)")
+                        help="sort by: 90d (default), 30d, 365d, trending, name")
     parser.add_argument("-t", "--top", type=_positive_int, metavar="N",
-                        help="Show top N by the active sort field")
+                        help="show top N matches (default: fill terminal)")
+    _add_column_flags(parser)
+    parser.add_argument("-l", "--installed", action="store_true",
+                        help="only installed packages")
     parser.add_argument("-r", "--refresh", action="store_true",
-                        help="Refresh cache before searching")
+                        help="refresh cache before searching")
     parser.add_argument("--all", action="store_true",
-                        help="Include deprecated and disabled packages")
-    parser.add_argument("--colors", type=int, choices=_COLOR_SCHEMES, metavar="N",
-                        help="Temporary formula/cask palette: 0..9")
+                        help="include deprecated and disabled packages")
     parser.add_argument("--tsv", action="store_true",
-                        help="Tab-separated output for scripting")
+                        help="tab-separated output for scripting")
     parser.add_argument("--version", action="version",
                         version=f"brewq {__version__}")
     return parser
@@ -112,17 +119,12 @@ def _build_command_parser() -> argparse.ArgumentParser:
         formatter_class=_FORMATTER,
     )
     lst.add_argument("--analytics", action="store_true",
-                     help="Add a 90d install-count column")
-    lst.add_argument("-p", "--preset", metavar="NAME",
-                     help="Column preset: 1/compact, 2/full, 3/links")
-    lst.add_argument("-c", "--columns", metavar="KEYS",
-                     help="Columns: name (n), type (t), version (v), trending (hot), 30d (i30), 90d (i90), 365d (i365), desc (d), status, bin, url (h)")
+                     help="add a 90d install-count column")
+    _add_column_flags(lst)
     lst.add_argument("--limit", type=_positive_int, metavar="N",
-                     help="Cap installed rows shown")
-    lst.add_argument("--colors", type=int, choices=_COLOR_SCHEMES, metavar="N",
-                     help="Temporary formula/cask palette: 0..9")
+                     help="cap installed rows shown")
     lst.add_argument("--tsv", action="store_true",
-                     help="Tab-separated output for scripting")
+                     help="tab-separated output for scripting")
 
     # refresh
     refresh_p = subparsers.add_parser(
@@ -166,10 +168,16 @@ def _normalize_argv(argv: list[str]) -> list[str]:
 
 
 def _validate_column_flags(args: argparse.Namespace) -> str | None:
-    """Return an error string if -p and -c are both set, else None."""
-    if getattr(args, "preset", None) and getattr(args, "columns", None):
-        return "cannot use both -p/--preset and -c/--columns"
+    """Return an error string if -c and -v are both set, else None."""
+    if getattr(args, "columns", None) and getattr(args, "verbose", False):
+        return "cannot use both -c/--columns and -v/--verbose"
     return None
+
+
+def _apply_column_shortcuts(args: argparse.Namespace, col_defs: list) -> list:
+    if getattr(args, "url", False):
+        col_defs = columns_mod.with_url(col_defs)
+    return col_defs
 
 
 def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
@@ -182,14 +190,12 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     list_cols_cfg = cfg["list"]["columns"]
 
     try:
-        col_defs = columns_mod.resolve(
-            opts.columns_spec,
-            list_cols_cfg,
-            profiles=columns_mod.list_profiles(),
-        )
+        col_defs = columns_mod.resolve(opts.columns_spec, list_cols_cfg)
     except ValueError as exc:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1
+
+    col_defs = _apply_column_shortcuts(args, col_defs)
 
     if opts.with_analytics:
         col_defs = _ensure_list_analytics_column(col_defs)
@@ -205,13 +211,7 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     if opts.tsv_output:
         render_mod.render_tsv(packages, col_defs, out=sys.stdout)
     else:
-        _c = getattr(args, "colors", None)
-        render_mod.render_table(
-            packages,
-            col_defs,
-            out=sys.stdout,
-            color_scheme=_c if _c is not None else 3,
-        )
+        render_mod.render_table(packages, col_defs, out=sys.stdout)
     return 0
 
 
@@ -271,12 +271,10 @@ _RANDOM_TERMS = (
 )
 _RANDOM_SORTS = ("trending", "trending", "30d", "365d", "90d", "name")
 _RANDOM_LAYOUTS = (
-    ("default", None, None),
-    ("compact", "compact", None),
-    ("full", "full", None),
-    ("metrics", None, "name,30d,90d,365d,description"),
-    ("ops", None, "name,type,version,bin,description"),
-    ("links", None, "name,30d,url"),
+    None,  # default columns
+    "name,30d,90d,365d,description",
+    "name,type,version,bin,description",
+    "name,30d,url",
 )
 
 
@@ -287,11 +285,9 @@ def _cmd_random(args: argparse.Namespace, cfg: dict) -> int:
     query = rng.choice(_RANDOM_TERMS)
     sort = rng.choice(_RANDOM_SORTS)
     top = rng.randint(4, 10)
-    _, preset, columns = rng.choice(_RANDOM_LAYOUTS)
+    columns = rng.choice(_RANDOM_LAYOUTS)
 
     command = ["brewq", "-t", str(top), "-s", sort]
-    if preset:
-        command.extend(["-p", preset])
     if columns:
         command.extend(["-c", columns])
     command.append(query)
@@ -301,11 +297,11 @@ def _cmd_random(args: argparse.Namespace, cfg: dict) -> int:
         query=[query],
         sort=sort,
         installed=False,
-        preset=preset,
         columns=columns,
+        url=False,
+        verbose=False,
         top=top,
         refresh=False,
-        colors=3,
         tsv=False,
         all=False,
     )
@@ -376,16 +372,16 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
             print(f"brewq: {exc}", file=sys.stderr)
             return 1
 
+    col_defs = _apply_column_shortcuts(args, col_defs)
+
     if opts.tsv_output:
         render_mod.render_tsv(ranked, col_defs, out=sys.stdout)
     else:
-        _c = getattr(args, "colors", None)
         render_mod.render_table(
             ranked,
             col_defs,
             out=sys.stdout,
             sorted_col=opts.sort,
-            color_scheme=_c if _c is not None else 3,
         )
     return 0
 

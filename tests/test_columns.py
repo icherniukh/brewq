@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from brewq.columns import pick_representative_metric, resolve
+from brewq.columns import FULL_COLUMNS, pick_representative_metric, resolve, with_url
 from brewq.model import Package
 
 
@@ -17,22 +17,32 @@ def _pkg(**kw) -> Package:
     return Package(**defaults)
 
 
-def test_resolve_profile():
-    cols = resolve("compact", [])
+def test_full_columns_resolve():
+    cols = resolve(list(FULL_COLUMNS), [])
     keys = [c.key for c in cols]
-    assert keys == ["name", "installs_90d", "description"]
+    assert keys == [
+        "name", "type", "version", "installed", "status",
+        "installs_30d", "installs_90d", "installs_365d", "trending",
+        "url", "description",
+    ]
 
 
-def test_resolve_full_profile_includes_all_windows():
-    cols = resolve("full", [])
-    keys = [c.key for c in cols]
-    assert keys == ["name", "type", "version", "installs_30d", "installs_90d", "installs_365d", "installed", "status", "description"]
+def test_with_url_inserts_before_description():
+    cols = resolve("name,installs_90d,description", [])
+    keys = [c.key for c in with_url(cols)]
+    assert keys == ["name", "installs_90d", "url", "description"]
 
 
+def test_with_url_appends_without_description():
+    cols = resolve("name,installs_90d", [])
+    keys = [c.key for c in with_url(cols)]
+    assert keys == ["name", "installs_90d", "url"]
 
-def test_resolve_list_compact_profile():
-    cols = resolve("compact", [], profiles={"compact": ["name", "type", "description"]})
-    assert [c.key for c in cols] == ["name", "type", "description"]
+
+def test_with_url_is_idempotent():
+    cols = resolve("name,url,description", [])
+    keys = [c.key for c in with_url(cols)]
+    assert keys == ["name", "url", "description"]
 
 
 def test_resolve_custom_list():

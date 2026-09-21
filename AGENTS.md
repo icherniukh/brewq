@@ -60,9 +60,19 @@ The current implementation and docs intentionally settle these first-release cho
   `auto` remains a config-only pseudo-column (not selectable via `-s`/`-c`) for
   a user's own `output.columns` list, resolving to whichever of
   90d/30d/365d has data for the top-ranked result.
-- Search defaults to the top 15 matches; `-t` / `--top` overrides the cap.
+- Search caps results adaptively: `-t` / `--top` wins, then `output.limit`
+  from config when > 0, then terminal height on a TTY (`rows - 6`, minimum 5),
+  then no cap when piped. There is no fixed top-N constant.
 - `list --limit` is the installed-list cap.
-- `-p` selects built-in presets; `-c` selects explicit comma-joined columns.
+- `-c` selects explicit comma-joined columns. No named presets: `-u` adds the
+  `url` column to the active set, `-v` shows all package fields. `-c` and `-v`
+  are mutually exclusive.
+- Deprecated/disabled packages are hidden when results would overflow the cap;
+  `--all` includes them. Uncapped (piped) output keeps them but ranks them
+  after active packages.
+- Formula/cask name colors use theme-relative standard 16-color ANSI codes
+  (cyan/magenta) so they follow the terminal theme; color is TTY-only and
+  honors `NO_COLOR`.
 - `--tsv` is the only public machine-readable output mode.
 - Releases bundle a seed cache so the first query does not block on a full refresh.
 - When the seed is used, brewq overlays installed state from the local Cellar/Caskroom before rendering.
@@ -106,8 +116,9 @@ Individual commands, for iterating on one area:
 Treat these as open until a later spec resolves them:
 
 - Grouping behavior: whether formulae and casks are mixed by relevance by default, with grouping deferred or exposed.
-- Status filtering: whether deprecated and disabled packages are hidden by default,
-  and whether exact matches or an explicit override still show them.
+- Status filtering: deprecated/disabled packages are hidden from capped results
+  (`--all` shows them) and demoted to the end of uncapped output; whether exact
+  matches should still surface them is open.
 - First release packaging: Python-only release versus including the zsh prototype as unsupported legacy.
 - Post-replacement cleanup: when to update dotfiles, remove/archive `dot_scripts/executable_bsx`, and replace the old ccconfig guide with a pointer here.
 - Deferred query features: semantic/vector search, `info`, `--exact`, `--explain`, `--open`, and `list --leaves`.

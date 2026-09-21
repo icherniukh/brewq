@@ -129,33 +129,23 @@ _ALIASES: dict[str, str] = {
     "homepage": "url",
 }
 
-# Named profiles for search output.
-_SEARCH_PROFILES: dict[str, list[str]] = {
-    "1": ["name", "installs_90d", "description"],
-    "compact": ["name", "installs_90d", "description"],
-    "2": ["name", "type", "version", "installs_30d", "installs_90d", "installs_365d", "installed", "status", "description"],
-    "full": ["name", "type", "version", "installs_30d", "installs_90d", "installs_365d", "installed", "status", "description"],
-    "3": ["name", "url", "description"],
-    "links": ["name", "url", "description"],
-}
-# Named profiles for installed-package output.
-_LIST_PROFILES: dict[str, list[str]] = {
-    "1": ["name", "type", "description"],
-    "compact": ["name", "type", "description"],
-    "2": ["name", "type", "version", "installs_90d", "installed", "status", "description"],
-    "full": ["name", "type", "version", "installs_90d", "installed", "status", "description"],
-    "3": ["name", "type", "url", "description"],
-    "links": ["name", "type", "url", "description"],
-}
-# "default" is driven by config, not hardcoded here
+# Column keys shown by -v/--verbose: every useful package field.
+FULL_COLUMNS: list[str] = [
+    "name", "type", "version", "installed", "status",
+    "installs_30d", "installs_90d", "installs_365d", "trending",
+    "url", "description",
+]
 
 
-def search_profiles() -> dict[str, list[str]]:
-    return dict(_SEARCH_PROFILES)
-
-
-def list_profiles() -> dict[str, list[str]]:
-    return dict(_LIST_PROFILES)
+def with_url(col_defs: list[ColumnDef]) -> list[ColumnDef]:
+    """Return col_defs with the url column added (before description), unless present."""
+    if any(c.key == "url" for c in col_defs):
+        return col_defs
+    url_col = _COLUMN_REGISTRY["url"]
+    desc_idx = next((i for i, c in enumerate(col_defs) if c.key == "description"), None)
+    if desc_idx is None:
+        return [*col_defs, url_col]
+    return [*col_defs[:desc_idx], url_col, *col_defs[desc_idx:]]
 
 
 _RAW_METRIC_KEYS = ("installs_90d", "installs_30d", "installs_365d")
@@ -176,18 +166,13 @@ def pick_representative_metric(pkg: Package | None) -> str:
 def resolve(
     spec: str | list[str],
     default_columns: list[str],
-    profiles: dict[str, list[str]] | None = None,
     representative_metric: str | None = None,
 ) -> list[ColumnDef]:
-    """Expand a column spec (profile name or comma-joined key list) into ColumnDef list."""
-    if profiles is None:
-        profiles = _SEARCH_PROFILES
+    """Expand a column spec (comma-joined key list or "default") into ColumnDef list."""
     if spec == "default":
         keys = default_columns
     elif isinstance(spec, list):
         keys = spec
-    elif spec in profiles:
-        keys = profiles[spec]
     else:
         keys = [s.strip() for s in spec.split(",")]
 
