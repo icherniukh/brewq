@@ -1,66 +1,119 @@
 # brewq
 
-`brewq` is a read-only Homebrew query and analytics tool. It answers a narrow question well: *what does Homebrew know about this package, and what should I trust?*
+`brewq` is a read-only Homebrew query and analytics tool: find packages, compare
+install counts, and inspect installed formulae and casks. It does not install,
+upgrade, uninstall, manage services, or manage Brewfiles.
 
-Install analytics are surfaced at the exact moment you search, compare, or review installed packages — so you can judge trust and quality without opening formula pages one by one.
+## Install and run
 
-## Install
+Requires Python 3.12+ and Homebrew for local inventory and refresh operations.
 
-```bash
+```sh
 uv tool install .
+brewq ripgrep
+bq ripgrep
 ```
 
-Ships two entry points: `brewq` and `bq` (same as `ripgrep`/`rg`).
+`brewq` and `bq` are identical entry points. Use `uv run brewq` in a checkout to
+run its source rather than an older user-level installation. After verifying an
+updated build, `uv tool install --force .` replaces the installed copy. Compare
+`brewq --version` with `uv run brewq --version` when diagnosing drift.
 
-## Usage
+## Search and output
 
-Search is the root command:
-
-```bash
-brewq ripgrep
+```sh
 brewq terminal multiplexer
 brewq -t 10 json
 brewq -s 365d rust
-brewq -u ripgrep          # add homepage URLs
-brewq -v ripgrep          # show all package fields
-```
-
-Sort by raw 90-day install volume by default (most trustworthy signal), or switch to `30d`, `365d`, `trending`, or `name`.
-
-Or pick exact columns:
-
-```bash
-brewq -c name,90d,trending,url ripgrep
-```
-
-### Installed packages
-
-```bash
-brewq list               # installed formulae and casks
-brewq list --analytics   # add 90d install counts
-brewq list -v            # all package fields
-```
-
-### Scripting
-
-```bash
+brewq -u ripgrep
+brewq -c name,90d,url ripgrep
 brewq --tsv -c name,90d,url ripgrep
+```
+
+Search matches names, formula aliases, and descriptions. All query terms must
+match; name normalization and a narrow formula fuzzy fallback also apply.
+The default sort is raw 90-day install volume. Exact name/alias matches precede
+other active matches under metric sorts; disabled/deprecated results rank last.
+`-s name` sorts alphabetically within those status groups.
+
+| Search option | Current behavior |
+| --- | --- |
+| `-s`, `--sort FIELD` | `90d` (built-in default), `30d`, `365d`, `trending`, or `name` |
+| `-t`, `--top N` | Positive result cap; overrides configuration and terminal sizing |
+| `-l`, `--installed` | Filter to packages marked installed |
+| `-r`, `--refresh` | Force foreground refresh before searching |
+| `--all` | Retain deprecated/disabled matches when the cap would otherwise hide them |
+
+Search cap precedence is `-t`, then positive `output.limit`, then terminal rows
+minus six (minimum five) on a TTY, then unlimited when piped. This caps records,
+not wrapped terminal lines. When capped matches overflow, deprecated/disabled
+matches are hidden unless `--all` is given. Otherwise they remain, ranked last.
+
+These output options work for both search and `list`:
+
+| Output option | Current behavior |
+| --- | --- |
+| `-c`, `--columns COLS` | Explicit comma-separated column names |
+| `-u`, `--url` | Add homepage URL before description, or append it |
+| `-v`, `--verbose` | Expanded column set below; mutually exclusive with `-c` |
+| `--tsv` | Selected columns as raw tab-separated rows, without a header |
+
+Canonical columns are `name`, `type`, `version`, `installs_30d`, `installs_90d`,
+`installs_365d`, `trending`, `binaries`, `description`, `installed`, `status`, and
+`url`. Use `30d`, `90d`, and `365d` as short metric names. `bin`/`bins`, `desc`,
+and `home`/`homepage` are also accepted. More aliases remain in the implementation;
+prefer canonical names in scripts.
+
+The current `-v` set is
+`name,type,version,installed,status,30d,90d,365d,trending,url,description`.
+It omits `binaries` despite help currently saying “all package fields.” Select
+`binaries` explicitly when needed. Cask binaries come from declared artifacts;
+formula binaries require local installed data.
+
+Search defaults to `name,90d,trending,description`; list defaults to
+`name,type,version,description`. `trending` is a smoothed recent-to-historical
+installation-rate multiplier, not absolute popularity. It is currently visible
+by default but is not the default sort.
+
+`--tsv` is the only machine-readable format. Cells sanitize tabs and newlines;
+unknown install counts become empty cells. Table colors follow the terminal
+theme, are TTY-only, and honor a nonempty `NO_COLOR` value. Installed markers
+remain visible without color.
+
+## Installed packages
+
+```sh
+brewq list
+brewq list --analytics
+brewq list --limit 10
 brewq list --tsv -c name,type,version
 ```
 
-### Cache
+Rows sort by type, then name. `--limit N` accepts a positive cap. `--analytics`
+adds a cached 90-day count column only if no 30-, 90-, or 365-day count column
+is already selected. It does not fetch analytics on demand.
 
-Releases bundle a seed cache, so the first query renders immediately. On first use, `brewq` overlays installed state from the local Cellar and Caskroom. Stale cache renders instantly and schedules one delayed background refresh. Cache age is shown on stderr.
+## Cache and recovery
 
-```bash
-brewq refresh            # force cache refresh
-brewq -r ripgrep         # refresh before searching
-brewq config path        # show config file location
+Releases bundle a seed catalog. Loads use the user cache or seed and inspect
+local inventory. Storage-root discovery can invoke Homebrew; cached roots avoid
+that discovery. Stale/seed data can schedule a detached refresh with a five-minute
+delay and system-load checks. Cache information goes to stderr.
+
+```sh
+brewq refresh           # refresh if stale
+brewq refresh --force   # force recovery, including a recently corrupted cache
+brewq -r ripgrep        # force refresh, then search
+brewq config path
 ```
 
-## Config
+`update-cache` remains a compatibility alias for `refresh`. `random [--seed N]`
+remains a development layout lab, not a product discovery workflow.
 
-Optional `config.toml` at `~/.config/brewq/config.toml` (or `$BREWQ_CONFIG`):
+## Configuration
+
+Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless
+`BREWQ_CONFIG` overrides it. Built-in defaults:
 
 ```toml
 [search]
@@ -68,7 +121,7 @@ sort = "90d"
 
 [output]
 columns = ["name", "installs_90d", "trending", "description"]
-limit = 0  # 0 = adaptive: terminal height on a TTY, no cap when piped
+limit = 0 # terminal-height cap on a TTY; unlimited when piped
 
 [list]
 columns = ["name", "type", "version", "description"]
@@ -77,22 +130,38 @@ columns = ["name", "type", "version", "description"]
 max_age_seconds = 86400
 ```
 
-Environment: `BREWQ_CONFIG`, `BREWQ_CACHE_DIR`, `BREWQ_CACHE_MAX_AGE`, `NO_COLOR`.
+`BREWQ_CACHE_DIR` overrides the cache directory, otherwise
+`${XDG_CACHE_HOME:-~/.cache}/brewq` is used. `BREWQ_CACHE_MAX_AGE` overrides cache
+age in seconds. There are no preset-management commands or named column presets.
 
-## What it's not
+The `auto` pseudo-column in search configuration selects an available raw metric
+from the top result, preferring 90d, then 30d, then 365d. Explicit `-c auto` is
+currently also accepted but resolves directly to 90d; this inconsistency is
+tracked for correction. Prefer explicit metric columns.
 
-`brewq` is not a package manager. It does not install, uninstall, upgrade, manage services, or replace Brewfile workflows. It is read-only.
+## Stability and development
 
-## Documentation
+The September 2026 review identified release gaps in config/cache validation,
+installed-state reconciliation, incomplete refresh recovery, and scheduling
+before output. These are tracked in milestone `brewq-4oc`. Current behavior above
+is not a claim that those gaps are fixed.
 
-- `docs/vision.md` — product goals and non-goals
-- `docs/product-spec.md` — requirements and first-release scope
-- `docs/cli-design.md` — command surface, options, columns, config model
-- `docs/local-workflows.md` — dotfiles aliases/functions this tool absorbs
+```sh
+uv sync --extra dev
+uv run python scripts/verify.py
+bd ready
+bd list --status=in_progress
+```
 
-## Repository Layout
+Verification runs Ruff, pytest, subprocess CLI smoke checks, and an installed-shim
+help check. The last check does not yet prove installed/source parity; artifact
+verification is part of stabilization.
 
-- `src/brewq/` — Python package
-- `tests/` — test suite
-- `scripts/` — verify, bump, benchmark, seed cache build
-- `legacy/bsx-prototype.zsh` — shell prototype (provenance)
+Maintained documentation:
+
+- [AGENTS.md](AGENTS.md): contributor workflow, ownership, and verification.
+- [Design and roadmap](docs/roadmap.md): philosophy, architecture, release gates,
+  and preserved historical decisions.
+
+Source is in `src/brewq/`, tests in `tests/`, and development commands in
+`scripts/`. `legacy/bsx-prototype.zsh` is preserved provenance.

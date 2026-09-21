@@ -1,3 +1,6 @@
+> Historical snapshot, archived 2026-09-21. This document is not the current contract or roadmap.
+> See the repository README, AGENTS.md, and docs/roadmap.md. Paths and issue status below reflect the original context.
+
 # Cache Bootstrap and Refresh Scheduling Design
 
 Date: 2026-06-29

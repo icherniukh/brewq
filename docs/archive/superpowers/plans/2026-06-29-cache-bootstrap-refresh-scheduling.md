@@ -1,3 +1,6 @@
+> Historical snapshot, archived 2026-09-21. This document is not the current contract or roadmap.
+> See the repository README, AGENTS.md, and docs/roadmap.md. Paths and issue status below reflect the original context.
+
 # Automatic Cache Lifecycle Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.

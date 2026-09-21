@@ -1,3 +1,6 @@
+> Historical snapshot, archived 2026-09-21. This document is not the current contract or roadmap.
+> See the repository README, AGENTS.md, and docs/roadmap.md. Paths and issue status below reflect the original context.
+
 # Product Spec
 
 This spec is intentionally directional. It defines the product boundaries and core interfaces, but avoids over-prescribing ranking formulas, renderer details, cache internals, or implementation order. Future implementation work should inspect the code, Homebrew behavior, and real output before filling in specifics.

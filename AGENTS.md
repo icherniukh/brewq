@@ -1,137 +1,100 @@
-# AGENTS.md
+# Working on brewq
 
-This repo is the new home for `brewq`: a read-only Homebrew query and analytics tool.
+## Read first
 
-## Orientation
+- [README.md](README.md) is the current user-facing CLI/configuration reference.
+- [docs/roadmap.md](docs/roadmap.md) owns product rationale, architectural direction,
+  stabilization gates, and the historical-document index.
+- `docs/archive/` contains superseded snapshots, not current implementation policy.
 
-- Canonical vision: `docs/vision.md`
-- Directional product spec: `docs/product-spec.md`
-- CLI sketch: `docs/cli-design.md`
-- Local workflows to replace: `docs/local-workflows.md`
-- Historical prototype: `legacy/bsx-prototype.zsh`
+Keep these three documents maintained. Do not repeat the CLI contract or defaults
+in additional guides. Preserve historical decisions through the archive.
 
-`brewq` is not a Homebrew manager. Do not add install, uninstall, upgrade, services, Brewfile, TUI, GUI, or multi-package-manager behavior unless the product direction is explicitly changed.
+## Product boundary
 
-## Current Framing
+Brewq is a compact, read-only Homebrew query and analytics tool. Keep search at
+the root command, installed inspection in `list`, columns as the output extension
+point, and TSV as the sole machine-readable format. No package management,
+services, Brewfiles, TUI/GUI, or multi-package-manager abstraction.
 
-The core shape is query + analytics:
+The baseline sorts by 90-day install volume and displays TREND in the default
+table. Changing that display default, removing compatibility aliases, or moving
+the random layout lab requires an explicit decision in `brewq-h7m`, not an
+incidental documentation edit. Do not restore presets or temporary palette flags.
 
-- query packages by name and description
-- surface raw 90-day install volume as the default trust/discovery signal —
-  see brewq-253; a trending signal (recent install rate vs. a package's own
-  historical baseline) remains available as an explicit, demoted metric
-- show useful configurable columns
-- provide script-friendly output
-- list installed formulae/casks with richer metadata
-- keep cache behavior visible and reliable
+Keep competitive analysis in historical/internal design material, not public
+README or release copy. Preserve `legacy/bsx-prototype.zsh` until replacement
+behavior and the separate dotfiles migration are verified.
 
-Avoid over-locking undecided details. If a choice is not settled, mark it as `deferred` or `open` instead of turning it into implementation policy.
+## Work tracking and commits
 
-## Current CLI Contract
+Use local Beads. The stabilization milestone is `brewq-4oc`.
 
-The current implementation and docs intentionally settle these first-release choices:
-
-- Search is the root command: `brewq [search-options] <query...>`.
-- Packaging ships two identical console-script entry points, `brewq` and `bq`
-  (both `= "brewq.cli:main"` in `pyproject.toml`), so a short name is available
-  out of the box without requiring `brew alias` setup — the same pattern
-  ripgrep uses for `rg`.
-- Default search matches package names, formula aliases, and descriptions.
-- Search defaults to raw 90-day install volume ranking — see brewq-253. Reversed
-  from an earlier trending-by-default direction (see brewq-4it/brewq-sbe)
-  because a self-relative growth ratio lets low-volume "new package" artifacts
-  (recently added to Homebrew analytics tracking, not genuinely adopted)
-  outrank widely-used packages. The default table shows a literal
-  `installs_90d` column alongside `TREND`, not the old `auto` picked-window
-  column.
-- `Package.trending` returns a recent installation rate, anchored on the 90d
-  window (`installs_90d / 3`, a several-week smoothed rate) rather than the
-  raw 30d snapshot, as a multiplier of a span-weighted baseline from the
-  365d window (`4.1x`, `1.0x` = unchanged), using pseudocount smoothing
-  (`_TREND_PSEUDOCOUNT`, calibrated at 30) rather than a post-hoc confidence
-  discount + hard clamp — see brewq-sbe. The pseudocount also scales up to 3x
-  (`_TREND_MATURITY_BOOST`) when a package has few installs recorded before
-  its most recent 90d window, tapering to 1x by `_TREND_MATURITY_THRESHOLD`
-  (1500) — see brewq-4o0 (bun/sdl2-compat-style tracking artifacts otherwise
-  read as 150-270x). There is no ceiling; low-volume noise and thin history
-  are both damped by the pseudocount, not clamped. It remains available as an
-  explicit, demoted sort/column.
-- `-s` / `--sort` selects `90d` (default), `30d`, `365d`, `trending`, or `name`.
-  `auto` remains a config-only pseudo-column (not selectable via `-s`/`-c`) for
-  a user's own `output.columns` list, resolving to whichever of
-  90d/30d/365d has data for the top-ranked result.
-- Search caps results adaptively: `-t` / `--top` wins, then `output.limit`
-  from config when > 0, then terminal height on a TTY (`rows - 6`, minimum 5),
-  then no cap when piped. There is no fixed top-N constant.
-- `list --limit` is the installed-list cap.
-- `-c` selects explicit comma-joined columns. No named presets: `-u` adds the
-  `url` column to the active set, `-v` shows all package fields. `-c` and `-v`
-  are mutually exclusive.
-- Deprecated/disabled packages are hidden when results would overflow the cap;
-  `--all` includes them. Uncapped (piped) output keeps them but ranks them
-  after active packages.
-- Formula/cask name colors use theme-relative standard 16-color ANSI codes
-  (cyan/magenta) so they follow the terminal theme; color is TTY-only and
-  honors `NO_COLOR`.
-- `--tsv` is the only public machine-readable output mode.
-- Releases bundle a seed cache so the first query does not block on a full refresh.
-- When the seed is used, brewq overlays installed state from the local Cellar/Caskroom before rendering.
-- Fresh cache paths are cache-only. Stale cache renders immediately and schedules one detached, delayed, low-load refresh.
-- `refresh` and `-r` remain optional foreground recovery controls, not setup requirements.
-- `list --analytics` exposes analytics already present in the cache.
-- `random` is a local layout lab command. It is not a product-level random browser.
-
-## Verification
-
-Run before opening a PR:
-
+```sh
+bd prime
+bd ready
+bd list --status=in_progress
+bd show <id>
 ```
+
+Read acceptance criteria and dependencies before starting; claim the issue when
+work begins. Live Beads is authoritative for status. Do not infer status from Git,
+timestamps, archived plans, or dashboard snapshots. Do not maintain parallel
+Markdown task lists or duplicate GitHub issues.
+
+Priorities: P0 is an emergency; P1 is required for stabilization; P2 is supporting
+review/tooling; P3 is post-stability enhancement; P4 is exploratory backlog.
+Dependencies gate feedback and final artifact checks.
+
+Preserve unrelated tracked and untracked work. Commit only reviewed changes.
+Keep issue completion and evidence with the completing repository commit:
+
+```sh
+bd close <completed-id> --reason '<verified outcome>'
+bd export -o .beads/issues.jsonl
+```
+
+Stage the exported issue snapshot alongside the corresponding code/docs/tests.
+The export is a portable issue snapshot, not the live database or a full Dolt
+backup. Re-export after changing priorities or dependencies. Do not push or touch
+remotes unless explicitly asked. Machine-local agent settings and runtime locks
+are ignored and must not become product configuration.
+
+## Runtime and verification
+
+Use mise for runtime management where pins exist. This repository declares
+Python 3.12+ and uses uv/uv.lock; do not migrate runtimes or rewrite dependency
+policy incidentally.
+
+```sh
+uv sync --extra dev
+uv run ruff check .
+uv run pytest -q
 uv run python scripts/verify.py
 ```
 
-This chains `ruff check`, `pytest`, functional CLI smoke checks (search/list, table/TSV,
-non-TTY ANSI-leak check), and the installed `brewq` shim if one is on `PATH`. It is the
-project's real pre-PR gate — `bd preflight`'s built-in checklist targets Go projects
-(`go test`, `golangci-lint`, `gofmt`) and does not apply to this repo; ignore it.
+Run full verification before a PR or completion commit changing runtime behavior.
+Use focused checks while iterating. Report exact results and unrun release checks.
+Beads' generic Go preflight checklist does not apply. A passing existing gate is
+not proof of pending artifact and state-boundary criteria in `brewq-4oc`.
 
-Individual commands, for iterating on one area:
+Use `uv run brewq` to test the checkout. User-level `brewq`/`bq` may point to an
+older installation. Verify a built artifact before replacing installed tools;
+never silently test the wrong version.
 
-- `uv run ruff check .` — lint
-- `uv run pytest -q` — unit tests (analytics, cache, cli, columns, config, inventory,
-  model, options, render, scheduler, seed)
-- `uv run python scripts/verify.py` — full gate, including subprocess-level CLI checks
-  the unit tests don't cover
+## Ownership and implementation
 
-## Working Rules
+Keep Python, argparse, the normalized package model, and the shared column
+registry. Refactor incrementally while fixing tracked behavior:
 
-- Read the relevant docs before changing code.
-- Preserve `legacy/bsx-prototype.zsh` as provenance until replacement behavior is implemented and verified.
-- Keep competitor discussion isolated to private/internal docs; do not copy it into public README/release copy.
-- Prefer small, reviewable changes.
-- Verify factual claims against files or commands.
-- Do not push or otherwise touch remotes unless explicitly asked.
+- CLI owns parsing, dispatch, diagnostics, and exit codes.
+- Config owns validation and typed defaults; options normalize requests.
+- Search policy owns matching, ranking, and limits, without I/O.
+- Cache owns versioned snapshots, completeness, refresh, and atomic persistence.
+- Inventory owns membership, installed versions, and discovered binary paths.
+- Scheduler owns deferred work; its failure must not suppress query output.
+- Columns own public field definitions; renderers own table/TSV formatting.
 
-## Remaining Open Decisions
-
-Treat these as open until a later spec resolves them:
-
-- Grouping behavior: whether formulae and casks are mixed by relevance by default, with grouping deferred or exposed.
-- Status filtering: deprecated/disabled packages are hidden from capped results
-  (`--all` shows them) and demoted to the end of uncapped output; whether exact
-  matches should still surface them is open.
-- First release packaging: Python-only release versus including the zsh prototype as unsupported legacy.
-- Post-replacement cleanup: when to update dotfiles, remove/archive `dot_scripts/executable_bsx`, and replace the old ccconfig guide with a pointer here.
-- Deferred query features: semantic/vector search, `info`, `--exact`, `--explain`, `--open`, and `list --leaves`.
-  (Trend score shipped as the default `trending` sort/column; no longer deferred.)
-- Future rewrite: whether Rust/Go is justified after measuring Python bottlenecks.
-
-## Tracker
-
-Use local beads for project status:
-
-- `bd ready`
-- `bd list --status=in_progress`
-
-Transferred tracker item:
-
-- `brewq-d9n`: `Implement brewq Python CLI from transferred bsx scope`
+Some boundaries are targets, not implemented guarantees; see the roadmap and
+issue evidence. Do not introduce generic helper/utils modules or a framework.
+Measure the full production path before further cache-format optimization.

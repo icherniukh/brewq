@@ -405,7 +405,7 @@
     <section class="grid metrics" aria-label="Project metrics">
       <article class="panel metric ready" id="metric-ready"></article>
       <article class="panel metric work" id="metric-active"></article>
-      <article class="panel metric good" id="metric-tests"></article>
+      <article class="panel metric warn" id="metric-tests"></article>
       <article class="panel metric risk" id="metric-blocked"></article>
     </section>
 
@@ -456,264 +456,132 @@
 
   <script id="dashboard-data" type="application/json">
 {
-  "generated_at": "2026-06-29 02:57 PDT",
-  "summary_text": "Read-only Homebrew query and analytics tool. Current work is focused on output polish, metadata signals, performance visibility, script-friendly behavior, and a stronger public README.",
+  "generated_at": "2026-09-21 18:38 EDT",
+  "summary_text": "Read-only Homebrew query and analytics. Stabilize state handling and the CLI contract, then review workflows and verify the installed artifact. Beads is the status source.",
   "stats": {
     "average_lead_time_hours": 0,
-    "blocked_issues": 0,
-    "closed_issues": 40,
-    "deferred_issues": 0,
+    "blocked_issues": 6,
+    "closed_issues": 59,
+    "deferred_issues": 1,
     "epics_eligible_for_closure": 0,
     "in_progress_issues": 0,
-    "open_issues": 20,
+    "open_issues": 12,
     "pinned_issues": 0,
-    "ready_issues": 20,
-    "total_issues": 60
+    "ready_issues": 6,
+    "total_issues": 72
   },
-  "completion_percent": 67,
+  "completion_percent": 82,
   "tests": {
-    "passed": 85,
-    "command": "PYTHONPATH=src uv run pytest"
+    "passed": null,
+    "command": "uv run python scripts/verify.py"
   },
   "ready": [
     {
-      "id": "brewq-9f4",
-      "title": "Refine CLI help wording, aliases, and explanation groups",
-      "summary": "Run several focused passes over brewq help. Explain important concepts like installed binaries, drop low-value wo...",
+      "id": "brewq-h7m",
+      "title": "Align compact CLI help and supported option semantics",
+      "summary": "Current source root help is 30 lines; stale global installation exposes removed presets/colors. Confirmed mismatc...",
       "labels": [
-        "docs",
-        "help"
-      ],
-      "priority": 2
-    },
-    {
-      "id": "brewq-su6",
-      "title": "Config preset management UI (brewq config create/edit/delete)",
-      "summary": "Add editor-backed preset management to brewq config subcommand. Commands: config create <name>, config edit <name...",
-      "labels": [],
-      "priority": 3
-    },
-    {
-      "id": "brewq-ztl",
-      "title": "brewq: preset configs in config.toml",
-      "summary": "Allow user to define named column presets in config.toml under [presets] section, usable via -p. Currently only c...",
-      "labels": [],
-      "priority": 3
-    },
-    {
-      "id": "brewq-2w4",
-      "title": "Create an unbeatable README",
-      "summary": "Rewrite the README into a strong first impression: 1) effortless short project pitch with a screenshot or gif of...",
-      "labels": [
-        "docs",
-        "readme"
-      ],
-      "priority": 2
-    },
-    {
-      "id": "brewq-9nb",
-      "title": "Run informal dev-agent feedback pass",
-      "summary": "Spawn a small set of research/dev agents, show them the current brewq tool and docs casually, and ask for candid...",
-      "labels": [
-        "feedback",
-        "research"
-      ],
-      "priority": 2
-    },
-    {
-      "id": "brewq-kj3",
-      "title": "Investigate package last-updated metadata column",
-      "summary": "Add a design/implementation path for showing when a package was last updated, preferably from tap/formula/cask me...",
-      "labels": [
-        "analytics",
-        "output"
-      ],
-      "priority": 2
-    },
-    {
-      "id": "brewq-zij",
-      "title": "Handle corrupt cache and config files without tracebacks",
-      "summary": "Normal search and list call JSON and TOML parsers without a user-facing error boundary. A malformed brew-all.json...",
-      "labels": [
-        "cache",
-        "config",
-        "error-handling"
+        "stabilization"
       ],
       "priority": 1
     },
     {
-      "id": "brewq-472",
-      "title": "Add cache-backed autocomplete suggestions for brew and brewq",
-      "summary": "Add an autocomplete/suggestion surface that uses the maintained brewq cache as the package-name source instead of...",
+      "id": "brewq-b14",
+      "title": "Make installed inventory authoritative and complete",
+      "summary": "inventory.overlay only sets installed=True for matching records; absent records never clear cached installed flag...",
+      "labels": [
+        "stabilization"
+      ],
+      "priority": 1
+    },
+    {
+      "id": "brewq-ar7",
+      "title": "Preserve cache repair state and render before scheduling",
+      "summary": "Reproduced metadata-only refresh -> cache.load requires_refresh=False -> scheduler returns fresh and spawns nothi...",
+      "labels": [
+        "stabilization"
+      ],
+      "priority": 1
+    },
+    {
+      "id": "brewq-4oc",
+      "title": "Stabilize brewq contract, state handling, and release artifact",
+      "summary": "September stability milestone. Keep Python, argparse, one normalized package model and shared columns. Resolve va...",
+      "labels": [],
+      "priority": 1
+    },
+    {
+      "id": "brewq-ybw",
+      "title": "Validate configuration and cache data at runtime boundaries",
+      "summary": "Reproduced in current working tree: BREWQ_CACHE_MAX_AGE=invalid makes even --help raise ValueError because config...",
+      "labels": [
+        "stabilization"
+      ],
+      "priority": 1
+    },
+    {
+      "id": "brewq-tm6",
+      "title": "Repair failing local agent hooks and remove obsolete hook invocations",
+      "summary": "",
       "labels": [],
       "priority": 2
-    },
-    {
-      "id": "brewq-73z",
-      "title": "brewq: 10x speed \u2014 cache binary format + lazy JSON",
-      "summary": "Current ~1s startup is Python overhead loading 16k packages from JSON each run. Needs: msgpack/pickle binary cach...",
-      "labels": [],
-      "priority": 2
-    },
-    {
-      "id": "brewq-jf1",
-      "title": "brewq: as-we-type fuzzy find with prefetched data",
-      "summary": "TUI mode where data is prefetched once and filtered interactively as you type. fzf-style. Requires fast in-memory...",
-      "labels": [],
-      "priority": 2
-    },
-    {
-      "id": "brewq-aur",
-      "title": "brewq alias: command to set up brew aliases (brew q, brew ql, brew qi)",
-      "summary": "Add a command (e.g. 'brewq alias setup') that configures Homebrew aliases so users can type 'brew q', 'brew ql',...",
-      "labels": [],
-      "priority": 3
-    },
-    {
-      "id": "brewq-cdj",
-      "title": "brewq: extended package metadata (cross-PM, security, tags)",
-      "summary": "Phase 2 enrichment: cross-check with MacPorts/pip/npm; community engagement (GitHub stars/issues); 3rd-party secu...",
-      "labels": [],
-      "priority": 3
-    },
-    {
-      "id": "brewq-1xx",
-      "title": "Stabilize and simplify brewq first-release CLI",
-      "summary": "Deliver a coherent, reliable first-release CLI by resolving the concrete defects and product changes already iden...",
-      "labels": [],
-      "priority": 0
-    },
-    {
-      "id": "brewq-1xx.1",
-      "title": "Define reliable brewq verification commands",
-      "summary": "Why this issue exists: passing unit tests are not enough if they do not exercise the behavior users care about. W...",
-      "labels": [],
-      "priority": 0
-    },
-    {
-      "id": "brewq-1xx.3",
-      "title": "Audit brewq test coverage against real user workflows",
-      "summary": "Why this issue exists: current tests pass while missing failures in real colored TTY output, cache-age UX, defaul...",
-      "labels": [],
-      "priority": 0
-    },
-    {
-      "id": "brewq-1xx.4",
-      "title": "Simplify brewq architecture and remove accidental complexity",
-      "summary": "Why this issue exists: recent code appears to have grown fragmented paths for columns, ranking, rendering, cache...",
-      "labels": [],
-      "priority": 0
-    },
-    {
-      "id": "brewq-1xx.5",
-      "title": "Decide and implement deprecated/disabled package filtering",
-      "summary": "Why this issue exists: deprecated and disabled packages can clutter or mislead normal search results, but hiding...",
-      "labels": [],
-      "priority": 0
-    },
-    {
-      "id": "brewq-1xx.6",
-      "title": "Redesign cache-age disclosure and stale-cache UX",
-      "summary": "Why this issue exists: leading every result with a prominent red stale-cache warning feels hostile and makes rout...",
-      "labels": [],
-      "priority": 0
-    },
-    {
-      "id": "brewq-4it",
-      "title": "Replace public popularity metrics with trending",
-      "summary": "Why this issue exists: the public install-count popularity surface should not expose proprietary/raw metrics as t...",
-      "labels": [],
-      "priority": 0
-    },
-    {
-      "id": "brewq-d78",
-      "title": "Design terminal-window-capped default output",
-      "summary": "Figure out the right default output cap for brewq search based on the terminal window view. User intent: limit ou...",
-      "labels": [],
-      "priority": 0
     }
   ],
   "active": [],
   "workstreams": [
     {
+      "name": "Stabilization",
+      "count": 4
+    },
+    {
       "name": "Other",
-      "count": 16
-    },
-    {
-      "name": "Docs and README",
       "count": 2
-    },
-    {
-      "name": "Analytics metadata",
-      "count": 1
-    },
-    {
-      "name": "CLI and output",
-      "count": 1
-    },
-    {
-      "name": "Feedback research",
-      "count": 1
-    },
-    {
-      "name": "Help and CLI UX",
-      "count": 1
     }
   ],
   "commits": [
     {
-      "sha": "e35c878",
-      "subject": "docs: mark cache lifecycle plan complete"
+      "sha": "793c774",
+      "subject": "refactor: simplify CLI columns and add binary cache loading"
     },
     {
-      "sha": "0157cf4",
-      "subject": "chore(beads): close cache lifecycle work"
+      "sha": "99f1580",
+      "subject": "docs(readme): update to match current reality (v0.3.2)"
     },
     {
-      "sha": "cd79f55",
-      "subject": "docs: describe automatic cache lifecycle"
+      "sha": "95dbfc6",
+      "subject": "chore(bump): 0.3.1 -> 0.3.2"
     },
     {
-      "sha": "5523146",
-      "subject": "fix(cache): keep scheduler checks nonblocking"
+      "sha": "a07c78d",
+      "subject": "refactor(presets): replace config management UI with thin built-in presets"
     },
     {
-      "sha": "ff0021c",
-      "subject": "build(cache): bundle release seed"
+      "sha": "5fd14da",
+      "subject": "chore(bump): 0.3.0 -> 0.3.1"
     },
     {
-      "sha": "f025147",
-      "subject": "feat(cli): automate cache bootstrap and refresh"
+      "sha": "720fe59",
+      "subject": "feat(config): preset management UI \u2014 add, remove, duplicate, list"
     },
     {
-      "sha": "fd7d70b",
-      "subject": "feat(cache): schedule low-load refreshes"
+      "sha": "f666b7f",
+      "subject": "chore(bump): 0.2.0 -> 0.3.0"
     },
     {
-      "sha": "cca0fee",
-      "subject": "feat(cache): load bundled seed data"
+      "sha": "ea84c3b",
+      "subject": "feat(presets): user-defined column presets in config.toml"
     }
   ],
   "signals": [
     {
-      "kind": "good",
-      "title": "Recent win: search correctness",
-      "body": "Tapped formulae are included from live Homebrew search, and loose fuzzy formula matches no longer surface misleading results."
+      "kind": "warn",
+      "title": "Release evidence",
+      "body": "The stabilization milestone brewq-4oc defines correctness, workflow review, and installed-artifact gates. Issue completion percentage is not release readiness."
     },
     {
       "kind": "warn",
-      "title": "Open decision: user-facing output",
-      "body": "Help shape, script-friendly mode, column presets, and color meaning need to lock before the README should become public-facing."
-    },
-    {
-      "kind": "warn",
-      "title": "Freshness caveat",
-      "body": "Tracker and git data refresh live; test count is a recorded verification value, not rerun by the dashboard refresh."
-    },
-    {
-      "kind": "good",
-      "title": "Working tree clean",
-      "body": "No uncommitted files are currently reported by git status."
+      "title": "Verification is separate",
+      "body": "This dashboard does not run checks. Run uv run python scripts/verify.py and consult issue evidence for results and outstanding release checks."
     }
   ],
   "notes": [
@@ -723,11 +591,11 @@
     },
     {
       "title": "Current Center",
-      "body": "Make terminal output trustworthy, compact, explainable, and script-friendly before expanding optional analytics columns."
+      "body": "Make config, inventory, cache recovery, and output behavior trustworthy before expanding features."
     },
     {
-      "title": "Next Best Move",
-      "body": "Lock column presets and help text, then turn the README into a public first impression with real output capture."
+      "title": "Execution order",
+      "body": "Follow bd ready and milestone dependencies: correctness and contract, workflow review, then artifact verification. Design lives in docs/roadmap.md."
     }
   ]
 }
@@ -808,8 +676,8 @@
 
       setMetric("metric-ready", ready, "ready issues", blocked ? "Some work is blocked." : "No blockers in the current tracker view.");
       setMetric("metric-active", active, "in progress", htmlEscape((data.active || []).map((issue) => issue.title).join(", ") || "No active tracker items."));
-      setMetric("metric-tests", data.tests?.passed || "n/a", "tests passing", htmlEscape(data.tests?.command || "Not recorded"));
-      setMetric("metric-blocked", blocked, "blocked", "Next risk is decision drift unless blockers appear.");
+      setMetric("metric-tests", "Not run", "verification", htmlEscape(data.tests?.command || "Not recorded"));
+      setMetric("metric-blocked", blocked, "blocked", "Dependencies determine which work can start.");
 
       const maxWorkstream = Math.max(1, ...(data.workstreams || []).map((item) => item.count));
       document.getElementById("workstreams").innerHTML = (data.workstreams || []).map((item) => `

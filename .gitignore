@@ -7,6 +7,12 @@ build/
 .cache/
 demo.tape
 
+# Machine-local agent context and runtime state (preserved on disk)
+.beads.gate.lock
+.commandcode/
+.serena/
+.ui-design/
+
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db

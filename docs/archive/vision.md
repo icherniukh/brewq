@@ -1,3 +1,6 @@
+> Historical snapshot, archived 2026-09-21. This document is not the current contract or roadmap.
+> See the repository README, AGENTS.md, and docs/roadmap.md. Paths and issue status below reflect the original context.
+
 # brewq Vision
 
 `brewq` is a fast, read-only Homebrew query and analytics tool.
