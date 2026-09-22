@@ -157,7 +157,7 @@ load operational configuration.
 The September 2026 stabilization milestone fixed config/cache validation,
 installed-state reconciliation, incomplete refresh recovery, and scheduling
 before output. Independent workflow reviews found no remaining release blocker.
-The 0.3.2 wheel, bundled seed, and both entry points were verified in an isolated
+The 0.4.0 wheel, bundled seed, and both entry points were verified in an isolated
 Python 3.12 environment; the user-level `brewq` and `bq` installation now matches.
 
 ```sh
