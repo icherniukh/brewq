@@ -183,8 +183,18 @@ def test_main_search_verbose_shows_all_fields(capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "ripgrep" in out
-    for header in ("TYPE", "VERSION", "INST", "STATUS", "30d", "90d", "365d", "TREND", "URL"):
+    for header in (
+        "TYPE", "VERSION", "INST", "STATUS", "30d", "90d", "365d", "TREND",
+        "BINARIES", "URL",
+    ):
         assert header in out
+
+
+def test_main_search_rejects_explicit_auto_column(capsys):
+    with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])):
+        rc = main(["ripgrep", "-c", "auto"])
+    assert rc == 1
+    assert "only available in search configuration" in capsys.readouterr().err
 
 
 def test_main_search_url_flag_adds_url_column(capsys):
@@ -274,7 +284,7 @@ def test_main_list_analytics_inserts_installs_before_description(capsys):
     assert header.index("90d") < header.index("DESCRIPTION")
 
 
-def test_main_list_analytics_respects_explicit_metric_column(capsys):
+def test_main_list_analytics_adds_90d_alongside_other_metric(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True, installs_30d=80_000),
     ])):
@@ -282,6 +292,7 @@ def test_main_list_analytics_respects_explicit_metric_column(capsys):
     assert rc == 0
     header = next(line for line in capsys.readouterr().out.splitlines() if "NAME" in line)
     assert "365d" in header
+    assert "90d" in header
     assert "30d" not in header
 
 
@@ -439,8 +450,27 @@ def test_seed_search_renders_before_scheduling(capsys):
         rc = main(["ripgrep"])
 
     assert rc == 0
-    assert events == ["schedule", "render"]
+    assert events == ["render", "schedule"]
     assert "cache: bundled seed; refresh scheduled" in capsys.readouterr().err
+
+
+def test_scheduler_failure_does_not_suppress_search_output(capsys):
+    loaded = _loaded([_pkg("ripgrep")], source="seed", age=100)
+    with patch("brewq.cache.load", return_value=loaded), \
+         patch("brewq.scheduler.schedule_if_needed", side_effect=OSError("unavailable")):
+        rc = main(["ripgrep"])
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "ripgrep" in captured.out
+    assert "refresh not scheduled (unavailable)" in captured.err
+
+
+def test_scheduler_cooldown_is_reported_truthfully(capsys):
+    loaded = _loaded([_pkg("ripgrep")], source="seed", age=100)
+    with patch("brewq.cache.load", return_value=loaded), \
+         patch("brewq.scheduler.schedule_if_needed", return_value="cooldown"):
+        assert main(["ripgrep"]) == 0
+    assert "refresh deferred (cooldown)" in capsys.readouterr().err
 
 
 def test_stale_user_cache_renders_and_schedules(capsys):

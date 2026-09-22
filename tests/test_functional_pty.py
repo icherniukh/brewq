@@ -37,6 +37,10 @@ def _env(tmp_path: Path) -> dict[str, str]:
     env["PYTHONPATH"] = str(SRC)
     env["BREWQ_CACHE_DIR"] = str(tmp_path)
     env["BREWQ_CONFIG"] = str(tmp_path / "config.toml")
+    # These rendering tests intentionally use cached installed metadata. Keep
+    # local inventory unavailable so a developer machine's Homebrew state cannot
+    # authoritatively replace the isolated fixture.
+    env["PATH"] = str(tmp_path / "unavailable-bin")
     env.pop("NO_COLOR", None)
     return env
 

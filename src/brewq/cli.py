@@ -28,10 +28,9 @@ def _use_color_stderr() -> bool:
 
 _SEARCH_EPILOG = """\
 Examples:
-  brewq ripgrep               search packages
-  brewq -u ripgrep            include homepage URLs
-  brewq -v git                show all package fields
-  brewq -t 10 -s 365d rust    top 10 by yearly installs
+  brewq ripgrep
+  brewq -t 10 -s 365d rust
+  brewq --tsv -c name,90d,url ripgrep
 
 Commands: list  refresh  config
 """
@@ -59,10 +58,7 @@ Examples:
 The config file controls default columns and cache freshness.
 """
 
-_COLUMN_HELP = (
-    "columns: name, type, version, 30d, 90d, 365d, trending, "
-    "binaries, description, installed, status, url"
-)
+_COLUMN_HELP = "select comma-separated columns; see README for names"
 
 
 def _positive_int(raw: str) -> int:
@@ -77,7 +73,7 @@ def _add_column_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-u", "--url", action="store_true",
                         help="add homepage URL column")
     parser.add_argument("-v", "--verbose", action="store_true",
-                        help="show all package fields")
+                        help="show the expanded package field set")
 
 
 def _build_search_parser() -> argparse.ArgumentParser:
@@ -88,19 +84,22 @@ def _build_search_parser() -> argparse.ArgumentParser:
         formatter_class=_FORMATTER,
     )
     parser.add_argument("query", nargs="*", help="search terms")
-    parser.add_argument("-s", "--sort", metavar="FIELD",
-                        help="sort by: 90d (default), 30d, 365d, trending, name")
-    parser.add_argument("-t", "--top", type=_positive_int, metavar="N",
-                        help="show top N matches (default: fill terminal)")
-    _add_column_flags(parser)
-    parser.add_argument("-l", "--installed", action="store_true",
+    search = parser.add_argument_group("search")
+    search.add_argument("-s", "--sort", metavar="FIELD",
+                        help=f"sort by {options_mod.sort_choices_text()} (default: 90d)")
+    search.add_argument("-t", "--top", type=_positive_int, metavar="N",
+                        help="cap matches (otherwise config, TTY height, or no pipe cap)")
+    search.add_argument("-l", "--installed", action="store_true",
                         help="only installed packages")
-    parser.add_argument("-r", "--refresh", action="store_true",
-                        help="refresh cache before searching")
-    parser.add_argument("--all", action="store_true",
+    search.add_argument("--all", action="store_true",
                         help="include deprecated and disabled packages")
-    parser.add_argument("--tsv", action="store_true",
-                        help="tab-separated output for scripting")
+    output = parser.add_argument_group("output")
+    _add_column_flags(output)
+    output.add_argument("--tsv", action="store_true",
+                        help="tab-separated rows without a header")
+    cache = parser.add_argument_group("cache")
+    cache.add_argument("-r", "--refresh", action="store_true",
+                       help="force refresh before searching")
     parser.add_argument("--version", action="version",
                         version=f"brewq {__version__}")
     return parser
@@ -190,7 +189,7 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     list_cols_cfg = cfg["list"]["columns"]
 
     try:
-        col_defs = columns_mod.resolve(opts.columns_spec, list_cols_cfg)
+        col_defs = columns_mod.resolve(opts.columns_spec, list_cols_cfg, allow_auto=False)
     except ValueError as exc:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1
@@ -207,17 +206,18 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
 
     packages = options_mod.rank_installed(packages, opts)
 
-    _finish_cache_command(loaded, cfg)
     if opts.tsv_output:
         render_mod.render_tsv(packages, col_defs, out=sys.stdout)
     else:
         render_mod.render_table(packages, col_defs, out=sys.stdout)
+    sys.stdout.flush()
+    _finish_cache_command(loaded, cfg)
     return 0
 
 
 def _ensure_list_analytics_column(col_defs: list) -> list:
     keys = {c.key for c in col_defs}
-    if keys & {"installs_30d", "installs_90d", "installs_365d"}:
+    if "installs_90d" in keys:
         return col_defs
     installs_col = columns_mod.resolve("installs_90d", [])[0]
     desc_idx = next((i for i, col in enumerate(col_defs) if col.key == "description"), None)
@@ -331,7 +331,7 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         # "default" is resolved after ranking: it may contain "auto", which needs
         # the top result to pick a representative raw metric column.
         try:
-            col_defs = columns_mod.resolve(opts.columns_spec, default_cols)
+            col_defs = columns_mod.resolve(opts.columns_spec, default_cols, allow_auto=False)
         except ValueError as exc:
             print(f"brewq: {exc}", file=sys.stderr)
             return 1
@@ -358,10 +358,10 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
 
     ranked = options_mod.rank(packages, opts)
 
-    _finish_cache_command(loaded, cfg)
     if not ranked:
         query_str = " ".join(opts.query) if opts.query else "(installed filter)"
         print(f"No results for: {query_str}", file=sys.stderr)
+        _finish_cache_command(loaded, cfg)
         return 0
 
     if col_defs is None:
@@ -383,6 +383,8 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
             out=sys.stdout,
             sorted_col=opts.sort,
         )
+    sys.stdout.flush()
+    _finish_cache_command(loaded, cfg)
     return 0
 
 
@@ -400,11 +402,25 @@ def _load_cache() -> cache_mod.CacheLoad | None:
 
 def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict) -> None:
     max_age = int(cfg["cache"]["max_age_seconds"])
-    scheduler_state = scheduler_mod.schedule_if_needed(loaded, max_age)
-    suffix = "refresh scheduled" if scheduler_state == "scheduled" else "refresh pending"
+    failure_detail = "unknown scheduler error"
+    try:
+        scheduler_state = scheduler_mod.schedule_if_needed(loaded, max_age)
+    except Exception as exc:
+        scheduler_state = "failed"
+        failure_detail = " ".join(str(exc).splitlines())[:120]
+
+    suffixes = {
+        "scheduled": "refresh scheduled",
+        "pending": "refresh pending",
+        "cooldown": "refresh deferred (cooldown)",
+        "deferred": "refresh deferred",
+        "failed": f"refresh not scheduled ({failure_detail})",
+    }
+    suffix = suffixes.get(scheduler_state)
 
     if loaded.source == "seed":
-        print(f"cache: bundled seed; {suffix}", file=sys.stderr)
+        detail = f"; {suffix}" if suffix else ""
+        print(f"cache: bundled seed{detail}", file=sys.stderr)
         return
 
     age_str = _format_age(loaded.age_seconds)
@@ -412,7 +428,8 @@ def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict) -> None:
         age_str = f"{_COLOR_RED}{age_str}{_RESET}"
 
     if loaded.requires_refresh or loaded.age_seconds >= max_age:
-        print(f"cache: {age_str} old; {suffix}", file=sys.stderr)
+        detail = f"; {suffix}" if suffix else ""
+        print(f"cache: {age_str} old{detail}", file=sys.stderr)
     else:
         print(f"cache: {age_str} old", file=sys.stderr)
 
@@ -434,22 +451,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     raw_argv = _normalize_argv(raw_argv)
 
-    cfg = config_mod.load()
-
     # Route subcommands only when they are the first token. Search remains the
     # default command even when query terms are named like subcommands.
     if raw_argv and raw_argv[0] in _COMMANDS:
         args = _build_command_parser().parse_args(raw_argv)
-        if args.command == "list":
-            return _cmd_list(args, cfg)
         if args.command == "refresh":
             return _cmd_refresh(args)
         if args.command == "config":
             return _cmd_config(args)
+        cfg = config_mod.load()
+        if args.command == "list":
+            return _cmd_list(args, cfg)
         if args.command == "random":
             return _cmd_random(args, cfg)
 
     args = _build_search_parser().parse_args(raw_argv)
+    cfg = config_mod.load()
     return _cmd_search(args, cfg)
 
 

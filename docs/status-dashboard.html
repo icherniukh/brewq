@@ -456,53 +456,26 @@
 
   <script id="dashboard-data" type="application/json">
 {
-  "generated_at": "2026-09-21 18:38 EDT",
+  "generated_at": "2026-09-22 10:25 EDT",
   "summary_text": "Read-only Homebrew query and analytics. Stabilize state handling and the CLI contract, then review workflows and verify the installed artifact. Beads is the status source.",
   "stats": {
     "average_lead_time_hours": 0,
-    "blocked_issues": 6,
-    "closed_issues": 59,
+    "blocked_issues": 5,
+    "closed_issues": 63,
     "deferred_issues": 1,
     "epics_eligible_for_closure": 0,
     "in_progress_issues": 0,
-    "open_issues": 12,
+    "open_issues": 8,
     "pinned_issues": 0,
-    "ready_issues": 6,
+    "ready_issues": 3,
     "total_issues": 72
   },
-  "completion_percent": 82,
+  "completion_percent": 88,
   "tests": {
     "passed": null,
     "command": "uv run python scripts/verify.py"
   },
   "ready": [
-    {
-      "id": "brewq-h7m",
-      "title": "Align compact CLI help and supported option semantics",
-      "summary": "Current source root help is 30 lines; stale global installation exposes removed presets/colors. Confirmed mismatc...",
-      "labels": [
-        "stabilization"
-      ],
-      "priority": 1
-    },
-    {
-      "id": "brewq-b14",
-      "title": "Make installed inventory authoritative and complete",
-      "summary": "inventory.overlay only sets installed=True for matching records; absent records never clear cached installed flag...",
-      "labels": [
-        "stabilization"
-      ],
-      "priority": 1
-    },
-    {
-      "id": "brewq-ar7",
-      "title": "Preserve cache repair state and render before scheduling",
-      "summary": "Reproduced metadata-only refresh -> cache.load requires_refresh=False -> scheduler returns fresh and spawns nothi...",
-      "labels": [
-        "stabilization"
-      ],
-      "priority": 1
-    },
     {
       "id": "brewq-4oc",
       "title": "Stabilize brewq contract, state handling, and release artifact",
@@ -511,34 +484,44 @@
       "priority": 1
     },
     {
-      "id": "brewq-ybw",
-      "title": "Validate configuration and cache data at runtime boundaries",
-      "summary": "Reproduced in current working tree: BREWQ_CACHE_MAX_AGE=invalid makes even --help raise ValueError because config...",
-      "labels": [
-        "stabilization"
-      ],
-      "priority": 1
-    },
-    {
       "id": "brewq-tm6",
       "title": "Repair failing local agent hooks and remove obsolete hook invocations",
       "summary": "",
       "labels": [],
+      "priority": 2
+    },
+    {
+      "id": "brewq-9nb",
+      "title": "Run informal dev-agent feedback pass",
+      "summary": "Spawn a small set of research/dev agents, show them the current brewq tool and docs casually, and ask for candid...",
+      "labels": [
+        "feedback",
+        "research",
+        "stabilization"
+      ],
       "priority": 2
     }
   ],
   "active": [],
   "workstreams": [
     {
-      "name": "Stabilization",
-      "count": 4
-    },
-    {
       "name": "Other",
       "count": 2
+    },
+    {
+      "name": "Feedback research",
+      "count": 1
+    },
+    {
+      "name": "Stabilization",
+      "count": 1
     }
   ],
   "commits": [
+    {
+      "sha": "ece2576",
+      "subject": "chore: establish stabilization roadmap and release gates"
+    },
     {
       "sha": "793c774",
       "subject": "refactor: simplify CLI columns and add binary cache loading"
@@ -566,10 +549,6 @@
     {
       "sha": "f666b7f",
       "subject": "chore(bump): 0.2.0 -> 0.3.0"
-    },
-    {
-      "sha": "ea84c3b",
-      "subject": "feat(presets): user-defined column presets in config.toml"
     }
   ],
   "signals": [

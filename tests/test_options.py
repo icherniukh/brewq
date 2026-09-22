@@ -72,8 +72,10 @@ def test_parse_sort_case_insensitive():
 
 
 def test_parse_sort_unknown_raises():
-    with pytest.raises(ValueError, match="Unknown sort field"):
+    with pytest.raises(ValueError, match="Unknown sort field") as error:
         parse_sort("bogus")
+    assert str(error.value).endswith("Valid: 90d, 30d, 365d, trending, name")
+    assert "i90" not in str(error.value)
 
 
 # --- rank ---

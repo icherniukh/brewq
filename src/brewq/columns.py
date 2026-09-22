@@ -16,13 +16,17 @@ class ColumnDef:
 
 
 def _short_version(pkg: Package) -> str:
-    version = pkg.version or "-"
+    version = _version(pkg) or "-"
     max_len = 20
     if len(version) <= max_len:
         return version
     prefix_len = 10
     suffix_len = 8
     return f"{version[:prefix_len]}…{version[-suffix_len:]}"
+
+
+def _version(pkg: Package) -> str:
+    return pkg.installed_version if pkg.installed and pkg.installed_version else pkg.version
 
 
 def _fmt(val: int) -> str:
@@ -43,7 +47,7 @@ def _fmt_binaries(p: Package) -> str:
 _COLUMN_REGISTRY: dict[str, ColumnDef] = {
     "name": ColumnDef("name", "NAME", "left", lambda p: p.name, lambda p: p.name),
     "type": ColumnDef("type", "TYPE", "left", lambda p: p.type, lambda p: p.type),
-    "version": ColumnDef("version", "VERSION", "left", _short_version, lambda p: p.version or ""),
+    "version": ColumnDef("version", "VERSION", "left", _short_version, _version),
     "installs_30d": ColumnDef(
         "installs_30d", "30d", "right",
         lambda p: _fmt(p.installs_30d),
@@ -83,6 +87,8 @@ _COLUMN_REGISTRY: dict[str, ColumnDef] = {
     "url": ColumnDef("url", "URL", "left", lambda p: p.url or "-", lambda p: p.url or ""),
 }
 
+CANONICAL_COLUMNS: tuple[str, ...] = tuple(_COLUMN_REGISTRY)
+
 # All aliases resolve to canonical registry keys.
 _ALIASES: dict[str, str] = {
     # name
@@ -110,10 +116,6 @@ _ALIASES: dict[str, str] = {
     # trending (recent rate vs own historical baseline)
     "trend": "trending",
     "hot": "trending",
-    "pop": "trending",
-    "popularity": "trending",
-    "score": "trending",
-    "rank": "trending",
     # binaries
     "bin": "binaries",
     "bins": "binaries",
@@ -133,7 +135,7 @@ _ALIASES: dict[str, str] = {
 FULL_COLUMNS: list[str] = [
     "name", "type", "version", "installed", "status",
     "installs_30d", "installs_90d", "installs_365d", "trending",
-    "url", "description",
+    "binaries", "url", "description",
 ]
 
 
@@ -167,6 +169,8 @@ def resolve(
     spec: str | list[str],
     default_columns: list[str],
     representative_metric: str | None = None,
+    *,
+    allow_auto: bool = True,
 ) -> list[ColumnDef]:
     """Expand a column spec (comma-joined key list or "default") into ColumnDef list."""
     if spec == "default":
@@ -179,12 +183,13 @@ def resolve(
     resolved = []
     for key in keys:
         if key == "auto":
+            if not allow_auto:
+                raise ValueError("Column 'auto' is only available in search configuration")
             canonical = representative_metric or "installs_90d"
         else:
             canonical = _ALIASES.get(key, key)
         col = _COLUMN_REGISTRY.get(canonical)
         if col is None:
-            valid = sorted(set(list(_COLUMN_REGISTRY) + list(_ALIASES)))
-            raise ValueError(f"Unknown column {key!r}. Valid: {', '.join(valid)}")
+            raise ValueError(f"Unknown column {key!r}. Valid: {', '.join(CANONICAL_COLUMNS)}")
         resolved.append(col)
     return resolved

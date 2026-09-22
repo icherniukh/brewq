@@ -22,13 +22,13 @@ theme colors, and binary cache loading; it is not a release-readiness declaratio
 
 ### First: reliable state and output
 
-P1 work is required for stability. Configuration and cache schema validation
-(`brewq-ybw`) must handle malformed values without tracebacks and keep help,
-version, and config-path discovery available. Inventory reconciliation
-(`brewq-b14`) must account for removals, inventory-only packages, custom roots,
-and failed scans. Cache recovery (`brewq-ar7`) must preserve usable analytics
-and incomplete-refresh state, repair recent corruption, and render/flush before
-best-effort background scheduling.
+The first P1 implementation slice covers configuration and cache schema
+validation (`brewq-ybw`), inventory reconciliation (`brewq-b14`), and cache
+recovery (`brewq-ar7`). Malformed state now falls back without blocking help,
+version, or config-path discovery. Inventory distinguishes a successful empty
+scan from failed roots and keeps installed versions separate from catalog
+versions. Cache health is explicit, partial refreshes preserve usable analytics,
+and output is flushed before best-effort background scheduling.
 
 These workstreams can progress independently. Share explicit data contracts
 rather than relying on mutable flags or file age to imply health. Regression
@@ -36,12 +36,11 @@ scenarios belong with the fixes.
 
 ### Alongside correctness: one usable contract
 
-CLI alignment (`brewq-h7m`) owns concise grouped help and consistency among
-option descriptions, accepted values, defaults, config, and TSV. Resolve the
-expanded-column/binaries mismatch, explicit/configured `auto`, conditional
-analytics insertion, and refresh semantics. Prefer canonical metric names in
-errors; evaluate misleading popularity aliases and relocation of the layout lab
-without silently changing compatibility.
+CLI alignment (`brewq-h7m`) establishes concise grouped help and consistency
+among option descriptions, accepted values, defaults, config, and TSV. The
+expanded set includes binaries, `auto` is configuration-only, list analytics
+inserts 90d specifically, and ambiguous popularity aliases are rejected. The
+layout lab remains available as the explicitly non-product `random` command.
 
 Documentation consolidation (`brewq-k1m`) establishes three maintained documents:
 README for the actual CLI, AGENTS for contributor workflow, and this document for

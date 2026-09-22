@@ -13,8 +13,18 @@ def isolated_cache(tmp_path, monkeypatch):
     monkeypatch.setenv("BREWQ_CACHE_DIR", str(tmp_path))
 
 
-def _load(source: str = "seed", age: float = 0) -> cache.CacheLoad:
-    return cache.CacheLoad(source=source, packages=[], age_seconds=age)
+def _load(
+    source: str = "seed",
+    age: float = 0,
+    *,
+    repair_needed: bool = False,
+) -> cache.CacheLoad:
+    return cache.CacheLoad(
+        source=source,
+        packages=[],
+        age_seconds=age,
+        repair_needed=repair_needed,
+    )
 
 
 def test_fresh_user_cache_does_not_spawn():
@@ -66,6 +76,33 @@ def test_failed_attempt_observes_retry_cooldown():
 
     with patch("brewq.scheduler.subprocess.Popen") as spawn:
         outcome = scheduler.schedule_if_needed(_load("seed"), max_age=100, now=1_000)
+
+    assert outcome == "cooldown"
+    spawn.assert_not_called()
+
+
+def test_recent_user_cache_with_repair_state_schedules():
+    with patch("brewq.scheduler.subprocess.Popen") as spawn:
+        spawn.return_value.pid = 123
+        outcome = scheduler.schedule_if_needed(
+            _load("user", age=10, repair_needed=True),
+            max_age=100,
+            now=1_000,
+        )
+
+    assert outcome == "scheduled"
+    spawn.assert_called_once()
+
+
+def test_partial_repair_reports_cooldown_instead_of_fresh():
+    scheduler.write_state({"state": "partial", "completed_at": 900, "detail": "offline"})
+
+    with patch("brewq.scheduler.subprocess.Popen") as spawn:
+        outcome = scheduler.schedule_if_needed(
+            _load("user", age=10, repair_needed=True),
+            max_age=100,
+            now=1_000,
+        )
 
     assert outcome == "cooldown"
     spawn.assert_not_called()

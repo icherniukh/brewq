@@ -1,24 +1,10 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 from brewq.model import Package
-
-
-def formula_binaries(name: str) -> list[str]:
-    """Return sorted binary names from the installed formula's bin/ directory."""
-    simple = name.split("/")[-1]
-    for prefix in ("/opt/homebrew/opt", "/usr/local/opt"):
-        bin_dir = Path(f"{prefix}/{simple}/bin")
-        if bin_dir.exists():
-            try:
-                return sorted(f.name for f in bin_dir.iterdir())
-            except OSError:
-                pass
-    return []
 
 
 @dataclass(frozen=True)
@@ -26,62 +12,124 @@ class InstalledRecord:
     name: str
     type: str
     version: str
+    binaries: tuple[str, ...] = ()
 
 
-def _directories(path: Path) -> list[Path]:
+@dataclass(frozen=True)
+class InventoryScan:
+    records: dict[tuple[str, str], InstalledRecord]
+    complete_types: frozenset[str]
+
+
+def _directories(path: Path) -> tuple[list[Path], bool]:
     try:
-        return [entry for entry in path.iterdir() if entry.is_dir()]
+        return [entry for entry in path.iterdir() if entry.is_dir()], True
     except OSError:
-        return []
+        return [], False
 
 
-def _formula_record(formula_dir: Path) -> tuple[int, InstalledRecord] | None:
+def _formula_binaries(version_dir: Path) -> tuple[tuple[str, ...], bool]:
+    try:
+        return tuple(sorted(entry.name for entry in (version_dir / "bin").iterdir())), True
+    except FileNotFoundError:
+        return (), True
+    except OSError:
+        return (), False
+
+
+def _formula_record(formula_dir: Path) -> tuple[tuple[int, InstalledRecord] | None, bool]:
     candidates: list[tuple[int, InstalledRecord]] = []
-    for version_dir in _directories(formula_dir):
+    version_dirs, complete = _directories(formula_dir)
+    for version_dir in version_dirs:
         receipt = version_dir / "INSTALL_RECEIPT.json"
         try:
             raw = json.loads(receipt.read_text())
             installed_at = int(raw["time"])
             tap = str(raw["source"]["tap"])
         except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            complete = False
             continue
         name = formula_dir.name if tap == "homebrew/core" else f"{tap}/{formula_dir.name}"
-        candidates.append((installed_at, InstalledRecord(name, "formula", version_dir.name)))
-    return max(candidates, key=lambda candidate: candidate[0], default=None)
+        binaries, binaries_complete = _formula_binaries(version_dir)
+        complete = complete and binaries_complete
+        candidates.append(
+            (installed_at, InstalledRecord(name, "formula", version_dir.name, binaries))
+        )
+    return max(candidates, key=lambda candidate: candidate[0], default=None), complete
 
 
-def _cask_record(cask_dir: Path) -> InstalledRecord | None:
-    versions = [entry for entry in _directories(cask_dir) if not entry.name.startswith(".")]
+def _cask_record(cask_dir: Path) -> tuple[InstalledRecord | None, bool]:
+    version_dirs, complete = _directories(cask_dir)
+    versions = [entry for entry in version_dirs if not entry.name.startswith(".")]
     try:
         newest = max(versions, key=lambda entry: entry.stat().st_mtime)
     except (OSError, ValueError):
-        return None
-    return InstalledRecord(cask_dir.name, "cask", newest.name)
+        return None, complete and not versions
+    return InstalledRecord(cask_dir.name, "cask", newest.name), complete
 
 
-def scan(cellar: Path, caskroom: Path) -> dict[tuple[str, str], InstalledRecord]:
+def scan(cellar: Path, caskroom: Path) -> InventoryScan:
     records: dict[tuple[str, str], InstalledRecord] = {}
-    for formula_dir in _directories(cellar):
-        candidate = _formula_record(formula_dir)
+    complete_types: set[str] = set()
+
+    formula_dirs, formulae_complete = _directories(cellar)
+    for formula_dir in formula_dirs:
+        candidate, record_complete = _formula_record(formula_dir)
+        formulae_complete = formulae_complete and record_complete
         if candidate is not None:
             record = candidate[1]
             records[(record.type, record.name)] = record
-    for cask_dir in _directories(caskroom):
-        record = _cask_record(cask_dir)
+    if formulae_complete:
+        complete_types.add("formula")
+
+    cask_dirs, casks_complete = _directories(caskroom)
+    for cask_dir in cask_dirs:
+        record, record_complete = _cask_record(cask_dir)
+        casks_complete = casks_complete and record_complete
         if record is not None:
             records[(record.type, record.name)] = record
-    return records
+    if casks_complete:
+        complete_types.add("cask")
+
+    return InventoryScan(records, frozenset(complete_types))
 
 
 def overlay(
     packages: list[Package],
-    records: Mapping[tuple[str, str], InstalledRecord],
+    inventory: InventoryScan,
 ) -> None:
+    matched: set[tuple[str, str]] = set()
     for package in packages:
-        record = records.get((package.type, package.name))
+        key = (package.type, package.name)
+        record = inventory.records.get(key)
         if record is None:
+            if package.type in inventory.complete_types:
+                package.installed = False
+                package.installed_version = ""
+                if package.type == "formula":
+                    package.binaries = []
             continue
+        matched.add(key)
         package.installed = True
-        package.version = record.version
+        package.installed_version = record.version
         if package.type == "formula":
-            package.binaries = formula_binaries(package.name)
+            package.binaries = list(record.binaries)
+
+    for key, record in inventory.records.items():
+        if key in matched:
+            continue
+        packages.append(Package(
+            name=record.name,
+            type=record.type,
+            description="",
+            url="",
+            version="",
+            installs_30d=-1,
+            installs_90d=-1,
+            installs_365d=-1,
+            installed=True,
+            deprecated=False,
+            disabled=False,
+            binaries=list(record.binaries),
+            installed_version=record.version,
+        ))

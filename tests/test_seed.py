@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from brewq import cache, seed
-from brewq.inventory import InstalledRecord
+from brewq.inventory import InstalledRecord, InventoryScan
 
 
 def _data() -> dict:
@@ -77,19 +77,21 @@ def test_cache_load_prefers_valid_user_cache(tmp_path, monkeypatch):
 def test_cache_loads_seed_and_overlays_installed_state(tmp_path, monkeypatch):
     monkeypatch.setenv("BREWQ_CACHE_DIR", str(tmp_path))
     metadata = seed.SeedMetadata(schema_version=1, generated_at=1_700_000_000)
-    records = {
-        ("formula", "ripgrep"): InstalledRecord("ripgrep", "formula", "14.1"),
-    }
+    inventory = InventoryScan(
+        {("formula", "ripgrep"): InstalledRecord("ripgrep", "formula", "14.1")},
+        frozenset({"formula", "cask"}),
+    )
     with patch("brewq.seed.load_resource", return_value=(_data(), metadata)), \
          patch("brewq.brew.storage_roots", return_value=(Path("/cellar"), Path("/caskroom"))), \
-         patch("brewq.inventory.scan", return_value=records):
+         patch("brewq.inventory.scan", return_value=inventory):
         loaded = cache.load(now=1_700_000_100)
 
     ripgrep = next(package for package in loaded.packages if package.name == "ripgrep")
     assert loaded.source == "seed"
     assert loaded.age_seconds == 100
     assert ripgrep.installed is True
-    assert ripgrep.version == "14.1"
+    assert ripgrep.version == "15.0"
+    assert ripgrep.installed_version == "14.1"
 
 
 def test_invalid_user_cache_falls_back_to_seed(tmp_path, monkeypatch):

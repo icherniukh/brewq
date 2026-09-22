@@ -23,7 +23,7 @@ def test_full_columns_resolve():
     assert keys == [
         "name", "type", "version", "installed", "status",
         "installs_30d", "installs_90d", "installs_365d", "trending",
-        "url", "description",
+        "binaries", "url", "description",
     ]
 
 
@@ -63,6 +63,16 @@ def test_version_raw_keeps_full_version():
     assert cols[0].raw_getter(pkg) == "20240203-110809,5046fc22"
 
 
+def test_version_prefers_installed_version_for_installed_package():
+    pkg = _pkg(version="available")
+    pkg.installed = True
+    pkg.installed_version = "installed"
+    col = resolve("version", [])[0]
+    assert col.getter(pkg) == "installed"
+    assert col.raw_getter is not None
+    assert col.raw_getter(pkg) == "installed"
+
+
 def test_resolve_alias_trending():
     cols = resolve("trending", ["name"])
     assert cols[0].key == "trending"
@@ -78,9 +88,10 @@ def test_resolve_alias_hot():
     assert cols[0].key == "trending"
 
 
-def test_resolve_alias_popularity_maps_to_trending():
-    cols = resolve("popularity", ["name"])
-    assert cols[0].key == "trending"
+@pytest.mark.parametrize("alias", ["pop", "popularity", "score", "rank"])
+def test_misleading_trend_aliases_are_rejected(alias):
+    with pytest.raises(ValueError, match="Unknown column"):
+        resolve(alias, ["name"])
 
 
 def test_resolve_auto_uses_representative_metric():
@@ -91,6 +102,11 @@ def test_resolve_auto_uses_representative_metric():
 def test_resolve_auto_without_metric_falls_back_to_90d():
     cols = resolve(["auto"], [])
     assert cols[0].key == "installs_90d"
+
+
+def test_resolve_auto_can_be_reserved_for_configuration():
+    with pytest.raises(ValueError, match="only available in search configuration"):
+        resolve("auto", [], allow_auto=False)
 
 
 def test_resolve_alias_installs():
@@ -159,8 +175,10 @@ def test_resolve_alias_homepage():
 
 
 def test_resolve_unknown_raises():
-    with pytest.raises(ValueError, match="Unknown column"):
+    with pytest.raises(ValueError, match="Unknown column") as error:
         resolve("bogus_col", [])
+    assert "installs_90d" in str(error.value)
+    assert "homepage" not in str(error.value)
 
 
 def test_installs_30d_display_with_comma():

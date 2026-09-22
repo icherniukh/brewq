@@ -7,7 +7,7 @@ from subprocess import CompletedProcess
 from unittest.mock import patch
 
 from brewq import brew
-from brewq.inventory import InstalledRecord, overlay, scan
+from brewq.inventory import InstalledRecord, InventoryScan, overlay, scan
 from brewq.model import Package
 
 
@@ -35,14 +35,16 @@ def _package(name: str, type_: str) -> Package:
 def test_scan_reconstructs_formula_names_and_selects_newest_receipt(tmp_path):
     cellar = tmp_path / "Cellar"
     caskroom = tmp_path / "Caskroom"
+    caskroom.mkdir()
     _receipt(cellar / "ripgrep" / "14.0" / "INSTALL_RECEIPT.json", installed_at=10, tap="homebrew/core")
     _receipt(cellar / "ripgrep" / "15.0" / "INSTALL_RECEIPT.json", installed_at=20, tap="homebrew/core")
     _receipt(cellar / "widget" / "2.0" / "INSTALL_RECEIPT.json", installed_at=30, tap="acme/tools")
 
-    records = scan(cellar, caskroom)
+    inventory = scan(cellar, caskroom)
 
-    assert records[("formula", "ripgrep")].version == "15.0"
-    assert records[("formula", "acme/tools/widget")].version == "2.0"
+    assert inventory.records[("formula", "ripgrep")].version == "15.0"
+    assert inventory.records[("formula", "acme/tools/widget")].version == "2.0"
+    assert inventory.complete_types == {"formula", "cask"}
 
 
 def test_scan_casks_ignores_metadata_and_selects_newest_version(tmp_path):
@@ -57,9 +59,9 @@ def test_scan_casks_ignores_metadata_and_selects_newest_version(tmp_path):
     os.utime(new, (20, 20))
     os.utime(metadata, (30, 30))
 
-    records = scan(cellar, tmp_path / "Caskroom")
+    inventory = scan(cellar, tmp_path / "Caskroom")
 
-    assert records[("cask", "firefox")].version == "125.0"
+    assert inventory.records[("cask", "firefox")].version == "125.0"
 
 
 def test_scan_skips_malformed_receipt_without_losing_other_records(tmp_path):
@@ -69,25 +71,115 @@ def test_scan_skips_malformed_receipt_without_losing_other_records(tmp_path):
     bad.write_text("not json")
     _receipt(cellar / "ripgrep" / "15.0" / "INSTALL_RECEIPT.json", installed_at=20, tap="homebrew/core")
 
-    records = scan(cellar, tmp_path / "Caskroom")
+    inventory = scan(cellar, tmp_path / "Caskroom")
 
-    assert ("formula", "broken") not in records
-    assert ("formula", "ripgrep") in records
+    assert ("formula", "broken") not in inventory.records
+    assert ("formula", "ripgrep") in inventory.records
+    assert "formula" not in inventory.complete_types
 
 
 def test_overlay_updates_only_matching_type_and_name():
     formula = _package("ripgrep", "formula")
     same_name_cask = _package("ripgrep", "cask")
-    records = {
-        ("formula", "ripgrep"): InstalledRecord("ripgrep", "formula", "15.0"),
-    }
+    inventory = InventoryScan(
+        {("formula", "ripgrep"): InstalledRecord("ripgrep", "formula", "15.0")},
+        frozenset({"formula", "cask"}),
+    )
 
-    overlay([formula, same_name_cask], records)
+    overlay([formula, same_name_cask], inventory)
 
     assert formula.installed is True
-    assert formula.version == "15.0"
+    assert formula.version == "seed"
+    assert formula.installed_version == "15.0"
     assert same_name_cask.installed is False
     assert same_name_cask.version == "seed"
+
+
+def test_successful_empty_scan_clears_stale_installed_state(tmp_path):
+    stale = _package("ripgrep", "formula")
+    stale.installed = True
+    stale.installed_version = "14.0"
+    stale.binaries = ["rg"]
+    cellar = tmp_path / "Cellar"
+    caskroom = tmp_path / "Caskroom"
+    cellar.mkdir()
+    caskroom.mkdir()
+
+    inventory = scan(cellar, caskroom)
+    overlay([stale], inventory)
+
+    assert stale.installed is False
+    assert stale.installed_version == ""
+    assert stale.binaries == []
+
+
+def test_failed_scan_preserves_stale_installed_state(tmp_path, monkeypatch):
+    stale = _package("ripgrep", "formula")
+    stale.installed = True
+    stale.installed_version = "14.0"
+
+    def unreadable(path: Path):
+        if path.name == "Cellar":
+            raise PermissionError(path)
+        return iter(())
+
+    monkeypatch.setattr(Path, "iterdir", unreadable)
+    inventory = scan(tmp_path / "Cellar", tmp_path / "Caskroom")
+    overlay([stale], inventory)
+
+    assert "formula" not in inventory.complete_types
+    assert stale.installed is True
+    assert stale.installed_version == "14.0"
+
+
+def test_missing_root_preserves_stale_installed_state(tmp_path):
+    stale = _package("ripgrep", "formula")
+    stale.installed = True
+    stale.installed_version = "14.0"
+
+    inventory = scan(tmp_path / "missing-cellar", tmp_path / "missing-caskroom")
+    overlay([stale], inventory)
+
+    assert inventory.complete_types == set()
+    assert stale.installed is True
+    assert stale.installed_version == "14.0"
+
+
+def test_inventory_only_package_is_added_with_unknown_catalog_metadata():
+    packages: list[Package] = []
+    inventory = InventoryScan(
+        {("formula", "local-tool"): InstalledRecord(
+            "local-tool", "formula", "2.1", ("local-tool",),
+        )},
+        frozenset({"formula", "cask"}),
+    )
+
+    overlay(packages, inventory)
+
+    assert len(packages) == 1
+    package = packages[0]
+    assert package.name == "local-tool"
+    assert package.version == ""
+    assert package.installed_version == "2.1"
+    assert package.description == ""
+    assert package.url == ""
+    assert package.installs_30d == -1
+    assert package.installs_90d == -1
+    assert package.installs_365d == -1
+    assert package.binaries == ["local-tool"]
+
+
+def test_formula_binaries_come_from_discovered_cellar(tmp_path):
+    cellar = tmp_path / "custom" / "Cellar"
+    version_dir = cellar / "ripgrep" / "15.0"
+    _receipt(version_dir / "INSTALL_RECEIPT.json", installed_at=20, tap="homebrew/core")
+    bin_dir = version_dir / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "rg").touch()
+
+    inventory = scan(cellar, tmp_path / "custom" / "Caskroom")
+
+    assert inventory.records[("formula", "ripgrep")].binaries == ("rg",)
 
 
 def test_storage_roots_uses_bounded_homebrew_queries():

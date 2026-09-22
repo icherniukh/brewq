@@ -20,6 +20,7 @@ class Package:
     disabled: bool
     aliases: list[str] = field(default_factory=list)
     binaries: list[str] = field(default_factory=list)
+    installed_version: str = ""
 
     @property
     def status(self) -> str:
@@ -114,12 +115,11 @@ def from_formula(
     installs_365d: int = -1,
 ) -> Package:
     installed_list = raw.get("installed") or []
-    version = ""
+    installed_version = ""
     if installed_list:
-        version = installed_list[0].get("version", "")
-    if not version:
-        versions = raw.get("versions") or {}
-        version = versions.get("stable", "")
+        installed_version = installed_list[0].get("version", "")
+    versions = raw.get("versions") or {}
+    version = versions.get("stable", "")
 
     name = raw.get("full_name") or raw["name"]
     is_installed = bool(installed_list)
@@ -136,6 +136,7 @@ def from_formula(
         deprecated=bool(raw.get("deprecated")),
         disabled=bool(raw.get("disabled")),
         aliases=list(raw.get("aliases") or []),
+        installed_version=installed_version,
     )
 
 
@@ -145,6 +146,9 @@ def from_cask(
     installs_90d: int = -1,
     installs_365d: int = -1,
 ) -> Package:
+    installed_version = raw.get("installed") or ""
+    if not isinstance(installed_version, str):
+        installed_version = ""
     return Package(
         name=raw["token"],
         type="cask",
@@ -158,4 +162,5 @@ def from_cask(
         deprecated=bool(raw.get("deprecated")),
         disabled=bool(raw.get("disabled")),
         binaries=_cask_binaries(raw),
+        installed_version=installed_version,
     )

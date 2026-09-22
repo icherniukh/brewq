@@ -7,50 +7,31 @@ from typing import Any
 from brewq import columns as columns_mod
 from brewq.model import Package
 
-# Sort aliases map user input to canonical sort fields.
-_SORT_ALIASES: dict[str, str] = {
-    # trending
-    "trending": "trending",
-    "trend": "trending",
-    "hot": "trending",
-    "default": "installs_90d",
-    # installs_30d
-    "installs_30d": "installs_30d",
-    "installs": "installs_30d",
-    "install": "installs_30d",
-    "30": "installs_30d",
-    "30d": "installs_30d",
-    "i30": "installs_30d",
-    # installs_90d
-    "installs_90d": "installs_90d",
-    "90": "installs_90d",
-    "90d": "installs_90d",
-    "i90": "installs_90d",
-    # installs_365d
-    "installs_365d": "installs_365d",
-    "365": "installs_365d",
-    "365d": "installs_365d",
-    "i365": "installs_365d",
-    "year": "installs_365d",
-    "y": "installs_365d",
-    "annual": "installs_365d",
-    # name
-    "name": "name",
-    "n": "name",
-    "nm": "name",
-    "alpha": "name",
-    "alphabetical": "name",
-    "az": "name",
-    "a-z": "name",
+# Public names, internal fields, and compatibility aliases share one registry.
+_SORT_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "90d": ("installs_90d", ("installs_90d", "90", "i90", "default")),
+    "30d": ("installs_30d", ("installs_30d", "installs", "install", "30", "i30")),
+    "365d": ("installs_365d", ("installs_365d", "365", "i365", "year", "y", "annual")),
+    "trending": ("trending", ("trend", "hot")),
+    "name": ("name", ("n", "nm", "alpha", "alphabetical", "az", "a-z")),
 }
+SORT_CHOICES: tuple[str, ...] = tuple(_SORT_SPECS)
+_SORT_ALIASES = {
+    alias: internal
+    for public, (internal, aliases) in _SORT_SPECS.items()
+    for alias in (public, *aliases)
+}
+
+
+def sort_choices_text() -> str:
+    return ", ".join(SORT_CHOICES)
 
 def parse_sort(raw: str) -> str:
     """Resolve a sort alias to a canonical sort field."""
     normalized = raw.strip().lower()
     result = _SORT_ALIASES.get(normalized)
     if result is None:
-        valid = "trending (trend, hot), 30d (i30, installs), 90d (i90), 365d (i365, y), name (n)"
-        raise ValueError(f"Unknown sort field {raw!r}. Valid: {valid}")
+        raise ValueError(f"Unknown sort field {raw!r}. Valid: {sort_choices_text()}")
     return result
 
 
