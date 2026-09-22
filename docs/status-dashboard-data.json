@@ -1,60 +1,65 @@
 {
-  "generated_at": "2026-09-22 12:54 EDT",
+  "generated_at": "2026-09-22 12:57 EDT",
   "summary_text": "Read-only Homebrew query and analytics. Stabilize state handling and the CLI contract, then review workflows and verify the installed artifact. Beads is the status source.",
   "stats": {
     "average_lead_time_hours": 0,
-    "blocked_issues": 4,
-    "closed_issues": 64,
+    "blocked_issues": 0,
+    "closed_issues": 67,
     "deferred_issues": 1,
     "epics_eligible_for_closure": 0,
     "in_progress_issues": 0,
-    "open_issues": 7,
+    "open_issues": 4,
     "pinned_issues": 0,
-    "ready_issues": 3,
+    "ready_issues": 4,
     "total_issues": 72
   },
-  "completion_percent": 89,
+  "completion_percent": 93,
   "tests": {
     "passed": null,
     "command": "uv run python scripts/verify.py"
   },
   "ready": [
     {
-      "id": "brewq-4oc",
-      "title": "Stabilize brewq contract, state handling, and release artifact",
-      "summary": "September stability milestone. Keep Python, argparse, one normalized package model and shared columns. Resolve va...",
+      "id": "brewq-472",
+      "title": "Add cache-backed autocomplete suggestions for brew and brewq",
+      "summary": "Add an autocomplete/suggestion surface that uses the maintained brewq cache as the package-name source instead of...",
       "labels": [],
-      "priority": 1
+      "priority": 3
     },
     {
-      "id": "brewq-4ri",
-      "title": "Verify release artifact and installed CLI parity",
-      "summary": "Observed /Users/ivan/.local/bin/brewq is 0.3.1 with --preset and temporary --colors; uv run brewq is 0.3.2 with -...",
-      "labels": [
-        "stabilization"
-      ],
-      "priority": 1
+      "id": "brewq-8a8",
+      "title": "Champion README with screenshot animation",
+      "summary": "Craft an appealing README with animated terminal screenshots showing brewq in action. This is the marketing-grade...",
+      "labels": [],
+      "priority": 3
     },
     {
-      "id": "brewq-tm6",
-      "title": "Repair failing local agent hooks and remove obsolete hook invocations",
-      "summary": "",
+      "id": "brewq-73z",
+      "title": "brewq: 10x speed \u2014 cache binary format + lazy JSON",
+      "summary": "Current ~1s startup is Python overhead loading 16k packages from JSON each run. Needs: msgpack/pickle binary cach...",
       "labels": [],
-      "priority": 2
+      "priority": 3
+    },
+    {
+      "id": "brewq-cdj",
+      "title": "brewq: extended package metadata (cross-PM, security, tags)",
+      "summary": "Phase 2 enrichment: cross-check with MacPorts/pip/npm; community engagement (GitHub stars/issues); 3rd-party secu...",
+      "labels": [],
+      "priority": 4
     }
   ],
   "active": [],
   "workstreams": [
     {
       "name": "Other",
-      "count": 2
-    },
-    {
-      "name": "Stabilization",
-      "count": 1
+      "count": 4
     }
   ],
   "commits": [
+    {
+      "sha": "9c7b217",
+      "subject": "test: exercise stabilized workflows"
+    },
     {
       "sha": "2f4bf2e",
       "subject": "fix: harden CLI state boundaries"
@@ -82,10 +87,6 @@
     {
       "sha": "5fd14da",
       "subject": "chore(bump): 0.3.0 -> 0.3.1"
-    },
-    {
-      "sha": "720fe59",
-      "subject": "feat(config): preset management UI \u2014 add, remove, duplicate, list"
     }
   ],
   "signals": [

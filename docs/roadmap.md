@@ -14,6 +14,10 @@ either source.
 
 ## Stabilization sequence
 
+The milestone completed on September 22, 2026. The sections below preserve the
+gates and ownership used to reach that state; Beads remains authoritative for
+later enhancement work.
+
 The September 21 review found a passing verification suite alongside reproducible
 trust failures. User-level brewq was 0.3.1 while the checkout was 0.3.2. Presets and
 temporary palette flags therefore appeared installed despite removal from source.
@@ -49,25 +53,23 @@ behavior changes update the authoritative reference in the same commit.
 
 ### Then: workflow review and artifact verification
 
-The P2 workflow review (`brewq-9nb`) follows correctness and contract work.
-Exercise empty/fresh/stale/partial/corrupt caches, install/uninstall transitions,
-TTY and piped output, NO_COLOR, custom columns, and config overrides. Turn
-findings into Beads issues instead of accepting a green unit-test suite alone.
+The P2 workflow review (`brewq-9nb`) exercised empty/fresh/stale/partial/corrupt
+caches, install/uninstall transitions, TTY and piped output, NO_COLOR, custom
+columns, config overrides, and maintained examples. Its one blocking finding,
+an incomplete snapshot labeled only by metadata age, was fixed and regressed.
 
-The P1 release gate (`brewq-4ri`) follows that review. Build and install an isolated
-artifact; prove both `brewq` and `bq` entry points, packaged seed availability,
-CLI help/option semantics, and TSV behavior. Compare the installed artifact with
-the intended source version and replace the user-level installation only after
-verification. Re-run the full existing gate, with no unresolved release-blocking
-findings. Existing installed-shim checking only tests help exit status and must
-be strengthened.
+The P1 release gate (`brewq-4ri`) built and installed an isolated wheel, proved
+both `brewq` and `bq`, packaged seed availability, CLI help/option semantics, and
+TSV parity, then replaced the stale user-level installation. The full gate now
+checks the external installed version and option contract rather than help exit
+status alone.
 
 ### After the stability milestone
 
 Autocomplete (`brewq-472`), performance work (`brewq-73z`), and README animation
-(`brewq-8a8`) are P3 enhancements blocked by the milestone. Extended metadata
+(`brewq-8a8`) are P3 follow-ups after the milestone. Extended metadata
 (`brewq-cdj`) and package-update research (`brewq-kj3`) are P4 exploratory work;
-the latter remains deferred. Local hook reload verification (`brewq-tm6`) is P2
+the latter remains deferred. Local hook cleanup (`brewq-tm6`) is completed P2
 tooling work, not a package feature or release guarantee.
 
 P0 is reserved for emergencies. There is no date-based release promise; behavior

@@ -154,10 +154,11 @@ load operational configuration.
 
 ## Stability and development
 
-The September 2026 review identified release gaps in config/cache validation,
+The September 2026 stabilization milestone fixed config/cache validation,
 installed-state reconciliation, incomplete refresh recovery, and scheduling
-before output. The first stabilization slice fixes those source-level failures;
-the remaining milestone gates are workflow review and isolated artifact parity.
+before output. Independent workflow reviews found no remaining release blocker.
+The 0.3.2 wheel, bundled seed, and both entry points were verified in an isolated
+Python 3.12 environment; the user-level `brewq` and `bq` installation now matches.
 
 ```sh
 uv sync --extra dev
@@ -166,9 +167,9 @@ bd ready
 bd list --status=in_progress
 ```
 
-Verification runs Ruff, pytest, subprocess CLI smoke checks, and an installed-shim
-help check. The last check does not prove installed/source parity; the milestone's
-artifact gate builds and tests both entry points in an isolated installation.
+Verification runs Ruff, pytest, subprocess CLI smoke checks, and external
+installed-entry-point parity checks. The artifact gate also builds and tests both
+entry points and the bundled seed in an isolated installation.
 
 Maintained documentation:
 
