@@ -82,6 +82,12 @@ Use `uv run brewq` to test the checkout. User-level `brewq`/`bq` may point to an
 older installation. Verify a built artifact before replacing installed tools;
 never silently test the wrong version.
 
+Before building or installing a release artifact, choose a SemVer bump from the
+cumulative changes since the last release: patch for fixes, minor for compatible
+features or material CLI changes, and major for incompatible public contracts.
+Run `uv run python scripts/bump.py <patch|minor|major>` and commit the version
+change with the release work; do not reuse a released version for new behavior.
+
 ## Ownership and implementation
 
 Keep Python, argparse, the normalized package model, and the shared column
