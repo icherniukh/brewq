@@ -9,12 +9,13 @@ not apply here (see brewq-1xx.1).
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+
+from brewq import __version__
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -85,12 +86,61 @@ def check_cli_smoke() -> Result:
     return Result("cli smoke", ok, "\n".join(failures))
 
 
+def _external_entrypoint(name: str) -> str | None:
+    """Find a PATH entry outside the environment running this verification script."""
+    active_bin = Path(sys.executable).absolute().parent
+    for raw_dir in os.environ.get("PATH", "").split(os.pathsep):
+        if not raw_dir:
+            continue
+        directory = Path(raw_dir).expanduser()
+        try:
+            if directory.resolve() == active_bin:
+                continue
+        except OSError:
+            continue
+        candidate = directory / name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
 def check_installed_shim() -> Result:
-    brewq_path = shutil.which("brewq")
+    brewq_path = _external_entrypoint("brewq")
     if brewq_path is None:
-        return Result("installed shim", True, "skipped: brewq not on PATH (no installed shim to check)")
-    proc = subprocess.run([brewq_path, "--help"], capture_output=True, text=True, timeout=20.0)
-    return Result("installed shim", proc.returncode == 0, proc.stdout + proc.stderr)
+        return Result(
+            "installed shim",
+            True,
+            "skipped: brewq not on PATH outside the active environment",
+        )
+
+    failures = []
+    expected_version = f"brewq {__version__}"
+    for name in ("brewq", "bq"):
+        path = _external_entrypoint(name)
+        if path is None:
+            failures.append(f"{name}: entry point missing from PATH")
+            continue
+        version = subprocess.run(
+            [path, "--version"], capture_output=True, text=True, timeout=20.0
+        )
+        if version.returncode != 0 or version.stdout.strip() != expected_version:
+            actual = (version.stdout + version.stderr).strip() or f"exit {version.returncode}"
+            failures.append(f"{name}: expected {expected_version!r}, got {actual!r}")
+
+    help_result = subprocess.run(
+        [brewq_path, "--help"], capture_output=True, text=True, timeout=20.0
+    )
+    if help_result.returncode != 0:
+        failures.append(f"brewq help: exit {help_result.returncode}: {help_result.stderr.strip()}")
+    else:
+        for expected in ("-u, --url", "-v, --verbose", "--tsv"):
+            if expected not in help_result.stdout:
+                failures.append(f"brewq help: missing {expected!r}")
+        for removed in ("--preset", "--colors"):
+            if removed in help_result.stdout:
+                failures.append(f"brewq help: stale option {removed!r} is still installed")
+
+    return Result("installed shim", not failures, "\n".join(failures))
 
 
 CHECKS: tuple[Check, ...] = (

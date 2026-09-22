@@ -1,19 +1,19 @@
 {
-  "generated_at": "2026-09-22 10:25 EDT",
+  "generated_at": "2026-09-22 12:54 EDT",
   "summary_text": "Read-only Homebrew query and analytics. Stabilize state handling and the CLI contract, then review workflows and verify the installed artifact. Beads is the status source.",
   "stats": {
     "average_lead_time_hours": 0,
-    "blocked_issues": 5,
-    "closed_issues": 63,
+    "blocked_issues": 4,
+    "closed_issues": 64,
     "deferred_issues": 1,
     "epics_eligible_for_closure": 0,
     "in_progress_issues": 0,
-    "open_issues": 8,
+    "open_issues": 7,
     "pinned_issues": 0,
     "ready_issues": 3,
     "total_issues": 72
   },
-  "completion_percent": 88,
+  "completion_percent": 89,
   "tests": {
     "passed": null,
     "command": "uv run python scripts/verify.py"
@@ -27,21 +27,19 @@
       "priority": 1
     },
     {
+      "id": "brewq-4ri",
+      "title": "Verify release artifact and installed CLI parity",
+      "summary": "Observed /Users/ivan/.local/bin/brewq is 0.3.1 with --preset and temporary --colors; uv run brewq is 0.3.2 with -...",
+      "labels": [
+        "stabilization"
+      ],
+      "priority": 1
+    },
+    {
       "id": "brewq-tm6",
       "title": "Repair failing local agent hooks and remove obsolete hook invocations",
       "summary": "",
       "labels": [],
-      "priority": 2
-    },
-    {
-      "id": "brewq-9nb",
-      "title": "Run informal dev-agent feedback pass",
-      "summary": "Spawn a small set of research/dev agents, show them the current brewq tool and docs casually, and ask for candid...",
-      "labels": [
-        "feedback",
-        "research",
-        "stabilization"
-      ],
       "priority": 2
     }
   ],
@@ -52,15 +50,15 @@
       "count": 2
     },
     {
-      "name": "Feedback research",
-      "count": 1
-    },
-    {
       "name": "Stabilization",
       "count": 1
     }
   ],
   "commits": [
+    {
+      "sha": "2f4bf2e",
+      "subject": "fix: harden CLI state boundaries"
+    },
     {
       "sha": "ece2576",
       "subject": "chore: establish stabilization roadmap and release gates"
@@ -88,10 +86,6 @@
     {
       "sha": "720fe59",
       "subject": "feat(config): preset management UI \u2014 add, remove, duplicate, list"
-    },
-    {
-      "sha": "f666b7f",
-      "subject": "chore(bump): 0.2.0 -> 0.3.0"
     }
   ],
   "signals": [

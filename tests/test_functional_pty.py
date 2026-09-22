@@ -59,7 +59,15 @@ def _formula(name: str, *, installed: bool = False, installs_30d: int = 1000,
 
 def _write_cache(tmp_path: Path, formulae: list[dict], age_seconds: float = 5.0) -> None:
     path = tmp_path / "brew-all.json"
-    path.write_text(json.dumps({"formulae": formulae, "casks": []}))
+    path.write_text(json.dumps({
+        "formulae": formulae,
+        "casks": [],
+        "_brewq_cache": {
+            "schema_version": 1,
+            "analytics_complete": True,
+            "repair_needed": False,
+        },
+    }))
     mtime = time.time() - age_seconds
     os.utime(path, (mtime, mtime))
 

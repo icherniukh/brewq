@@ -427,7 +427,13 @@ def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict) -> None:
     if _use_color_stderr():
         age_str = f"{_COLOR_RED}{age_str}{_RESET}"
 
-    if loaded.requires_refresh or loaded.age_seconds >= max_age:
+    if not loaded.analytics_complete:
+        detail = f"; {suffix}" if suffix else ""
+        print(
+            f"cache: metadata {age_str} old; analytics incomplete{detail}",
+            file=sys.stderr,
+        )
+    elif loaded.requires_refresh or loaded.age_seconds >= max_age:
         detail = f"; {suffix}" if suffix else ""
         print(f"cache: {age_str} old{detail}", file=sys.stderr)
     else:

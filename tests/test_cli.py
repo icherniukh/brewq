@@ -21,8 +21,21 @@ def _pkg(name: str, type_: str = "formula", installs_30d: int = 10_000,
     )
 
 
-def _loaded(packages: list[Package], *, source: str = "user", age: float = 0) -> CacheLoad:
-    return CacheLoad(source=source, packages=packages, age_seconds=age)
+def _loaded(
+    packages: list[Package],
+    *,
+    source: str = "user",
+    age: float = 0,
+    analytics_complete: bool = True,
+    repair_needed: bool = False,
+) -> CacheLoad:
+    return CacheLoad(
+        source=source,
+        packages=packages,
+        age_seconds=age,
+        analytics_complete=analytics_complete,
+        repair_needed=repair_needed,
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -471,6 +484,23 @@ def test_scheduler_cooldown_is_reported_truthfully(capsys):
          patch("brewq.scheduler.schedule_if_needed", return_value="cooldown"):
         assert main(["ripgrep"]) == 0
     assert "refresh deferred (cooldown)" in capsys.readouterr().err
+
+
+def test_partial_cache_reports_metadata_age_and_incomplete_analytics(capsys):
+    loaded = _loaded(
+        [_pkg("ripgrep")],
+        age=5,
+        analytics_complete=False,
+        repair_needed=True,
+    )
+    with patch("brewq.cache.load", return_value=loaded), \
+         patch("brewq.scheduler.schedule_if_needed", return_value="cooldown"):
+        assert main(["ripgrep"]) == 0
+
+    assert (
+        "cache: metadata 5s old; analytics incomplete; refresh deferred (cooldown)"
+        in capsys.readouterr().err
+    )
 
 
 def test_stale_user_cache_renders_and_schedules(capsys):
