@@ -80,9 +80,9 @@ CASES: tuple[Case, ...] = (
         _brewq("list", "--limit", "25"),
     ),
     Case(
-        "list_analytics",
-        "brewq list --analytics --limit 25",
-        _brewq("list", "--analytics", "--limit", "25"),
+        "list_metrics",
+        "brewq list -c name,90d --limit 25",
+        _brewq("list", "-c", "name,90d", "--limit", "25"),
     ),
     Case(
         "list_tsv",

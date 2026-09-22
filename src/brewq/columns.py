@@ -13,6 +13,7 @@ class ColumnDef:
     align: str  # "left" | "right"
     getter: Callable[[Package], str]
     raw_getter: Callable[[Package], object] | None = field(default=None)
+    description: str = ""
 
 
 def _short_version(pkg: Package) -> str:
@@ -45,49 +46,80 @@ def _fmt_binaries(p: Package) -> str:
 
 
 _COLUMN_REGISTRY: dict[str, ColumnDef] = {
-    "name": ColumnDef("name", "NAME", "left", lambda p: p.name, lambda p: p.name),
-    "type": ColumnDef("type", "TYPE", "left", lambda p: p.type, lambda p: p.type),
-    "version": ColumnDef("version", "VERSION", "left", _short_version, _version),
+    "name": ColumnDef(
+        "name", "NAME", "left", lambda p: p.name, lambda p: p.name,
+        description="package name",
+    ),
+    "type": ColumnDef(
+        "type", "TYPE", "left", lambda p: p.type, lambda p: p.type,
+        description="formula or cask",
+    ),
+    "version": ColumnDef(
+        "version", "VERSION", "left", _short_version, _version,
+        description="installed version when present; otherwise catalog version",
+    ),
     "installs_30d": ColumnDef(
         "installs_30d", "30d", "right",
         lambda p: _fmt(p.installs_30d),
         lambda p: "" if p.installs_30d < 0 else p.installs_30d,
+        description="installs in the last 30 days",
     ),
     "installs_90d": ColumnDef(
         "installs_90d", "90d", "right",
         lambda p: _fmt(p.installs_90d),
         lambda p: "" if p.installs_90d < 0 else p.installs_90d,
+        description="installs in the last 90 days",
     ),
     "installs_365d": ColumnDef(
         "installs_365d", "365d", "right",
         lambda p: _fmt(p.installs_365d),
         lambda p: "" if p.installs_365d < 0 else p.installs_365d,
+        description="installs in the last 365 days",
     ),
     "trending": ColumnDef(
         "trending", "TREND", "right",
         _fmt_trending,
         lambda p: "" if p.trending is None else p.trending,
+        description="recent rate relative to the package's earlier rate",
     ),
     "binaries": ColumnDef(
         "binaries", "BINARIES", "left",
         _fmt_binaries,
         lambda p: "  ".join(p.binaries),
+        description="installed executable names, when known",
     ),
     "description": ColumnDef(
         "description", "DESCRIPTION", "left",
         lambda p: p.description or "-",
         lambda p: p.description or "",
+        description="package description",
     ),
     "installed": ColumnDef(
         "installed", "INST", "left",
         lambda p: "✔" if p.installed else "",
         lambda p: "true" if p.installed else "false",
+        description="whether the package is installed",
     ),
-    "status": ColumnDef("status", "STATUS", "left", lambda p: p.status, lambda p: p.status),
-    "url": ColumnDef("url", "URL", "left", lambda p: p.url or "-", lambda p: p.url or ""),
+    "status": ColumnDef(
+        "status", "STATUS", "left", lambda p: p.status, lambda p: p.status,
+        description="deprecated or disabled state",
+    ),
+    "url": ColumnDef(
+        "url", "URL", "left", lambda p: p.url or "-", lambda p: p.url or "",
+        description="homepage URL",
+    ),
 }
 
 CANONICAL_COLUMNS: tuple[str, ...] = tuple(_COLUMN_REGISTRY)
+
+
+def reference_lines() -> tuple[str, ...]:
+    """Return the canonical column reference for CLI documentation."""
+    width = max(len(key) for key in CANONICAL_COLUMNS) + 2
+    return tuple(
+        f"  {key:<{width}}{column.description}"
+        for key, column in _COLUMN_REGISTRY.items()
+    )
 
 # All aliases resolve to canonical registry keys.
 _ALIASES: dict[str, str] = {

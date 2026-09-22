@@ -64,10 +64,11 @@ def _brewq(*args: str) -> tuple[str, ...]:
 def check_cli_smoke() -> Result:
     cases: list[tuple[str, Sequence[str], Sequence[str]]] = [
         ("help", _brewq("--help"), ["usage"]),
+        ("full_help", _brewq("--full-help"), ["columns:", "trending:", "cache:"]),
         ("search_table", _brewq("-t", "5", "json"), ["NAME"]),
         ("search_tsv", _brewq("--tsv", "-c", "name,30d", "ripgrep"), []),
         ("list_default", _brewq("list", "--limit", "5"), ["NAME", "TYPE"]),
-        ("list_analytics", _brewq("list", "--analytics", "--limit", "5"), []),
+        ("list_metrics", _brewq("list", "-c", "name,90d", "--limit", "5"), []),
         ("list_tsv", _brewq("list", "--tsv", "-c", "name,type", "--limit", "5"), []),
     ]
     failures = []
@@ -133,10 +134,10 @@ def check_installed_shim() -> Result:
     if help_result.returncode != 0:
         failures.append(f"brewq help: exit {help_result.returncode}: {help_result.stderr.strip()}")
     else:
-        for expected in ("-u, --url", "-v, --verbose", "--tsv"):
+        for expected in ("-c, --columns", "--full-help", "--tsv"):
             if expected not in help_result.stdout:
                 failures.append(f"brewq help: missing {expected!r}")
-        for removed in ("--preset", "--colors"):
+        for removed in ("-u, --url", "-v, --verbose", "--preset", "--colors"):
             if removed in help_result.stdout:
                 failures.append(f"brewq help: stale option {removed!r} is still installed")
 

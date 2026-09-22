@@ -25,10 +25,12 @@ updated build, `uv tool install --force .` replaces the installed copy. Compare
 brewq terminal multiplexer
 brewq -t 10 json
 brewq -s 365d rust
-brewq -u ripgrep
 brewq -c name,90d,url ripgrep
 brewq --tsv -c name,90d,url ripgrep
 ```
+
+`brewq --help` shows the common search path. `brewq --full-help` adds the full
+column reference plus concise trending and cache behavior.
 
 Search matches names, formula aliases, and descriptions. All query terms must
 match; name normalization and a narrow formula fuzzy fallback also apply.
@@ -54,8 +56,6 @@ These output options work for both search and `list`:
 | Output option | Current behavior |
 | --- | --- |
 | `-c`, `--columns COLS` | Explicit comma-separated column names |
-| `-u`, `--url` | Add homepage URL before description, or append it |
-| `-v`, `--verbose` | Expanded column set below; mutually exclusive with `-c` |
 | `--tsv` | Selected columns as raw tab-separated rows, without a header |
 
 Canonical columns are `name`, `type`, `version`, `installs_30d`, `installs_90d`,
@@ -65,8 +65,6 @@ and `home`/`homepage` are also accepted. `trend` and `hot` mean `trending`.
 Prefer canonical names in scripts; ambiguous popularity/score/rank aliases are
 rejected.
 
-The current `-v` set is
-`name,type,version,installed,status,30d,90d,365d,trending,binaries,url,description`.
 Cask binaries come from declared artifacts; formula binaries require local
 installed data.
 
@@ -84,16 +82,15 @@ remain visible without color.
 
 ```sh
 brewq list
-brewq list --analytics
+brewq list -c name,type,version,90d,description
 brewq list --limit 10
 brewq list --tsv -c name,type,version
 ```
 
-Rows sort by type, then name. `--limit N` accepts a positive cap. `--analytics`
-adds a cached 90-day count column unless 90d is already selected, even alongside
-another analytics window. It does not fetch analytics on demand. VERSION displays
-the installed version for installed rows; the catalog's available version remains
-separate internally.
+Rows sort by type, then name. `--limit N` accepts a positive cap. Select cached
+analytics through the same `-c` column interface used by search; this never
+fetches analytics on demand. VERSION displays the installed version for installed
+rows; the catalog's available version remains separate internally.
 
 ## Cache and recovery
 
@@ -157,7 +154,7 @@ load operational configuration.
 The September 2026 stabilization milestone fixed config/cache validation,
 installed-state reconciliation, incomplete refresh recovery, and scheduling
 before output. Independent workflow reviews found no remaining release blocker.
-The 0.4.0 wheel, bundled seed, and both entry points were verified in an isolated
+The 0.5.0 wheel, bundled seed, and both entry points were verified in an isolated
 Python 3.12 environment; the user-level `brewq` and `bq` installation now matches.
 
 ```sh

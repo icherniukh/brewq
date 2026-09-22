@@ -27,19 +27,12 @@ def _use_color_stderr() -> bool:
     return hasattr(sys.stderr, "isatty") and sys.stderr.isatty()
 
 _SEARCH_EPILOG = """\
-Examples:
-  brewq ripgrep
-  brewq -t 10 -s 365d rust
-  brewq --tsv -c name,90d,url ripgrep
-
-Commands: list  refresh  config
+commands: list, refresh, config path
+examples: brewq ripgrep | brewq -t 10 rust | brewq list
 """
 
 _LIST_EPILOG = """\
-Examples:
-  brewq list
-  brewq list --analytics
-  brewq list -u
+Use `brewq --full-help` for columns, trending, and cache behavior.
 """
 
 _REFRESH_EPILOG = """\
@@ -58,7 +51,36 @@ Examples:
 The config file controls default columns and cache freshness.
 """
 
-_COLUMN_HELP = "select comma-separated columns; see README for names"
+_COLUMN_HELP = "comma-separated output columns"
+
+_FULL_HELP_DETAILS = """\
+advanced search:
+  --all               include deprecated and disabled packages
+  -r, --refresh       refresh before searching
+
+columns:
+{columns}
+
+  Short forms: 30d, 90d, 365d, trend, bin, desc, home.
+  Search default: name,90d,trending,description
+  List default: name,type,version,description
+
+trending:
+  TREND compares a package's recent monthly install rate with its own earlier
+  monthly rate. With complete data, recent is 90d / 3 and earlier is the prior
+  275 days normalized to 30 days. Low-volume and newly tracked packages are
+  smoothed toward 1.0x; 1.0x means steady. Missing history displays `-`.
+  TREND measures momentum, not absolute popularity; search sorts by 90d unless
+  another field is selected.
+
+cache:
+  A bundled seed makes the first query immediate. Fresh snapshots are read
+  locally. Stale data is shown immediately, then refreshed in the background.
+  `brewq refresh` refreshes stale data; `brewq refresh --force` refreshes now.
+  If analytics fail, counts from the previous user snapshot are retained and
+  retried later.
+  `brewq config path` shows the configuration file.
+"""
 
 
 def _positive_int(raw: str) -> int:
@@ -71,35 +93,33 @@ def _positive_int(raw: str) -> int:
 def _add_column_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-c", "--columns", metavar="COLS", help=_COLUMN_HELP)
     parser.add_argument("-u", "--url", action="store_true",
-                        help="add homepage URL column")
+                        help=argparse.SUPPRESS)
     parser.add_argument("-v", "--verbose", action="store_true",
-                        help="show the expanded package field set")
+                        help=argparse.SUPPRESS)
 
 
 def _build_search_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="brewq",
-        description="Query Homebrew packages with cached analytics.",
+        usage="brewq [options] [query ...]\n       brewq {list,refresh,config} ...",
+        description="Fast, read-only Homebrew package search.",
         epilog=_SEARCH_EPILOG,
         formatter_class=_FORMATTER,
     )
-    parser.add_argument("query", nargs="*", help="search terms")
-    search = parser.add_argument_group("search")
-    search.add_argument("-s", "--sort", metavar="FIELD",
+    parser.add_argument("query", nargs="*", help=argparse.SUPPRESS)
+    parser.add_argument("-s", "--sort", metavar="FIELD",
                         help=f"sort by {options_mod.sort_choices_text()} (default: 90d)")
-    search.add_argument("-t", "--top", type=_positive_int, metavar="N",
-                        help="cap matches (otherwise config, TTY height, or no pipe cap)")
-    search.add_argument("-l", "--installed", action="store_true",
-                        help="only installed packages")
-    search.add_argument("--all", action="store_true",
-                        help="include deprecated and disabled packages")
-    output = parser.add_argument_group("output")
-    _add_column_flags(output)
-    output.add_argument("--tsv", action="store_true",
+    parser.add_argument("-t", "--top", type=_positive_int, metavar="N",
+                        help="show at most N matches")
+    parser.add_argument("-l", "--installed", action="store_true",
+                        help="search installed packages only")
+    parser.add_argument("--all", action="store_true", help=argparse.SUPPRESS)
+    _add_column_flags(parser)
+    parser.add_argument("--tsv", action="store_true",
                         help="tab-separated rows without a header")
-    cache = parser.add_argument_group("cache")
-    cache.add_argument("-r", "--refresh", action="store_true",
-                       help="force refresh before searching")
+    parser.add_argument("-r", "--refresh", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--full-help", action="store_true",
+                        help="show columns, trending, and cache behavior")
     parser.add_argument("--version", action="version",
                         version=f"brewq {__version__}")
     return parser
@@ -113,12 +133,13 @@ def _build_command_parser() -> argparse.ArgumentParser:
     lst = subparsers.add_parser(
         "list",
         help="Show installed formulae and casks",
-        description="Show installed formulae and casks with the same column system as search.",
+        usage="brewq list [options]",
+        description="Show installed formulae and casks.",
         epilog=_LIST_EPILOG,
         formatter_class=_FORMATTER,
     )
     lst.add_argument("--analytics", action="store_true",
-                     help="add a 90d install-count column")
+                     help=argparse.SUPPRESS)
     _add_column_flags(lst)
     lst.add_argument("--limit", type=_positive_int, metavar="N",
                      help="cap installed rows shown")
@@ -158,6 +179,11 @@ def _build_command_parser() -> argparse.ArgumentParser:
                         help="Fix the random seed for a reproducible lab run")
 
     return parser
+
+
+def _full_help_text() -> str:
+    details = _FULL_HELP_DETAILS.format(columns="\n".join(columns_mod.reference_lines()))
+    return f"{_build_search_parser().format_help().rstrip()}\n\n{details.rstrip()}\n"
 
 
 def _normalize_argv(argv: list[str]) -> list[str]:
@@ -472,6 +498,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _cmd_random(args, cfg)
 
     args = _build_search_parser().parse_args(raw_argv)
+    if args.full_help:
+        print(_full_help_text(), end="")
+        return 0
     cfg = config_mod.load()
     return _cmd_search(args, cfg)
 

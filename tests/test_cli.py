@@ -8,6 +8,7 @@ import pytest
 
 from brewq.cache import CacheLoad, RefreshOutcome, RefreshResult
 from brewq.cli import main
+from brewq.columns import CANONICAL_COLUMNS
 from brewq.model import Package
 
 
@@ -48,9 +49,24 @@ def test_main_no_args_prints_help(capsys):
     rc = main([])
     assert rc == 2
     out = capsys.readouterr().out
-    assert "Commands:" in out
-    assert "Examples:" in out
+    assert "commands:" in out
+    assert "examples:" in out
     assert "-s" in out
+
+
+def test_full_help_documents_columns_trending_and_cache(capsys):
+    rc = main(["--full-help"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    column_block = out.split("columns:\n", 1)[1].split("\n\n", 1)[0]
+    documented_columns = tuple(
+        line.split(maxsplit=1)[0] for line in column_block.splitlines()
+    )
+    assert documented_columns == CANONICAL_COLUMNS
+    assert "smoothed toward 1.0x" in out
+    assert "bundled seed" in out
+    assert "--all" in out
+    assert "-r, --refresh" in out
 
 
 def test_main_search_bootstraps_when_seed_is_unavailable(capsys):

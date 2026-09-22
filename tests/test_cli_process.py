@@ -32,6 +32,30 @@ def test_help_ignores_invalid_operational_config(tmp_path):
     assert proc.stderr == ""
 
 
+def test_compact_help_hides_legacy_and_advanced_shortcuts(tmp_path):
+    proc = _run(tmp_path, "--help")
+    assert proc.returncode == 0
+    assert "-c, --columns" in proc.stdout
+    assert "--full-help" in proc.stdout
+    for hidden in ("-u, --url", "-v, --verbose", "--all", "-r, --refresh"):
+        assert hidden not in proc.stdout
+
+    list_proc = _run(tmp_path, "list", "--help")
+    assert list_proc.returncode == 0
+    for hidden in ("--analytics", "-u, --url", "-v, --verbose"):
+        assert hidden not in list_proc.stdout
+
+
+def test_full_help_ignores_invalid_operational_config(tmp_path):
+    (tmp_path / "config.toml").write_text("search = 1\n")
+    proc = _run(tmp_path, "--full-help", env_override={"BREWQ_CACHE_MAX_AGE": "invalid"})
+    assert proc.returncode == 0
+    assert "columns:" in proc.stdout
+    assert "trending:" in proc.stdout
+    assert "cache:" in proc.stdout
+    assert proc.stderr == ""
+
+
 def test_version_ignores_invalid_operational_config(tmp_path):
     proc = _run(tmp_path, "--version", env_override={"BREWQ_CACHE_MAX_AGE": "invalid"})
     assert proc.returncode == 0

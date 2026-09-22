@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-09-22 19:19 EDT",
+  "generated_at": "2026-09-22 19:45 EDT",
   "summary_text": "Read-only Homebrew query and analytics. Stabilize state handling and the CLI contract, then review workflows and verify the installed artifact. Beads is the status source.",
   "stats": {
     "average_lead_time_hours": 0,
     "blocked_issues": 0,
-    "closed_issues": 69,
+    "closed_issues": 70,
     "deferred_issues": 1,
     "epics_eligible_for_closure": 0,
     "in_progress_issues": 0,
     "open_issues": 4,
     "pinned_issues": 0,
     "ready_issues": 4,
-    "total_issues": 74
+    "total_issues": 75
   },
   "completion_percent": 93,
   "tests": {
@@ -57,6 +57,10 @@
   ],
   "commits": [
     {
+      "sha": "a9bbea5",
+      "subject": "chore(release): bump version to 0.4.0"
+    },
+    {
       "sha": "fa83cb1",
       "subject": "docs: require release version bumps"
     },
@@ -83,10 +87,6 @@
     {
       "sha": "99f1580",
       "subject": "docs(readme): update to match current reality (v0.3.2)"
-    },
-    {
-      "sha": "95dbfc6",
-      "subject": "chore(bump): 0.3.1 -> 0.3.2"
     }
   ],
   "signals": [

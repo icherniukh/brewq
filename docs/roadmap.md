@@ -40,11 +40,12 @@ scenarios belong with the fixes.
 
 ### Alongside correctness: one usable contract
 
-CLI alignment (`brewq-h7m`) establishes concise grouped help and consistency
-among option descriptions, accepted values, defaults, config, and TSV. The
-expanded set includes binaries, `auto` is configuration-only, list analytics
-inserts 90d specifically, and ambiguous popularity aliases are rejected. The
-layout lab remains available as the explicitly non-product `random` command.
+CLI alignment (`brewq-h7m`, refined by `brewq-cqt`) establishes a compact common
+help path and one visible column selector shared by search and list. Extended
+column, trending, and cache reference lives in `--full-help`; legacy output
+shortcuts remain accepted but undiscoverable for compatibility. `auto` is
+configuration-only and ambiguous popularity aliases are rejected. The layout
+lab remains available as the explicitly non-product `random` command.
 
 Documentation consolidation (`brewq-k1m`) establishes three maintained documents:
 README for the actual CLI, AGENTS for contributor workflow, and this document for
