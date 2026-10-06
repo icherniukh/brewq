@@ -116,6 +116,11 @@ terminal-theme green, using bold for values at least 2×. Neutral cache footers
 keep freshness and repair state visible without competing with query results.
 These presentation bands do not change analytics, sorting, or TSV values.
 
+Column control stays within `-c`: an on-demand field reference, all-field
+selection, and additive/subtractive edits to the command's configured layout.
+The shared registry owns field names and aliases; defaults and compatibility
+shortcuts remain intact. Field discovery needs no cache or operational config.
+
 Exact matches versus deprecated/disabled hiding, formula/cask grouping, eventual
 prototype retirement, and external dotfiles migration remain open decisions.
 Semantic/vector search, `info`, `--exact`, `--explain`, `--open`, `list --leaves`,

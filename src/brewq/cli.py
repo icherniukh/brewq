@@ -41,7 +41,7 @@ Examples:
 The config file controls default columns and cache freshness.
 """
 
-_COLUMN_HELP = "comma-separated output columns"
+_COLUMN_HELP = "fields, +add, -remove, all; -c help lists fields"
 
 _FULL_HELP_DETAILS = """\
 advanced search:
@@ -54,6 +54,8 @@ columns:
   Short forms: 30d, 90d, 365d, trend, bin, desc, home.
   Search default: name,90d,trending,description
   List default: name,type,version,description
+  Use -c help for fields and examples. -c +version,bin adds to your layout;
+  -c +home,-trend adds homepage and removes trend; -c all shows every field.
 
 trending:
   TREND compares a package's recent monthly install rate with its own earlier
@@ -206,7 +208,7 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     list_cols_cfg = cfg["list"]["columns"]
 
     try:
-        col_defs = columns_mod.resolve(opts.columns_spec, list_cols_cfg, allow_auto=False)
+        col_defs = columns_mod.select(opts.columns_spec, list_cols_cfg)
     except ValueError as exc:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1
@@ -348,7 +350,10 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         # "default" is resolved after ranking: it may contain "auto", which needs
         # the top result to pick a representative raw metric column.
         try:
-            col_defs = columns_mod.resolve(opts.columns_spec, default_cols, allow_auto=False)
+            if isinstance(opts.columns_spec, str) and opts.columns_spec.strip().startswith(("+", "-")):
+                columns_mod.parse_edits(opts.columns_spec)
+            else:
+                col_defs = columns_mod.select(opts.columns_spec, default_cols)
         except ValueError as exc:
             print(f"brewq: {exc}", file=sys.stderr)
             return 1
@@ -384,7 +389,7 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
     if col_defs is None:
         metric = columns_mod.pick_representative_metric(ranked[0])
         try:
-            col_defs = columns_mod.resolve(default_cols, default_cols, representative_metric=metric)
+            col_defs = columns_mod.select(opts.columns_spec, default_cols, representative_metric=metric)
         except ValueError as exc:
             print(f"brewq: {exc}", file=sys.stderr)
             return 1
@@ -479,6 +484,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _cmd_refresh(args)
         if args.command == "config":
             return _cmd_config(args)
+        if getattr(args, "columns", None) == "help":
+            print(columns_mod.selection_help(), end="")
+            return 0
         cfg = config_mod.load()
         if args.command == "list":
             return _cmd_list(args, cfg)
@@ -488,6 +496,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _build_search_parser().parse_args(raw_argv)
     if args.full_help:
         print(_full_help_text(), end="")
+        return 0
+    if args.columns == "help":
+        print(columns_mod.selection_help(), end="")
         return 0
     cfg = config_mod.load()
     return _cmd_search(args, cfg)

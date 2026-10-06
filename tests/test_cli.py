@@ -195,6 +195,43 @@ def test_config_auto_column_picks_available_window_via_top_result(capsys, tmp_pa
     assert "90d" not in out
 
 
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [(["ripgrep", "-c", "+version,bin", "--tsv"], "ripgrep\t\t\t1.0\t\tDescription of ripgrep\n"),
+     (["ripgrep", "-c", "+home,-trend", "--tsv"], "ripgrep\t\thttps://example.com\tDescription of ripgrep\n"),
+     (["list", "-c", "+90d,trend", "--tsv"], "ripgrep\tformula\t1.0\t\t\tDescription of ripgrep\n")],
+)
+def test_column_edits_search_and_list_tsv(capsys, argv, expected):
+    with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep", installed=True)])):
+        assert main(argv) == 0
+    assert capsys.readouterr().out == expected
+
+
+def test_edits_respect_custom_layout_and_resolve_auto_after_ranking(capsys, tmp_path):
+    (tmp_path / "config.toml").write_text('[output]\ncolumns = ["auto"]\n')
+    pkg = _pkg("ripgrep")
+    pkg.installs_30d = -1
+    pkg.installs_365d = 40_000
+    with patch("brewq.cache.load", return_value=_loaded([pkg])):
+        assert main(["ripgrep", "-c=-90d", "--tsv"]) == 0
+    assert capsys.readouterr().out == "40000\n"
+
+
+@pytest.mark.parametrize("spec", ["+bogus", "+auto", "+version,", "name,bogus"])
+def test_invalid_selection_fails_before_loading_cache(capsys, spec):
+    with patch("brewq.cache.load", side_effect=AssertionError("loaded cache")):
+        assert main(["ripgrep", "-c", spec]) == 1
+    assert "brewq:" in capsys.readouterr().err
+
+
+def test_all_fields_matches_legacy_verbose(capsys):
+    with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])):
+        assert main(["ripgrep", "-c", "all", "--tsv"]) == 0
+        all_fields = capsys.readouterr().out
+        assert main(["ripgrep", "-v", "--tsv"]) == 0
+        assert capsys.readouterr().out == all_fields
+
+
 def test_main_search_columns_short_alias(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):

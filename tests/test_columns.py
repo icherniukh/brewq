@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from brewq.columns import FULL_COLUMNS, pick_representative_metric, resolve, with_url
+from brewq.columns import FULL_COLUMNS, pick_representative_metric, resolve, select, with_url
 from brewq.model import Package
 
 
@@ -267,3 +267,43 @@ def test_pick_representative_metric_defaults_when_no_data_at_all():
 
 def test_pick_representative_metric_handles_none_package():
     assert pick_representative_metric(None) == "installs_90d"
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [("+version,bin", ["name", "installs_90d", "trending", "version", "binaries", "description"]),
+     ("+home,-trend", ["name", "installs_90d", "url", "description"]),
+     ("-trend,desc", ["name", "installs_90d"]),
+     ("+90d,i90", ["name", "installs_90d", "trending", "description"]),
+     ("-bin,+version,-ver,+ver", ["name", "installs_90d", "trending", "version", "description"]),
+     ("name,version,90d", ["name", "version", "installs_90d"])],
+)
+def test_column_layout_edits_and_exact_order(spec, expected):
+    defaults = ["name", "installs_90d", "trending", "description"]
+    assert [col.key for col in select(spec, defaults)] == expected
+    assert defaults == ["name", "installs_90d", "trending", "description"]
+
+
+def test_column_edits_resolve_config_auto_with_representative_metric():
+    assert [col.key for col in select(
+        "+version", ["name", "auto", "description"], "installs_365d",
+    )] == ["name", "installs_365d", "version", "description"]
+
+
+def test_added_field_appends_when_description_absent():
+    assert [col.key for col in select("+bin", ["name"])] == ["name", "binaries"]
+
+
+def test_all_uses_full_field_order():
+    assert [col.key for col in select("all", ["name"])] == FULL_COLUMNS
+
+
+@pytest.mark.parametrize("spec", ["+", "-", "+bogus", "+version,", "+auto", "-auto"])
+def test_invalid_column_edits_are_rejected(spec):
+    with pytest.raises(ValueError):
+        select(spec, ["name"])
+
+
+def test_removing_every_column_is_rejected():
+    with pytest.raises(ValueError, match="at least one field"):
+        select("-name,desc", ["name", "description"])

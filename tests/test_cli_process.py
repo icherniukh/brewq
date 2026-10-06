@@ -69,3 +69,15 @@ def test_config_path_ignores_invalid_operational_config(tmp_path):
     assert proc.returncode == 0
     assert proc.stdout.strip() == str(tmp_path / "config.toml")
     assert proc.stderr == ""
+
+
+def test_field_help_ignores_config_and_does_not_initialize_cache(tmp_path):
+    (tmp_path / "config.toml").write_text("output = []\n")
+    for args in [("-c", "help"), ("list", "-c", "help")]:
+        proc = _run(tmp_path, *args, env_override={"BREWQ_CACHE_MAX_AGE": "invalid"})
+        assert proc.returncode == 0
+        assert "Output fields" in proc.stdout
+        assert "installs_90d" in proc.stdout and "homepage" in proc.stdout
+        assert "+version,bin" in proc.stdout and "-c all" in proc.stdout
+        assert proc.stderr == ""
+    assert not (tmp_path / "cache").exists()

@@ -55,7 +55,7 @@ These output options work for both search and `list`:
 
 | Output option | Current behavior |
 | --- | --- |
-| `-c`, `--columns COLS` | Explicit comma-separated column names |
+| `-c`, `--columns COLS` | Select fields, edit the layout with `+`/`-`, or use `all` / `help` |
 | `--tsv` | Selected columns as raw tab-separated rows, without a header |
 
 Canonical columns are `name`, `type`, `version`, `installs_30d`, `installs_90d`,
@@ -64,6 +64,25 @@ Canonical columns are `name`, `type`, `version`, `installs_30d`, `installs_90d`,
 and `home`/`homepage` are also accepted. `trend` and `hot` mean `trending`.
 Prefer canonical names in scripts; ambiguous popularity/score/rank aliases are
 rejected.
+
+Discover fields or adjust a layout without retyping it:
+
+```sh
+brewq -c help                       # field reference and short names; no cache needed
+brewq ripgrep -c +version,bin        # keep your layout, add version and binaries
+brewq rust -c +home,-trend           # add homepage, remove trend
+brewq rust -c=-desc                  # remove description; = protects the leading minus
+brewq list -c +90d,trend             # extend the installed-package layout
+brewq ripgrep -c all --tsv           # every field, with raw values
+brewq ripgrep -c name,version,90d    # exact selection and order
+```
+
+An initial `+` or `-` edits the command's configured layout. Comma-separated
+fields keep the preceding operation until another `+` or `-` switches it.
+Added fields go before description (or at the end if description is absent);
+adding an existing field or removing an absent one has no effect. Aliases resolve
+before editing, so `+90d` won't duplicate `installs_90d`. Keep at least one field.
+`-c default` selects the configured layout. The same controls work with `list`.
 
 Cask binaries come from declared artifacts; formula binaries require local
 installed data.

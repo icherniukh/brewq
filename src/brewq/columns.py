@@ -121,6 +121,31 @@ def reference_lines() -> tuple[str, ...]:
         for key, column in _COLUMN_REGISTRY.items()
     )
 
+
+def selection_help() -> str:
+    """Discover fields and common short names from the shared registry."""
+    short_names = {
+        key: [alias for alias, target in _ALIASES.items() if target == key and len(alias) > 1]
+        for key in CANONICAL_COLUMNS
+    }
+    lines = ["Output fields (use -c with search or list):", ""]
+    width = max(len(key) for key in CANONICAL_COLUMNS) + 2
+    for key, col in _COLUMN_REGISTRY.items():
+        aliases = ", ".join(short_names[key])
+        label = f" [{aliases}]" if aliases else ""
+        lines.append(f"  {key:<{width}}{col.description}{label}")
+    lines.extend([
+        "", "  -c name,version,90d   select fields in this order",
+        "  -c +version,bin      add fields to the configured layout",
+        "  -c +home,-trend      add homepage, remove trend",
+        "  -c=-desc             remove description (use = for a leading minus)",
+        "  -c all               show every field",
+        "  -c default           use the configured layout",
+        "", "Added fields go before description; aliases do not add duplicate fields.",
+        "Fields keep the preceding + or - operation until it changes.",
+    ])
+    return "\n".join(lines) + "\n"
+
 # All aliases resolve to canonical registry keys.
 _ALIASES: dict[str, str] = {
     # name
@@ -222,6 +247,49 @@ def resolve(
             canonical = _ALIASES.get(key, key)
         col = _COLUMN_REGISTRY.get(canonical)
         if col is None:
-            raise ValueError(f"Unknown column {key!r}. Valid: {', '.join(CANONICAL_COLUMNS)}")
+            raise ValueError(
+                f"Unknown column {key!r}. Valid: {', '.join(CANONICAL_COLUMNS)}. "
+                "Use '-c help' for fields and examples."
+            )
         resolved.append(col)
     return resolved
+
+
+def parse_edits(spec: str) -> list[tuple[str, ColumnDef]]:
+    """Validate edits without resolving a layout's deferred auto metric."""
+    edits = []
+    operation = "+"
+    for token in spec.split(","):
+        token = token.strip()
+        if token.startswith(("+", "-")):
+            operation, token = token[0], token[1:].strip()
+        edits.append((operation, resolve(token, [], allow_auto=False)[0]))
+    return edits
+
+
+def select(
+    spec: str | list[str],
+    default_columns: list[str],
+    representative_metric: str | None = None,
+) -> list[ColumnDef]:
+    """Resolve CLI selection while retaining config-only auto in the base layout."""
+    if spec == "default":
+        return resolve(default_columns, default_columns, representative_metric)
+    if spec == "all":
+        return resolve(FULL_COLUMNS, [])
+    if not isinstance(spec, str) or not spec.strip().startswith(("+", "-")):
+        return resolve(spec, default_columns, allow_auto=False)
+
+    selected = resolve(default_columns, default_columns, representative_metric)
+    for operation, col in parse_edits(spec):
+        if operation == "-":
+            selected = [existing for existing in selected if existing.key != col.key]
+        elif not any(existing.key == col.key for existing in selected):
+            desc_idx = next(
+                (i for i, existing in enumerate(selected) if existing.key == "description"),
+                len(selected),
+            )
+            selected.insert(desc_idx, col)
+    if not selected:
+        raise ValueError("Column selection must keep at least one field. Use '-c help' for fields.")
+    return selected
