@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import io
 import re
+from unittest.mock import PropertyMock, patch
+
+import pytest
 
 from brewq.columns import resolve
 from brewq.model import Package
@@ -230,3 +233,55 @@ def test_render_table_installed_marker_keeps_columns_aligned(monkeypatch):
     assert "python@3.14 ✔" in python
     assert awscli.index("202,215") + len("202,215") == python.index("84,739") + len("84,739")
     assert awscli.index("Search tool") == python.index("Search tool")
+
+
+@pytest.mark.parametrize(
+    ("trend", "cue", "style"),
+    [(None, "-", "\033[2m"), (0.74, "0.7x ↓", "\033[2m"),
+     (0.79, "0.8x ·", "\033[2m"), (0.8, "0.8x ·", "\033[2m"),
+     (1.19, "1.2x ↑", "\033[32m"), (1.2, "1.2x ↑", "\033[32m"),
+     (1.99, "2.0x ↑↑", "\033[1m\033[32m"),
+     (2.0, "2.0x ↑↑", "\033[1m\033[32m")],
+)
+def test_trend_bands_match_visible_precision_and_keep_tsv_raw(monkeypatch, trend, cue, style):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    cols = resolve("trending", [])
+    table, tsv = TtyStringIO(), io.StringIO()
+    with patch.object(Package, "trending", new_callable=PropertyMock, return_value=trend):
+        render_table([_pkg()], cols, out=table)
+        render_tsv([_pkg()], cols, out=tsv)
+    assert cue in _strip_ansi(table.getvalue())
+    assert style in table.getvalue()
+    assert tsv.getvalue() == ("\n" if trend is None else f"{trend}\n")
+
+
+@pytest.mark.parametrize("no_color", [False, True])
+def test_trend_cues_keep_columns_aligned_and_fit_narrow_terminal(monkeypatch, no_color):
+    if no_color:
+        monkeypatch.setenv("NO_COLOR", "1")
+    else:
+        monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 60)
+    out = TtyStringIO()
+    packages = [_pkg("hot", installed=True), _pkg("rising"), _pkg("steady"), _pkg("cooling")]
+    # Real model data exercises the whole presentation path, without mocked getters.
+    for pkg, annual in zip(packages, [240_000, 400_000, 960_000, 2_000_000], strict=True):
+        pkg.installs_365d = annual
+    render_table(packages, resolve("name,trend,description", []), out=out)
+    lines = [_strip_ansi(line) for line in out.getvalue().splitlines() if line]
+    assert all(len(line) <= 60 for line in lines)
+    rows = [line for line in lines if "Search tool" in line]
+    assert len({line.index("Search tool") for line in rows}) == 1
+    assert len({line.index("x ") for line in rows}) == 1
+    assert "↑↑" in rows[0] and "↑" in rows[1] and "·" in rows[2] and "↓" in rows[3]
+    if no_color:
+        assert "\033[" not in out.getvalue()
+
+
+def test_piped_trend_keeps_cues_without_ansi():
+    out = io.StringIO()
+    pkg = _pkg()
+    pkg.installs_365d = 240_000
+    render_table([pkg], resolve("trend", []), out=out)
+    assert "↑↑" in out.getvalue()
+    assert "\033[" not in out.getvalue()

@@ -154,3 +154,22 @@ def test_pty_non_tty_pipe_emits_no_ansi(tmp_path):
     assert proc.returncode == 0
     assert "\x1b[" not in proc.stdout
     assert "\x1b[" not in proc.stderr
+
+
+def test_pty_hot_trend_and_quiet_cache_footer(tmp_path):
+    hot = _formula("zztrend-hot", installs_30d=80_000)
+    hot.update(installs_90d=240_000, installs_365d=400_000)
+    _write_cache(tmp_path, [hot])
+    env = _env(tmp_path)
+    rc, output = _run_in_pty(_brewq("zztrend"), env, cols=60)
+    assert rc == 0
+    assert re.search(r"\x1b\[1m\x1b\[32m *[0-9.]+x ↑↑\x1b\[0m", output)
+    assert "\x1b[2mcache: " in output
+    assert "\x1b[31m" not in output
+    assert all(len(line) <= 60 for line in _strip_ansi(output).splitlines())
+
+    env["NO_COLOR"] = "1"
+    rc, output = _run_in_pty(_brewq("zztrend"), env, cols=60)
+    assert rc == 0
+    assert "↑↑" in output and "cache: " in output
+    assert "\x1b[" not in output

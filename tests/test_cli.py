@@ -417,6 +417,25 @@ def test_stale_cache_warning_respects_no_color(monkeypatch):
     assert "\033[" not in stderr.getvalue()
 
 
+@pytest.mark.parametrize(
+    ("source", "age", "complete", "message"),
+    [("user", 90, True, "cache: 1min old"),
+     ("user", 90_000, True, "cache: 25h old; refresh scheduled"),
+     ("user", 90, False, "cache: metadata 1min old; analytics incomplete; refresh scheduled"),
+     ("seed", 0, True, "cache: bundled seed; refresh scheduled")],
+)
+def test_cache_footer_is_neutral_and_subdued(monkeypatch, source, age, complete, message):
+    stderr = io.StringIO()
+    stderr.isatty = lambda: True
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr("brewq.cli.sys.stderr", stderr)
+    with patch("brewq.cache.load", return_value=_loaded(
+        [_pkg("ripgrep")], source=source, age=age, analytics_complete=complete,
+    )), patch("brewq.scheduler.schedule_if_needed", return_value="scheduled"):
+        assert main(["ripgrep"]) == 0
+    assert stderr.getvalue() == f"\033[2m{message}\033[0m\n"
+
+
 def test_random_runs_generated_search(capsys):
     with patch("brewq.cli._cmd_search", return_value=0) as search:
         rc = main(["random", "--seed", "7"])

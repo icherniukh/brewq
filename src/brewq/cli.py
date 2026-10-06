@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import shutil
 import sys
 from collections.abc import Sequence
@@ -17,15 +16,6 @@ from brewq import seed as seed_mod
 
 _COMMANDS = frozenset({"list", "refresh", "config", "random"})
 _FORMATTER = argparse.RawDescriptionHelpFormatter
-_COLOR_RED = "\033[31m"
-_RESET = "\033[0m"
-
-
-def _use_color_stderr() -> bool:
-    if os.environ.get("NO_COLOR"):
-        return False
-    return hasattr(sys.stderr, "isatty") and sys.stderr.isatty()
-
 _SEARCH_EPILOG = """\
 commands: list, refresh, config path
 examples: brewq ripgrep | brewq -t 10 rust | brewq list
@@ -70,6 +60,7 @@ trending:
   monthly rate. With complete data, recent is 90d / 3 and earlier is the prior
   275 days normalized to 30 days. Low-volume and newly tracked packages are
   smoothed toward 1.0x; 1.0x means steady. Missing history displays `-`.
+  Table cues: ↑↑ >= 2x, ↑ >= 1.2x, · near baseline, ↓ < 0.8x.
   TREND measures momentum, not absolute popularity; search sorts by 90d unless
   another field is selected.
 
@@ -446,24 +437,21 @@ def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict) -> None:
 
     if loaded.source == "seed":
         detail = f"; {suffix}" if suffix else ""
-        print(f"cache: bundled seed{detail}", file=sys.stderr)
+        render_mod.render_cache_note(f"cache: bundled seed{detail}", sys.stderr)
         return
 
     age_str = _format_age(loaded.age_seconds)
-    if _use_color_stderr():
-        age_str = f"{_COLOR_RED}{age_str}{_RESET}"
-
     if not loaded.analytics_complete:
         detail = f"; {suffix}" if suffix else ""
-        print(
+        render_mod.render_cache_note(
             f"cache: metadata {age_str} old; analytics incomplete{detail}",
-            file=sys.stderr,
+            sys.stderr,
         )
     elif loaded.requires_refresh or loaded.age_seconds >= max_age:
         detail = f"; {suffix}" if suffix else ""
-        print(f"cache: {age_str} old{detail}", file=sys.stderr)
+        render_mod.render_cache_note(f"cache: {age_str} old{detail}", sys.stderr)
     else:
-        print(f"cache: {age_str} old", file=sys.stderr)
+        render_mod.render_cache_note(f"cache: {age_str} old", sys.stderr)
 
 
 def _format_age(age_seconds: object) -> str:

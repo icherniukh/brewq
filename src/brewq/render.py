@@ -13,12 +13,37 @@ from brewq.model import Package
 # package/status colors follow the user's terminal theme instead of pinning
 # fixed 256-color values.
 _BOLD = "\033[1m"
+_DIM = "\033[2m"
 _RESET = "\033[0m"
 _COLOR_GREEN = "\033[32m"
 _COLOR_FORMULA = "\033[36m"  # cyan
 _COLOR_CASK = "\033[35m"     # magenta
 _COLOR_DEPRECATED = "\033[33m"  # yellow
 _COLOR_DISABLED = "\033[31m"    # red
+
+
+def _trend_emphasis(pkg: Package) -> tuple[str, str]:
+    """Table-only momentum cues; keep the column registry and TSV numeric."""
+    trend = pkg.trending
+    if trend is None:
+        return "", _DIM
+    # Match the displayed precision so a visible 2.0x always gets the hot cue.
+    trend = round(trend, 1)
+    if trend >= 2:
+        return "↑↑", _BOLD + _COLOR_GREEN
+    if trend >= 1.2:
+        return "↑", _COLOR_GREEN
+    if trend < 0.8:
+        return "↓", _DIM
+    return "·", _DIM
+
+
+def render_cache_note(message: str, out: TextIO) -> None:
+    """Keep routine cache health visible but subordinate to query results."""
+    if _use_color(out):
+        out.write(_DIM + message + _RESET + "\n")
+    else:
+        out.write(message + "\n")
 
 
 def _plain_status_prefix(pkg: Package) -> str:
@@ -79,7 +104,11 @@ def render_table(
 
     # Compute raw cell values
     rows: list[list[str]] = [
-        [col.getter(pkg) for col in columns]
+        [
+            col.getter(pkg) + f" {_trend_emphasis(pkg)[0]:<2}"
+            if col.key == "trending" else col.getter(pkg)
+            for col in columns
+        ]
         for pkg in packages
     ]
     headers = [
@@ -182,6 +211,10 @@ def render_table(
                         parts.append(_COLOR_DEPRECATED + f"{cell:<{w}}" + _RESET)
                     else:
                         parts.append(f"{cell:<{w}}")
+                    continue
+
+                if color and line_no == 0 and col.key == "trending":
+                    parts.append(_trend_emphasis(pkg)[1] + f"{cell:>{w}}" + _RESET)
                     continue
 
                 if col.align == "right":

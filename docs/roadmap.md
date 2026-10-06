@@ -111,6 +111,11 @@ remains in the default table: making it opt-in is a product decision for the CLI
 contract issue, not a claim about current behavior. Historical calibration and
 rejected popularity/clamp approaches remain in the archive.
 
+Table momentum cues emphasize rising TREND values with direction markers and
+terminal-theme green, using bold for values at least 2×. Neutral cache footers
+keep freshness and repair state visible without competing with query results.
+These presentation bands do not change analytics, sorting, or TSV values.
+
 Exact matches versus deprecated/disabled hiding, formula/cask grouping, eventual
 prototype retirement, and external dotfiles migration remain open decisions.
 Semantic/vector search, `info`, `--exact`, `--explain`, `--open`, `list --leaves`,

@@ -73,6 +73,13 @@ Search defaults to `name,90d,trending,description`; list defaults to
 installation-rate multiplier, not absolute popularity. It is currently visible
 by default but is not the default sort.
 
+TREND adds compact momentum cues: `↑↑` at 2.0× or above, `↑` at 1.2× or
+above, `·` near baseline, and `↓` below 0.8×. Rising values are green on a
+color terminal, with bold emphasis at 2.0×; steady, cooling, and missing values
+are subdued. Bands use the displayed one-decimal multiplier, not statistical
+significance thresholds.
+Markers remain visible without color; TSV keeps the raw multiplier.
+
 `--tsv` is the only machine-readable format. Cells sanitize tabs and newlines;
 unknown install counts become empty cells. Table colors follow the terminal
 theme, are TTY-only, and honor a nonempty `NO_COLOR` value. Installed markers
@@ -93,6 +100,9 @@ fetches analytics on demand. VERSION displays the installed version for installe
 rows; the catalog's available version remains separate internally.
 
 ## Cache and recovery
+
+The cache footer uses subdued neutral text on a color terminal. Age, incomplete
+analytics, and refresh scheduling remain visible without red freshness accents.
 
 Releases bundle a seed catalog. Loads validate the user snapshot before using it,
 fall back to the seed after corruption, and reconcile installed state from local
