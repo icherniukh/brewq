@@ -23,6 +23,7 @@ from brewq.model import Package, from_cask, from_formula
 
 _CACHE_FILE = "brew-all.json"
 _PICKLE_FILE = "brew-all.pkl"
+_INVENTORY_INDEX_FILE = "inventory-index.pkl"
 _CACHE_METADATA = "_brewq_cache"
 _CACHE_SCHEMA = 1
 _PICKLE_SCHEMA = 2
@@ -425,7 +426,7 @@ def _overlay_inventory(packages: list[Package], roots: object = None) -> tuple[s
             if not isinstance(roots, (tuple, list)) or len(roots) != 2:
                 raise ValueError("invalid cached storage roots")
             cellar, caskroom = Path(roots[0]), Path(roots[1])
-        scan_result = inventory_mod.scan(cellar, caskroom)
+        scan_result = inventory_mod.scan(cellar, caskroom, _dir() / _INVENTORY_INDEX_FILE)
         inventory_mod.overlay(packages, scan_result)
         return str(cellar), str(caskroom)
     except (OSError, ValueError):

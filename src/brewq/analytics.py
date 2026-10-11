@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
 from typing import Any
 
 # Formulae use install_on_request (excludes dependency drag).
@@ -29,6 +27,10 @@ class AnalyticsFetchError(RuntimeError):
 
 
 def _fetch(feed: str, url: str) -> list[dict]:
+    # Imported here: only refreshes touch the network, and urllib is slow to import.
+    import urllib.error
+    import urllib.request
+
     try:
         with urllib.request.urlopen(url, timeout=_TIMEOUT) as resp:
             payload = json.loads(resp.read())

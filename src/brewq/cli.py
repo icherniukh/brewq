@@ -5,7 +5,6 @@ import shutil
 import sys
 from collections.abc import Sequence
 
-from brewq import __version__
 from brewq import cache as cache_mod
 from brewq import columns as columns_mod
 from brewq import config as config_mod
@@ -76,6 +75,19 @@ cache:
 """
 
 
+class _VersionAction(argparse.Action):
+    """Print the version on demand; looking it up eagerly slows every run."""
+
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
+        super().__init__(option_strings, dest, default=default, nargs=0, help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        import brewq
+
+        print(f"brewq {brewq.__version__}")
+        parser.exit()
+
+
 def _positive_int(raw: str) -> int:
     value = int(raw)
     if value < 1:
@@ -113,8 +125,8 @@ def _build_search_parser() -> argparse.ArgumentParser:
     parser.add_argument("-r", "--refresh", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--full-help", action="store_true",
                         help="show columns, trending, and cache behavior")
-    parser.add_argument("--version", action="version",
-                        version=f"brewq {__version__}")
+    parser.add_argument("--version", action=_VersionAction,
+                        help="show program's version number and exit")
     return parser
 
 

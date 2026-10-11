@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import pickle
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -68,17 +71,84 @@ def _cask_record(cask_dir: Path) -> tuple[InstalledRecord | None, bool]:
     return InstalledRecord(cask_dir.name, "cask", newest.name), complete
 
 
-def scan(cellar: Path, caskroom: Path) -> InventoryScan:
+_INDEX_SCHEMA = 1
+# formula directory name -> (directory mtime_ns, newest installed candidate or None)
+_Index = dict[str, tuple[int, tuple[int, InstalledRecord] | None]]
+
+
+def _load_index(path: Path | None, cellar: Path) -> _Index:
+    if path is None:
+        return {}
+    try:
+        with open(path, "rb") as fh:
+            payload = pickle.load(fh)
+        if payload["schema"] == _INDEX_SCHEMA and payload["cellar"] == str(cellar):
+            entries = payload["entries"]
+            if isinstance(entries, dict):
+                return entries
+    except Exception:
+        pass
+    return {}
+
+
+def _save_index(path: Path, cellar: Path, entries: _Index) -> None:
+    payload = {"schema": _INDEX_SCHEMA, "cellar": str(cellar), "entries": entries}
+    tmp_name = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile("wb", dir=path.parent, delete=False) as fh:
+            tmp_name = fh.name
+            pickle.dump(payload, fh, protocol=pickle.HIGHEST_PROTOCOL)
+        os.replace(tmp_name, path)
+    except OSError:
+        if tmp_name is not None:
+            Path(tmp_name).unlink(missing_ok=True)
+
+
+def _scan_formulae(cellar: Path, index_path: Path | None) -> tuple[list[InstalledRecord], bool]:
+    """Scan the Cellar, reusing per-formula results while a directory's mtime is unchanged.
+
+    Adding, removing, or reinstalling a keg changes its formula directory's mtime,
+    so unchanged directories keep their previous receipt and binary listing.
+    """
+    previous = _load_index(index_path, cellar)
+    current: _Index = {}
+    records: list[InstalledRecord] = []
+    complete = True
+    try:
+        entries = [e for e in os.scandir(cellar) if e.is_dir()]
+    except OSError:
+        return records, False
+    for entry in entries:
+        try:
+            mtime = entry.stat().st_mtime_ns
+        except OSError:
+            complete = False
+            continue
+        cached = previous.get(entry.name)
+        if cached is not None and cached[0] == mtime:
+            candidate = cached[1]
+            current[entry.name] = cached
+        else:
+            candidate, record_complete = _formula_record(Path(entry.path))
+            if record_complete:
+                current[entry.name] = (mtime, candidate)
+            else:
+                complete = False
+        if candidate is not None:
+            records.append(candidate[1])
+    if index_path is not None and current != previous:
+        _save_index(index_path, cellar, current)
+    return records, complete
+
+
+def scan(cellar: Path, caskroom: Path, index_path: Path | None = None) -> InventoryScan:
     records: dict[tuple[str, str], InstalledRecord] = {}
     complete_types: set[str] = set()
 
-    formula_dirs, formulae_complete = _directories(cellar)
-    for formula_dir in formula_dirs:
-        candidate, record_complete = _formula_record(formula_dir)
-        formulae_complete = formulae_complete and record_complete
-        if candidate is not None:
-            record = candidate[1]
-            records[(record.type, record.name)] = record
+    formula_records, formulae_complete = _scan_formulae(cellar, index_path)
+    for record in formula_records:
+        records[(record.type, record.name)] = record
     if formulae_complete:
         complete_types.add("formula")
 

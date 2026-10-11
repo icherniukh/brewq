@@ -193,3 +193,43 @@ def test_storage_roots_uses_bounded_homebrew_queries():
 
     assert roots == (Path("/opt/homebrew/Cellar"), Path("/opt/homebrew/Caskroom"))
     assert [call.kwargs["timeout"] for call in run.call_args_list] == [5, 5]
+
+
+def test_scan_index_reuses_unchanged_formulae_and_rescans_changed_ones(tmp_path):
+    cellar = tmp_path / "Cellar"
+    caskroom = tmp_path / "Caskroom"
+    caskroom.mkdir()
+    index = tmp_path / "index.pkl"
+    _receipt(cellar / "ripgrep" / "14.0" / "INSTALL_RECEIPT.json", installed_at=10, tap="homebrew/core")
+    _receipt(cellar / "jq" / "1.7" / "INSTALL_RECEIPT.json", installed_at=10, tap="homebrew/core")
+    (cellar / "jq" / "1.7" / "bin").mkdir()
+    (cellar / "jq" / "1.7" / "bin" / "jq").write_text("")
+
+    first = scan(cellar, caskroom, index)
+    assert index.exists()
+    assert first.records[("formula", "jq")].binaries == ("jq",)
+
+    with patch("brewq.inventory._formula_record", side_effect=AssertionError("rescanned")):
+        second = scan(cellar, caskroom, index)
+    assert second.records == first.records
+
+    _receipt(cellar / "ripgrep" / "15.0" / "INSTALL_RECEIPT.json", installed_at=20, tap="homebrew/core")
+    third = scan(cellar, caskroom, index)
+    assert third.records[("formula", "ripgrep")].version == "15.0"
+    assert third.records[("formula", "jq")].version == "1.7"
+
+
+def test_scan_index_drops_removed_formulae_and_ignores_corrupt_index(tmp_path):
+    cellar = tmp_path / "Cellar"
+    caskroom = tmp_path / "Caskroom"
+    caskroom.mkdir()
+    index = tmp_path / "index.pkl"
+    _receipt(cellar / "jq" / "1.7" / "INSTALL_RECEIPT.json", installed_at=10, tap="homebrew/core")
+    scan(cellar, caskroom, index)
+
+    index.write_bytes(b"not a pickle")
+    assert ("formula", "jq") in scan(cellar, caskroom, index).records
+
+    import shutil
+    shutil.rmtree(cellar / "jq")
+    assert ("formula", "jq") not in scan(cellar, caskroom, index).records

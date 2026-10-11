@@ -32,7 +32,7 @@ def test_parse_count_invalid():
 
 def test_fetch_names_transport_failure():
     with patch(
-        "brewq.analytics.urllib.request.urlopen",
+        "urllib.request.urlopen",
         side_effect=urllib.error.URLError("offline"),
     ), pytest.raises(AnalyticsFetchError, match="formula_30d: offline"):
         _fetch("formula_30d", "https://example.test/analytics.json")
