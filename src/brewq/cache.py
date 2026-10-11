@@ -395,6 +395,7 @@ def clear() -> None:
         try:
             cache_path().unlink(missing_ok=True)
             pickle_path().unlink(missing_ok=True)
+            (directory / _INVENTORY_INDEX_FILE).unlink(missing_ok=True)
         finally:
             fcntl.flock(lock_fh, fcntl.LOCK_UN)
 

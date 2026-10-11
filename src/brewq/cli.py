@@ -485,6 +485,21 @@ def _format_age(age_seconds: object) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    try:
+        return _main(argv)
+    except BrokenPipeError:
+        # Reader closed early (`brewq ... | head`): exit like SIGPIPE, without a traceback
+        # or a second error when the interpreter flushes stdout at shutdown.
+        import os
+
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except (OSError, ValueError):
+            pass
+        return 141
+
+
+def _main(argv: Sequence[str] | None = None) -> int:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     raw_argv = _normalize_argv(raw_argv)
 

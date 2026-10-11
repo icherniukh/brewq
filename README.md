@@ -33,9 +33,11 @@ brewq --tsv -c name,90d,url ripgrep
 column reference plus concise trending and cache behavior.
 
 Search matches names, formula aliases, and descriptions. All query terms must
-match; name normalization applies. Results are a superset of `brew search`: its
-substring and spell-correction (DidYouMean) matches are reproduced for formulae and
-casks, and `/regex/` queries are supported.
+match; name normalization applies. For homebrew/core and homebrew/cask, results are
+a superset of `brew search`: its substring and spell-correction (DidYouMean) matches
+are reproduced for formulae and casks, and `/regex/` queries are supported. Packages
+from third-party taps are not in the catalog, so `brew search` can list names brewq
+cannot. `brew search` exits 1 when nothing matches; brewq exits 0.
 The default sort is raw 90-day install volume. Exact name/alias matches precede
 other active matches under metric sorts; disabled/deprecated results rank last.
 `-s name` sorts alphabetically within those status groups.

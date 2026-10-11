@@ -81,3 +81,19 @@ def test_field_help_ignores_config_and_does_not_initialize_cache(tmp_path):
         assert "+version,bin" in proc.stdout and "-c all" in proc.stdout
         assert proc.stderr == ""
     assert not (tmp_path / "cache").exists()
+
+
+def test_broken_pipe_exits_quietly(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "BREWQ_CACHE_DIR": str(tmp_path), "BREWQ_CONFIG": str(tmp_path / "c.toml")}
+    cmd = [sys.executable, "-m", "brewq.cli", "--tsv", "-c", "all", "a"]
+    producer = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+    assert producer.stdout is not None
+    producer.stdout.readline()
+    producer.stdout.close()
+    stderr = producer.stderr.read().decode()
+    producer.wait(timeout=60)
+    assert "Traceback" not in stderr

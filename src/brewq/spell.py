@@ -100,7 +100,9 @@ def correct(query: str, dictionary: Iterable[str]) -> list[str]:
         score = _jaro_winkler(norm_word, normalized)
         if score >= threshold:
             scored.append((score, word, norm_word))
-    scored.sort(key=lambda item: item[0], reverse=True)
+    # Ruby sorts ascending then reverses; mirroring that keeps tie order identical.
+    scored.sort(key=lambda item: item[0])
+    scored.reverse()
 
     max_typos = ceil(len(normalized) * 0.25)
     corrections = [

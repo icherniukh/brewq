@@ -107,8 +107,11 @@ def test_load_computes_age_from_real_file_mtime():
 def test_clear():
     _write_cache(Path(os.environ["BREWQ_CACHE_DIR"]), {"formulae": [], "casks": []})
     assert cache_mod.cache_path().exists()
+    index = Path(os.environ["BREWQ_CACHE_DIR"]) / "inventory-index.pkl"
+    index.write_bytes(b"x")
     cache_mod.clear()
     assert not cache_mod.cache_path().exists()
+    assert not index.exists()
 
 
 def test_refresh_skips_when_fresh():
