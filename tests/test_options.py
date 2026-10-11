@@ -206,11 +206,20 @@ def test_rank_name_search_orders_name_matches_before_fuzzy_popularity():
     assert [p.name for p in result] == ["zenmap", "zmap"]
 
 
-def test_rank_name_search_does_not_fuzzy_match_casks():
+def test_rank_name_search_spell_corrects_casks_like_brew():
     local = [_pkg("zenmap", type_="cask")]
     opts = SearchOptions(query=["zmap"])
     result = rank(local, opts)
-    assert result == []
+    assert [p.name for p in result] == ["zenmap"]
+
+
+def test_rank_regex_query_matches_names_and_descriptions():
+    import re
+
+    local = [_pkg("ripgrep", desc="Fast line search"), _pkg("bat"), _pkg("rg-ish")]
+    opts = SearchOptions(query=["/^r.*h?$/"], regex=re.compile("^r.*h?$"))
+    result = rank(local, opts)
+    assert {p.name for p in result} == {"ripgrep", "rg-ish"}
 
 
 def test_rank_deprecated_included_with_no_limit():
