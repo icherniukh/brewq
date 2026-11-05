@@ -222,6 +222,25 @@ def _read_snapshot(path: Path) -> _Snapshot:
     return _validate_snapshot(json.loads(path.read_text()))
 
 
+def completion_names() -> list[str]:
+    """Read names only: never initialize, refresh, reconcile inventory, or write."""
+    try:
+        raw = _read_snapshot(cache_path()).raw
+    except (OSError, UnicodeError, ValueError, TypeError):
+        return []
+    names = {
+        record[key]
+        for group, key in (("formulae", "name"), ("casks", "token"))
+        for record in raw[group]
+    }
+    # Names enter a shell's editing buffer; reject control bytes and shell syntax.
+    return sorted(
+        name for name in names
+        if name[0].isalnum() and name.isascii()
+        and all(char.isalnum() or char in "@+_./-" for char in name)
+    )
+
+
 def _snapshot_metadata(*, analytics_complete: bool, repair_needed: bool) -> dict[str, Any]:
     return {
         "schema_version": _CACHE_SCHEMA,

@@ -7,12 +7,153 @@ comparison signal, not proof of quality. Keep the interface small and the data
 and failure modes understandable.
 
 This document describes direction and release gates. **Live work status lives
-in Beads**, under milestone `brewq-4oc`; run `bd ready` and
-`bd list --status=in_progress`. The [README](../README.md) describes current
-behavior, including known inconsistencies. Historical snapshots do not override
-either source.
+in Beads**; the first-public-release gate is `brewq-m1-release`. Run `bd ready`
+and `bd list --status=in_progress`. The [README](../README.md) describes current
+behavior, including known inconsistencies. Historical snapshots and the closed
+`brewq-4oc` stabilization milestone do not establish readiness of a new release.
 
-## Stabilization sequence
+## First public release boundary
+
+The November release cut separates a finite public 0.x release from optional
+polish and new product ideas. Beads owns membership, priorities, dependencies,
+and completion evidence; this is the rationale, not a second task inventory.
+
+| Milestone | Purpose | Release relationship |
+| --- | --- | --- |
+| M1 — `brewq-m1-release` | Legal/provenance and privacy clearance; settled CLI contract; background-refresh control; honest result limits; one installation path and factual public docs; final artifact verification. | **Release after M1.** This is the only first-public-release gate. |
+| M2 — `brewq-m2-ux` | Everyday terminal UX: responsive layout, readable cells and non-color cues, browsing consistency, optional pager, and presentation polish. | Post-release improvements; known limitations must be disclosed, not silently treated as fixed. |
+| M3 — `brewq-m3-value` | Select useful query/metadata/completion additions from feedback; automate verification and consider another distribution channel. | Independently releasable after M1; does not require every M2 item first. |
+| M4 — `brewq-m4-explore` | Parked experiments, evidence-gated performance work, and personal workflow ideas. | No release commitment. Existing product boundaries still apply. |
+
+At the owner's explicit request, a narrow zsh-completion slice was brought
+forward: commands/options derive from argparse, fields from shared registries,
+and package names from the validated user snapshot only. It does not refresh,
+initialize a seed, reconcile inventory, or integrate with `brew`; broader shell
+and suggestion work remains separate. This does not add a release gate.
+
+M1 does not require a GIF, a pager, a palette redesign, autocomplete, more query
+modes, CI, or a Homebrew tap. One concrete versioned installation route is enough;
+the initial target is a release wheel installed with `uv tool install`, with the
+exact artifact location settled in Beads before publication. Registry availability
+and ownership must be verified if PyPI is chosen instead. Layout imperfections
+can ship as documented M2 limitations; personal-data leakage and missing legal
+clearance cannot.
+
+The final task, `brewq-release-gate`, explicitly depends on every other M1 task.
+It requires the correct version bump before building, full source verification,
+inspection of both wheel and sdist, and installation outside the checkout on the
+supported Python baseline. Verify the promised entrypoints, seed, private-data
+boundary, clean/offline and failure-state behavior, scheduler opt-out, TTY/pipe
+contracts, and the actual installation/uninstallation instructions. The current
+verification script's checkout and installed-shim checks are useful inputs, not
+proof of a newly built public artifact; skipped checks are not release evidence.
+
+The owner has confirmed that the seed must be sanitized and public Git history
+cleaned before release. Short-command convenience should remain; collision-aware
+`bq` creation is the desired direction, while `brq` is a proposed fallback, not a
+settled contract. License choice, the exact history-redaction scope, and the
+supported shortcut setup mechanism still need explicit decisions. Record
+entrypoint/flag decisions in `brewq-h7m`; do not silently remove aliases or change
+defaults. Completing M1 means ready to recommend a first public 0.x release, not
+automatic publication or a 1.0 stability claim.
+
+## Release execution plan
+
+Follow this sequence for M1. This is the execution order and safety boundary;
+Beads remains the only task/status tracker. Start or resume with
+`bd ready --label m1-release`, read the issue, then claim it. Complete each issue
+with verification evidence; do not mark a stage finished only because it is
+written here. M2/M3 remain post-release and M4 remains parked.
+
+### 1. Preserve a private recovery point
+
+Before changing the seed or preparing a rewrite, inventory local branches, tags,
+stashes, worktrees, and staged/unstaged/untracked work. Make and verify a private
+Git backup plus a separate backup of uncommitted and untracked files; a Git-only
+backup does not capture the dirty working tree. Keep backups and the original
+history outside anything intended for publication. Do not reset, clean, stash
+away, or overwrite existing work just to prepare the release.
+
+### 2. Sanitize the seed and prevent recurrence
+
+Implement `brewq-seed-paths`: fix the seed builder, cover nested personal paths
+and installed state with regressions, then regenerate or sanitize and re-encode
+the seed. Remove actual builder-specific values without blindly damaging valid
+upstream examples. Preserve package identity, analytics, and cask binary data.
+Inspect the resulting compressed resource, not just a sanitizer test. Historical
+copies are addressed in stage 4; changing today's file does not clean history.
+
+### 3. Finish and freeze the small M1 release contract
+
+Continue independent M1 work while privacy fixes are prepared: resolve the
+license/notices, implement scheduler opt-out and result-limit disclosure, settle
+the cap/installed-filter spellings, and fix query/flag ordering. Keep terminal
+height work to a deterministic budget, not an expanded layout project. Settle
+`brewq-bqname`, then align packaging metadata and factual public documentation
+with one supported install/uninstall route. No GIF, extra registry, tap, or new
+query feature is required. Freeze this prepared candidate before the history
+cleanup so private text is not reintroduced afterward.
+
+**Short-command direction to validate:** always retain `brewq`; provide `bq`
+automatically when that name is unclaimed, without overwriting another tool or
+user shortcut. If `bq` belongs to something else, consider `brq` only if that
+fallback is approved and unclaimed too. Reuse our own existing shortcut on
+reinstall; if neither name is safe, retain `brewq` and give a clear diagnostic.
+Treat this as installation/setup work, not a side effect of a package query.
+
+The current `pyproject.toml` declares fixed `brewq` and `bq` console scripts, not
+shell aliases or collision-aware setup. Verify a supported mechanism for the
+chosen installation route before promising automatic selection. Account for
+PATH commands, symlinks, aliases/functions in the supported shell, repeat setup,
+and uninstall removing only our own files. Do not silently edit shell startup
+files, install both names as a substitute for collision handling, or invent a
+conditional package-install hook. If the route cannot support the desired
+behavior, report that gap for a concrete decision rather than claim it works.
+
+**Settled flag spellings:** installed-only search uses `-i` / `--installed`;
+`-l` is retired rather than kept as an ambiguous shortcut. Both search and `list`
+use `-t` / `--top` for explicit positive caps and retain `--limit` as an alias;
+no `-n` shorthand is added. This unifies explicit controls without changing the
+existing automatic-cap defaults or making `--all` mean unlimited output.
+
+### 4. Clean public Git history in an isolated copy
+
+Execute `brewq-history-scrub` after the sanitized seed and M1 candidate/docs are
+ready. Review and approve the exact redaction/removal map and branches/tags to be
+published. Use a disposable rewrite copy, not this dirty working checkout. Keep
+private research and the original data in the private recovery backup; do not
+blanket-delete archives, Beads, contributor guidance, or the legacy prototype.
+Preserve required licensing and provenance, and review affected local feature
+branches so later merges cannot reintroduce old private blobs.
+
+Inspect every ref intended for publication and its reachable objects for the
+reviewed private material, not only the final file tree. Compare the rewritten
+candidate tree with the prepared candidate to catch unintended changes. Record
+the reviewed scope and verification evidence. Stop before replacing the working
+repository or its refs until that concrete operation is approved. Do not push,
+force-push, or expose backup/original refs; remote publication is a separate step.
+
+### 5. Verify the exact release candidate
+
+Run `brewq-release-gate` only after all other M1 work, including history cleanup.
+Choose and commit the correct version bump before any release build. Run the
+full checks against the cleaned candidate, build and inspect wheel and sdist,
+and install outside the checkout on the supported Python baseline. Verify seed
+availability/privacy, the decided command/shortcut behavior, offline/cache/config
+and inventory cases, scheduler opt-out, TTY/piped/no-color and TSV behavior, and
+installation/uninstallation. Recheck both source history and artifacts for private
+material after any further edit. Record the candidate revision, version, artifact
+hashes, exact results, and disclosed M2 limitations; skipped checks are not passes.
+
+### 6. Release after M1, then take feedback
+
+Once the M1 issues and final gate are verified, the candidate is suitable for a
+first public 0.x release. Obtain publication approval, publish only the reviewed
+source/refs and artifacts through the chosen route, and smoke-check the published
+install instructions. Do not wait for M2 or M3. Keep later refinements independently
+releasable instead of turning the optional backlog into another release gate.
+
+## Historical stabilization sequence
 
 The milestone completed on September 22, 2026. The sections below preserve the
 gates and ownership used to reach that state; Beads remains authoritative for
@@ -65,13 +206,14 @@ TSV parity, then replaced the stale user-level installation. The full gate now
 checks the external installed version and option contract rather than help exit
 status alone.
 
-### After the stability milestone
+### Follow-ups from the historical milestone
 
-Autocomplete (`brewq-472`), performance work (`brewq-73z`), and README animation
-(`brewq-8a8`) are P3 follow-ups after the milestone. Extended metadata
-(`brewq-cdj`) and package-update research (`brewq-kj3`) are P4 exploratory work;
-the latter remains deferred. Local hook cleanup (`brewq-tm6`) is completed P2
-tooling work, not a package feature or release guarantee.
+Later work is grouped by the public release boundary above. Autocomplete and
+README animation remain optional post-release work. Further cache optimization
+requires fresh full-path measurements; the recorded sub-100ms search/list results
+are not a reason to add another cache representation. Extended metadata and
+package-update research remain exploratory. Local hook cleanup (`brewq-tm6`) is
+completed tooling work, not a package feature or release guarantee.
 
 P0 is reserved for emergencies. There is no date-based release promise; behavior
 and artifact gates determine readiness.

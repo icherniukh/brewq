@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
+import runpy
 from pathlib import Path
 from unittest.mock import patch
 
@@ -33,6 +35,102 @@ def _data() -> dict:
             **metrics,
         }],
     }
+
+
+@pytest.fixture
+def sanitize_seed():
+    script = Path(__file__).resolve().parents[1] / "scripts" / "build-seed-cache.py"
+    return runpy.run_path(str(script))["_sanitize"]
+
+
+@pytest.mark.parametrize("home", ["/Users/example.user", "/home/example+builder", "/Users/构建者"])
+def test_builder_sanitizes_nested_home_paths_and_installed_state(monkeypatch, sanitize_seed, home):
+    monkeypatch.setenv("HOME", home)
+    data = _data()
+    formula = data["formulae"][0]
+    formula["installed"] = [{"version": "14.1", "prefix": f"{home}/Cellar/ripgrep"}]
+    formula["service"] = {"run": [f"{home}/bin/rg", "--flag"], "working_dir": home}
+    formula["caveats"] = f'Use "{home}" or ({home}) and {home}/.config/rg'
+    formula["upstream_examples"] = [
+        "/Users/Shared/public", "/home/upstream-user/example",
+        f"{home}-other/config", f"{home}.backup/config", f"{home}_other/config",
+        f"{home}+other/config", f"/archive{home}/config",
+        f"https://example.test{home}/config",
+    ]
+    cask = data["casks"][0]
+    cask["installed"] = "124.0"
+    cask["artifacts"] = [
+        {"app": ["Browser.app", {"target": f"{home}/Applications/Browser.app"}]},
+        {"binary": ["bin/browser", {"target": "browser-tool"}]},
+    ]
+    data["nested"] = {f"{home}/key": [True, None, 7, 1.5]}
+    examples = list(formula["upstream_examples"])
+
+    sanitize_seed(data)
+
+    formula, cask = data["formulae"][0], data["casks"][0]
+    assert formula["installed"] == [] and cask["installed"] is None
+    assert formula["service"] == {"run": ["~/bin/rg", "--flag"], "working_dir": "~"}
+    assert formula["caveats"] == 'Use "~" or (~) and ~/.config/rg'
+    assert formula["upstream_examples"] == examples
+    assert cask["artifacts"][0]["app"][1]["target"] == "~/Applications/Browser.app"
+    assert data["nested"] == {"~/key": [True, None, 7, 1.5]}
+    assert cask["artifacts"][1]["binary"][1]["target"] == "browser-tool"
+    for group in ("formulae", "casks"):
+        for key, value in _data()[group][0].items():
+            assert data[group][0][key] == value
+    encoded = seed.encode(data, generated_at=1_700_000_000)
+    sanitize_seed(data)
+    assert seed.encode(data, generated_at=1_700_000_000) == encoded
+
+
+def test_builder_rejects_redacted_key_collisions_without_mutation(monkeypatch, sanitize_seed):
+    monkeypatch.setenv("HOME", "/home/seed-builder")
+    data = _data()
+    data["paths"] = {"/home/seed-builder/tool": 1, "~/tool": 2}
+    original = json.dumps(data)
+
+    with pytest.raises(ValueError, match="collision"):
+        sanitize_seed(data)
+
+    assert json.dumps(data) == original
+
+
+def test_builder_root_home_does_not_redact_all_absolute_paths(monkeypatch, sanitize_seed):
+    monkeypatch.setenv("HOME", "/")
+    data = _data()
+    data["formulae"][0]["caveats"] = "/usr/local/bin; https://example.test/path"
+
+    sanitize_seed(data)
+
+    assert data["formulae"][0]["caveats"] == "/usr/local/bin; https://example.test/path"
+
+
+def test_packaged_seed_has_no_unreviewed_home_paths_or_installed_state():
+    data, _ = seed.load_resource()
+    # Detect another builder's account too. Shared system paths and home-like
+    # segments inside public URLs are not local user-profile destinations.
+    def strings(value):
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                yield key
+                yield from strings(item)
+        elif isinstance(value, list):
+            for item in value:
+                yield from strings(item)
+
+    unreviewed_paths = sum(
+        len(re.findall(
+            r'''(?:^|[\s"'(<=>])/(?:Users/(?!Shared(?:/|$|["\s]))|home/)[^/\s"'<>]+''',
+            text,
+        ))
+        for text in strings(data)
+    )
+    assert unreviewed_paths == 0
+    assert all(record["installed"] == [] for record in data["formulae"])
+    assert all(record["installed"] is None for record in data["casks"])
 
 
 def test_encode_is_deterministic_and_valid():

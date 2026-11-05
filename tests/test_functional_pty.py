@@ -23,6 +23,8 @@ import termios
 import time
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -143,6 +145,21 @@ def test_pty_default_output_caps_by_real_terminal_height(tmp_path):
     # verify this by mocking sys.stdout and shutil.get_terminal_size wholesale.
     assert 0 < len(matched) <= 14
     assert "zzcap-39" not in output
+
+
+@pytest.mark.parametrize("command", [[], ["list"]])
+@pytest.mark.parametrize("flag", ["-t", "--top", "--limit"])
+def test_pty_limit_aliases_cap_both_commands(tmp_path, command, flag):
+    _write_cache(tmp_path, [_formula(f"zzflags-{i}", installed=True) for i in range(8)])
+    args = [*command, flag, "2"]
+    if not command:
+        args.extend(["-i", "zzflags"])
+    rc, output = _run_in_pty(_brewq(*args), _env(tmp_path), rows=24, cols=100)
+    assert rc == 0
+    rows = [line for line in _strip_ansi(output).splitlines() if line.startswith("zzflags-")]
+    assert len(rows) == 2
+    assert "zzflags-0" in rows[0] and "zzflags-1" in rows[1]
+    assert "zzflags-2" not in output
 
 
 def test_pty_non_tty_pipe_emits_no_ansi(tmp_path):

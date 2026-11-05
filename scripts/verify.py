@@ -8,9 +8,12 @@ not apply here (see brewq-1xx.1).
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import subprocess
 import sys
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -67,8 +70,8 @@ def check_cli_smoke() -> Result:
         ("full_help", _brewq("--full-help"), ["columns:", "trending:", "cache:"]),
         ("search_table", _brewq("-t", "5", "json"), ["NAME"]),
         ("search_tsv", _brewq("--tsv", "-c", "name,30d", "ripgrep"), []),
-        ("list_default", _brewq("list", "--limit", "5"), ["NAME", "TYPE"]),
-        ("list_metrics", _brewq("list", "-c", "name,90d", "--limit", "5"), []),
+        ("list_default", _brewq("list", "-t", "5"), ["NAME", "TYPE"]),
+        ("list_metrics", _brewq("list", "-c", "name,90d", "--top", "5"), []),
         ("list_tsv", _brewq("list", "--tsv", "-c", "name,type", "--limit", "5"), []),
     ]
     failures = []
@@ -101,7 +104,7 @@ def _external_entrypoint(name: str) -> str | None:
             continue
         candidate = directory / name
         if candidate.is_file() and os.access(candidate, os.X_OK):
-            return str(candidate)
+            return str(candidate.absolute())
     return None
 
 
@@ -134,12 +137,66 @@ def check_installed_shim() -> Result:
     if help_result.returncode != 0:
         failures.append(f"brewq help: exit {help_result.returncode}: {help_result.stderr.strip()}")
     else:
-        for expected in ("-c, --columns", "--full-help", "--tsv"):
-            if expected not in help_result.stdout:
+        # argparse's metavar placement differs between supported Python versions.
+        def advertised(flag: str) -> bool:
+            return re.search(
+                rf"(?<![\w-]){re.escape(flag)}(?=[\s,=]|$)", help_result.stdout,
+            ) is not None
+
+        for expected in ("-c", "--columns", "-i", "--installed", "--top", "--limit", "--full-help", "--tsv"):
+            if not advertised(expected):
                 failures.append(f"brewq help: missing {expected!r}")
-        for removed in ("-u, --url", "-v, --verbose", "--preset", "--colors"):
-            if removed in help_result.stdout:
+        for removed in ("-l", "-u", "--url", "-v", "--verbose", "--preset", "--colors"):
+            if advertised(removed):
                 failures.append(f"brewq help: stale option {removed!r} is still installed")
+
+    # Exercise the actual entrypoints, not the checkout's module on PYTHONPATH.
+    with tempfile.TemporaryDirectory(prefix="brewq-installed-check-") as directory:
+        root = Path(directory)
+        (root / "brew-all.json").write_text(json.dumps({
+            "formulae": [
+                {"name": name, "installed": [{"version": "1.0"}] if installed else [],
+                 "installs_90d": count}
+                for name, installed, count in [
+                    ("zzverify-hidden", False, 100_000),
+                    ("zzverify-installed-a", True, 1000),
+                    ("zzverify-installed-b", True, 500),
+                ]
+            ],
+            "casks": [],
+            "_brewq_cache": {
+                "schema_version": 1, "analytics_complete": True, "repair_needed": False,
+            },
+        }))
+        env = {
+            "HOME": directory, "PATH": str(root / "no-brew"),
+            "BREWQ_CACHE_DIR": directory, "BREWQ_CONFIG": str(root / "config.toml"),
+            "XDG_CACHE_HOME": directory, "XDG_CONFIG_HOME": directory,
+            "NO_COLOR": "1", "TERM": "dumb", "PYTHONDONTWRITEBYTECODE": "1",
+        }
+        cases = [
+            ["-i", "-t", "1", "--tsv", "-c", "name", "zzverify"],
+            ["--installed", "--limit", "1", "--tsv", "-c", "name", "zzverify"],
+            ["list", "--top", "1", "--tsv", "-c", "name"],
+            ["list", "--limit", "1", "--tsv", "-c", "name"],
+        ]
+        for name in ("brewq", "bq"):
+            path = _external_entrypoint(name)
+            if path is None:
+                continue  # Already reported above.
+            for args in cases:
+                proc = subprocess.run(
+                    [path, *args], cwd=directory, env=env,
+                    capture_output=True, text=True, timeout=20.0,
+                )
+                if proc.returncode != 0 or proc.stdout.splitlines() != ["zzverify-installed-a"]:
+                    failures.append(f"{name} {' '.join(args)}: installed behavior mismatch")
+            completion = subprocess.run(
+                [path, "completion", "zsh"], cwd=directory, env=env,
+                capture_output=True, text=True, timeout=20.0,
+            )
+            if completion.returncode != 0 or "compdef _brewq brewq bq" not in completion.stdout:
+                failures.append(f"{name}: installed completion generation failed")
 
     return Result("installed shim", not failures, "\n".join(failures))
 

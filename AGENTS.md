@@ -28,7 +28,9 @@ behavior and the separate dotfiles migration are verified.
 
 ## Work tracking and commits
 
-Use local Beads. The stabilization milestone is `brewq-4oc`.
+Use local Beads. The first-public-release gate is `brewq-m1-release`; the
+historical stabilization milestone `brewq-4oc` is closed. M2/M3 are post-release
+work and M4 is parked exploration, not additional first-release prerequisites.
 
 ```sh
 bd prime
@@ -76,11 +78,21 @@ uv run python scripts/verify.py
 Run full verification before a PR or completion commit changing runtime behavior.
 Use focused checks while iterating. Report exact results and unrun release checks.
 Beads' generic Go preflight checklist does not apply. A passing existing gate is
-not proof of pending artifact and state-boundary criteria in `brewq-4oc`.
+not proof of the pending artifact and state-boundary criteria in
+`brewq-release-gate`.
 
 Use `uv run brewq` to test the checkout. User-level `brewq`/`bq` may point to an
 older installation. Verify a built artifact before replacing installed tools;
 never silently test the wrong version.
+
+The owner authorizes reinstalling user-level `brewq`/`bq` after every new local
+build. Verify the exact wheel in an isolated environment outside the checkout,
+then install that same wheel with `uv tool install --force <wheel>`. Test the
+actual PATH entrypoints from outside the repo, including installed filtering,
+limits, and completion; do not report delivery based only on source tests or a
+version string. Keep completion bound to the installed tool's interface. Preserve
+rollback and stop on foreign-command collisions or failed checks. This standing
+authorization does not permit publishing, pushing, or history replacement.
 
 Before building or installing a release artifact, choose a SemVer bump from the
 cumulative changes since the last release: patch for fixes, minor for compatible

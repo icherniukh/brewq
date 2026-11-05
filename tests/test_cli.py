@@ -147,19 +147,33 @@ def test_main_search_explicit_top_overrides_default(capsys):
     assert "git-tool-10" not in out
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [
-        ["-t", "0", "git"],
-        ["-t", "-1", "git"],
-        ["list", "--limit", "0"],
-        ["list", "--limit", "-1"],
-    ],
-)
-def test_main_rejects_non_positive_row_limits(argv):
+@pytest.mark.parametrize("command", [[], ["list"]])
+@pytest.mark.parametrize("flag", ["-t", "--top", "--limit"])
+@pytest.mark.parametrize("value", ["0", "-1", "nope", "1.5"])
+def test_main_rejects_invalid_row_limits(command, flag, value):
     with pytest.raises(SystemExit) as exc:
-        main(argv)
+        main([*command, flag, value])
     assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("command", [[], ["list"]])
+@pytest.mark.parametrize("flag", ["-t", "--top", "--limit"])
+@pytest.mark.parametrize("tsv", [False, True])
+def test_main_limit_spellings_cap_search_and_list(command, flag, tsv, capsys):
+    packages = [_pkg(f"tool-{i}", installed=True) for i in range(5)]
+    args = [*command, flag, "2", "-c", "name"]
+    if tsv:
+        args.append("--tsv")
+    if not command:
+        args.extend(["--all", "tool"])
+    with patch("brewq.cache.load", return_value=_loaded(packages)):
+        assert main(args) == 0
+    output = capsys.readouterr().out
+    if tsv:
+        assert output.splitlines() == ["tool-0", "tool-1"]
+    else:
+        assert "tool-0" in output and "tool-1" in output
+        assert "tool-2" not in output
 
 
 def test_main_search_default_columns_omit_type(capsys):
@@ -296,13 +310,14 @@ def test_main_search_sort_invalid(capsys):
     assert "Unknown sort field" in capsys.readouterr().err
 
 
-def test_main_search_installed_filter(capsys):
+@pytest.mark.parametrize("flag", ["-i", "--installed"])
+def test_main_search_installed_filter(capsys, flag):
     pkgs = [
         _pkg("installed-tool", installed=True, installs_30d=1_000),
         _pkg("other-tool", installed=False, installs_30d=5_000),
     ]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["-l", "installed-tool"])
+        rc = main([flag, "tool"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "installed-tool" in out

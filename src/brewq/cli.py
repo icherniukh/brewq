@@ -13,10 +13,10 @@ from brewq import render as render_mod
 from brewq import scheduler as scheduler_mod
 from brewq import seed as seed_mod
 
-_COMMANDS = frozenset({"list", "refresh", "config", "random"})
+_COMMANDS = frozenset({"list", "refresh", "config", "random", "completion"})
 _FORMATTER = argparse.RawDescriptionHelpFormatter
 _SEARCH_EPILOG = """\
-commands: list, refresh, config path
+commands: list, refresh, config path, completion zsh
 examples: brewq ripgrep | brewq -t 10 rust | brewq list
 """
 
@@ -95,6 +95,12 @@ def _positive_int(raw: str) -> int:
     return value
 
 
+def _add_limit_flag(parser: argparse.ArgumentParser, *, dest: str) -> None:
+    parser.add_argument("-t", "--top", "--limit", dest=dest,
+                        type=_positive_int, metavar="N",
+                        help="show at most N packages")
+
+
 def _add_column_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-c", "--columns", metavar="COLS", help=_COLUMN_HELP)
     parser.add_argument("-u", "--url", action="store_true",
@@ -106,7 +112,7 @@ def _add_column_flags(parser: argparse.ArgumentParser) -> None:
 def _build_search_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="brewq",
-        usage="brewq [options] [query ...]\n       brewq {list,refresh,config} ...",
+        usage="brewq [options] [query ...]\n       brewq {list,refresh,config,completion} ...",
         description="Fast, read-only Homebrew package search.",
         epilog=_SEARCH_EPILOG,
         formatter_class=_FORMATTER,
@@ -114,9 +120,8 @@ def _build_search_parser() -> argparse.ArgumentParser:
     parser.add_argument("query", nargs="*", help=argparse.SUPPRESS)
     parser.add_argument("-s", "--sort", metavar="FIELD",
                         help=f"sort by {options_mod.sort_choices_text()} (default: 90d)")
-    parser.add_argument("-t", "--top", type=_positive_int, metavar="N",
-                        help="show at most N matches")
-    parser.add_argument("-l", "--installed", action="store_true",
+    _add_limit_flag(parser, dest="top")
+    parser.add_argument("-i", "--installed", action="store_true",
                         help="search installed packages only")
     parser.add_argument("--all", action="store_true", help=argparse.SUPPRESS)
     _add_column_flags(parser)
@@ -146,8 +151,7 @@ def _build_command_parser() -> argparse.ArgumentParser:
     lst.add_argument("--analytics", action="store_true",
                      help=argparse.SUPPRESS)
     _add_column_flags(lst)
-    lst.add_argument("--limit", type=_positive_int, metavar="N",
-                     help="cap installed rows shown")
+    _add_limit_flag(lst, dest="limit")
     lst.add_argument("--tsv", action="store_true",
                      help="tab-separated output for scripting")
 
@@ -172,6 +176,11 @@ def _build_command_parser() -> argparse.ArgumentParser:
     )
     config_p.add_argument("config_sub_cmd", nargs="?", choices=["path"], default="path",
                           help="Print the config file path")
+
+    completion_p = subparsers.add_parser(
+        "completion", help="Generate shell completion", formatter_class=_FORMATTER,
+    )
+    completion_p.add_argument("shell", choices=["zsh"], help="Completion shell")
 
     # random
     rand_p = subparsers.add_parser(
@@ -502,6 +511,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _main(argv: Sequence[str] | None = None) -> int:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     raw_argv = _normalize_argv(raw_argv)
+    if raw_argv == ["--_complete"]:
+        sys.stdout.write("".join(f"{name}\n" for name in cache_mod.completion_names()))
+        return 0
 
     # Route subcommands only when they are the first token. Search remains the
     # default command even when query terms are named like subcommands.
@@ -511,6 +523,11 @@ def _main(argv: Sequence[str] | None = None) -> int:
             return _cmd_refresh(args)
         if args.command == "config":
             return _cmd_config(args)
+        if args.command == "completion":
+            from brewq.completion import zsh_script
+
+            print(zsh_script(_build_search_parser(), _build_command_parser()), end="")
+            return 0
         if getattr(args, "columns", None) == "help":
             print(columns_mod.selection_help(), end="")
             return 0

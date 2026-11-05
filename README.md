@@ -19,11 +19,31 @@ run its source rather than an older user-level installation. After verifying an
 updated build, `uv tool install --force .` replaces the installed copy. Compare
 `brewq --version` with `uv run brewq --version` when diagnosing drift.
 
+### Zsh completion
+
+After zsh's completion system is initialized (`autoload -Uz compinit; compinit`,
+if your shell setup does not already do this), load completion for both commands:
+
+```zsh
+source <(brewq completion zsh)
+```
+
+Put that line after completion initialization in your zsh configuration to keep
+it enabled. For a checkout, use `source <(uv run brewq completion zsh)` instead.
+Tab completes commands, flags, sort fields, comma-separated columns, and cached
+formula/cask names. Package suggestions use the existing user cache even when
+stale; a missing, unreadable, or invalid cache yields no package suggestions.
+Completion never initializes the seed, scans installed packages, refreshes data,
+or schedules work. It binds to the generating Python environment, so regenerate
+it after moving or recreating that environment. Bash/fish and `brew` completion
+integration are not provided.
+
 ## Search and output
 
 ```sh
 brewq terminal multiplexer
 brewq -t 10 json
+brewq -i -t 10 grep
 brewq -s 365d rust
 brewq -c name,90d,url ripgrep
 brewq --tsv -c name,90d,url ripgrep
@@ -46,7 +66,7 @@ other active matches under metric sorts; disabled/deprecated results rank last.
 | --- | --- |
 | `-s`, `--sort FIELD` | `90d` (built-in default), `30d`, `365d`, `trending`, or `name` |
 | `-t`, `--top N` | Positive result cap; overrides configuration and terminal sizing |
-| `-l`, `--installed` | Filter to packages marked installed |
+| `-i`, `--installed` | Filter to packages marked installed |
 | `-r`, `--refresh` | Force foreground refresh before searching |
 | `--all` | Retain deprecated/disabled matches when the cap would otherwise hide them |
 
@@ -54,6 +74,11 @@ Search cap precedence is `-t`, then positive `output.limit`, then terminal rows
 minus six (minimum five) on a TTY, then unlimited when piped. This caps records,
 not wrapped terminal lines. When capped matches overflow, deprecated/disabled
 matches are hidden unless `--all` is given. Otherwise they remain, ranked last.
+
+Both search and `list` accept `-t N` / `--top N` as the canonical positive cap;
+`--limit N` is an equivalent compatibility alias. `--all` includes package
+statuses, not unlimited results. The former `-l` installed-filter shorthand is
+retired; use `-i` or `--installed` instead.
 
 These output options work for both search and `list`:
 
@@ -113,11 +138,12 @@ remain visible without color.
 ```sh
 brewq list
 brewq list -c name,type,version,90d,description
-brewq list --limit 10
+brewq list -t 10
 brewq list --tsv -c name,type,version
 ```
 
-Rows sort by type, then name. `--limit N` accepts a positive cap. Select cached
+Rows sort by type, then name. Unlike search, `list` remains uncapped by default;
+use the shared positive-cap flags to limit it. Select cached
 analytics through the same `-c` column interface used by search; this never
 fetches analytics on demand. VERSION displays the installed version for installed
 rows; the catalog's available version remains separate internally.
@@ -127,7 +153,8 @@ rows; the catalog's available version remains separate internally.
 The cache footer uses subdued neutral text on a color terminal. Age, incomplete
 analytics, and refresh scheduling remain visible without red freshness accents.
 
-Releases bundle a seed catalog. Loads validate the user snapshot before using it,
+Releases bundle a seed catalog, with builder-local home paths and installed
+state removed during seed generation. Loads validate the user snapshot before using it,
 fall back to the seed after corruption, and reconcile installed state from local
 Homebrew roots. A successful empty inventory clears stale installed markers;
 missing or unreadable roots preserve the last known state. Stale, seed, and
@@ -184,11 +211,13 @@ load operational configuration.
 
 ## Stability and development
 
-The September 2026 stabilization milestone fixed config/cache validation,
+The September 2026 stabilization milestone addressed config/cache validation,
 installed-state reconciliation, incomplete refresh recovery, and scheduling
-before output. Independent workflow reviews found no remaining release blocker.
-The 0.6.0 wheel, bundled seed, and both entry points were verified in an isolated
-Python 3.12 environment; the user-level `brewq` and `bq` installation now matches.
+before output. That historical milestone and the recorded isolated 0.6.0 wheel
+verification do not establish readiness of the next public release. The current
+release gate is `brewq-m1-release` in Beads; see the
+[release boundary](docs/roadmap.md#first-public-release-boundary) and
+[execution plan](docs/roadmap.md#release-execution-plan).
 
 ```sh
 uv sync --extra dev
@@ -197,9 +226,11 @@ bd ready
 bd list --status=in_progress
 ```
 
-Verification runs Ruff, pytest, subprocess CLI smoke checks, and external
-installed-entry-point parity checks. The artifact gate also builds and tests both
-entry points and the bundled seed in an isolated installation.
+The verification script runs Ruff, pytest, subprocess CLI smoke checks, and
+external installed-entry-point parity checks. The separate public-release gate
+requires inspecting the newly built wheel and sdist and verifying the decided
+entrypoint contract and bundled seed in an isolated installation. A skipped
+installed-tool check is not proof that the release artifact works.
 
 Maintained documentation:
 

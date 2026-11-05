@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import time
 from pathlib import Path
 
@@ -9,6 +10,31 @@ from brewq import analytics, brew, seed
 
 
 def _sanitize(data: dict) -> None:
+    """Remove builder-local paths and installed state from public seed metadata."""
+    home = str(Path.home()).rstrip("/")
+    # Match a path token, not a similar account or a path inside another tree.
+    pattern = re.compile(
+        r'''(?P<boundary>^|[\s"'(<=>])''' + re.escape(home) + r'''(?=$|/|[\s"'`,;:)\]}>])'''
+    ) if home else None
+
+    def redact(value):
+        if isinstance(value, str):
+            return pattern.sub(r"\g<boundary>~", value) if pattern else value
+        if isinstance(value, list):
+            return [redact(item) for item in value]
+        if isinstance(value, dict):
+            result = {}
+            for key, item in value.items():
+                clean_key = redact(key)
+                if clean_key in result:
+                    raise ValueError("seed home-path redaction causes a dictionary key collision")
+                result[clean_key] = redact(item)
+            return result
+        return value
+
+    clean = redact(data)
+    data.clear()
+    data.update(clean)
     for formula in data.get("formulae", []):
         formula["installed"] = []
     for cask in data.get("casks", []):

@@ -83,6 +83,25 @@ def test_field_help_ignores_config_and_does_not_initialize_cache(tmp_path):
     assert not (tmp_path / "cache").exists()
 
 
+def test_retired_installed_shorthand_is_rejected_before_cache_access(tmp_path):
+    proc = _run(tmp_path, "-l", "tool")
+    assert proc.returncode == 2
+    assert "unrecognized arguments: -l" in proc.stderr
+    assert not (tmp_path / "cache").exists()
+
+
+def test_search_and_list_help_share_limit_spellings(tmp_path):
+    for command in [(), ("list",)]:
+        proc = _run(tmp_path, *command, "--help")
+        assert proc.returncode == 0
+        assert "--top" in proc.stdout and "--limit" in proc.stdout
+        assert "-t" in proc.stdout
+        if not command:
+            assert "-i, --installed" in proc.stdout
+            assert "-l, --installed" not in proc.stdout
+    assert not (tmp_path / "cache").exists()
+
+
 def test_broken_pipe_exits_quietly(tmp_path):
     import os
     import subprocess
