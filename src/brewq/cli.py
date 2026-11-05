@@ -52,7 +52,7 @@ columns:
 
   Short forms: 30d, 90d, 365d, trend, bin, desc, home.
   Search default: name,90d,trending,description
-  List default: name,type,version,description
+  Installed view (-i or list): name,description
   Use -c help for fields and examples. -c +version,bin adds to your layout;
   -c +home,-trend adds homepage and removes trend; -c all shows every field.
 
@@ -365,7 +365,7 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         _build_search_parser().print_help()
         return 2
 
-    default_cols = cfg["output"]["columns"]
+    default_cols = cfg["list"]["columns"] if opts.installed_only else cfg["output"]["columns"]
     col_defs = None
     if opts.columns_spec != "default":
         # "default" is resolved after ranking: it may contain "auto", which needs

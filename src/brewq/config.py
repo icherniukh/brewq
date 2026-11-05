@@ -44,7 +44,7 @@ DEFAULTS: Settings = {
         "limit": 0,
     },
     "list": {
-        "columns": ["name", "type", "version", "description"],
+        "columns": ["name", "description"],
     },
     "cache": {
         "max_age_seconds": 86400,

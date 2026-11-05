@@ -213,7 +213,7 @@ def test_config_auto_column_picks_available_window_via_top_result(capsys, tmp_pa
     ("argv", "expected"),
     [(["ripgrep", "-c", "+version,bin", "--tsv"], "ripgrep\t\t\t1.0\t\tDescription of ripgrep\n"),
      (["ripgrep", "-c", "+home,-trend", "--tsv"], "ripgrep\t\thttps://example.com\tDescription of ripgrep\n"),
-     (["list", "-c", "+90d,trend", "--tsv"], "ripgrep\tformula\t1.0\t\t\tDescription of ripgrep\n")],
+     (["list", "-c", "+90d,trend", "--tsv"], "ripgrep\t\t\tDescription of ripgrep\n")],
 )
 def test_column_edits_search_and_list_tsv(capsys, argv, expected):
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep", installed=True)])):
@@ -322,6 +322,31 @@ def test_main_search_installed_filter(capsys, flag):
     out = capsys.readouterr().out
     assert "installed-tool" in out
     assert "other-tool" not in out
+
+
+@pytest.mark.parametrize("args", [["-i", "-t", "2"], ["list", "-t", "2"]])
+def test_installed_views_default_to_name_and_description(args, capsys):
+    with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep", installed=True)])):
+        assert main(args) == 0
+    output = capsys.readouterr().out
+    assert "NAME" in output and "DESCRIPTION" in output
+    assert "TYPE" not in output and "VERSION" not in output
+    assert "TREND" not in output and "90d" not in output
+
+
+@pytest.mark.parametrize("command", [["-i"], ["list"]])
+def test_installed_views_honor_list_config_and_explicit_columns(command, tmp_path, capsys):
+    (tmp_path / "config.toml").write_text('[list]\ncolumns = ["name", "version"]\n')
+    with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep", installed=True)])):
+        assert main(command) == 0
+        output = capsys.readouterr().out
+        assert "VERSION" in output and "DESCRIPTION" not in output
+        assert main([*command, "-c", "name,type"]) == 0
+        output = capsys.readouterr().out
+        assert "TYPE" in output and "VERSION" not in output
+        assert main([*command, "-v"]) == 0
+        output = capsys.readouterr().out
+        assert "TYPE" in output and "VERSION" in output and "TREND" in output
 
 
 def test_main_search_discloses_stale_cache(capsys):

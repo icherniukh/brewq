@@ -9,7 +9,7 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/verify.py"
 
 
-@pytest.mark.parametrize("broken", [None, "filter", "completion", "old-help"])
+@pytest.mark.parametrize("broken", [None, "filter", "completion", "old-help", "layout"])
 @pytest.mark.parametrize("metavars", [False, True])
 def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, metavars):
     check = runpy.run_path(str(SCRIPT))["check_installed_shim"]
@@ -33,6 +33,9 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
             output = "" if broken == "completion" else "compdef _brewq brewq bq\n"
         else:
             output = "zzverify-hidden\n" if broken == "filter" else "zzverify-installed-a\n"
+            if "--tsv" not in args:
+                output = ("NAME  TYPE  VERSION  DESCRIPTION\n" if broken == "layout" else "NAME  DESCRIPTION\n")
+                output += "zzverify-installed-a  useful description\n"
             assert kwargs["cwd"] != str(SCRIPT.parent.parent)
             assert "PYTHONPATH" not in kwargs["env"]
             assert kwargs["env"]["PATH"].endswith("no-brew")

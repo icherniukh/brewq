@@ -116,8 +116,13 @@ before editing, so `+90d` won't duplicate `installs_90d`. Keep at least one fiel
 Cask binaries come from declared artifacts; formula binaries require local
 installed data.
 
-Search defaults to `name,90d,trending,description`; list defaults to
-`name,type,version,description`. `trending` is a smoothed recent-to-historical
+Ordinary search defaults to `name,90d,trending,description`. Installed-only
+search (`-i`) and `list` use `[list].columns`, defaulting to `name,description`;
+explicit `-c` or `-v` overrides that layout. Long names are constrained to leave
+room for descriptions, with package basenames retained where possible. Selected
+metadata cells are clipped when necessary; extremely narrow tables use labeled
+vertical records rather than overflow or omit fields. TSV retains full values.
+`trending` is a smoothed recent-to-historical
 installation-rate multiplier, not absolute popularity. It is currently visible
 by default but is not the default sort.
 
@@ -190,7 +195,7 @@ columns = ["name", "installs_90d", "trending", "description"]
 limit = 0 # terminal-height cap on a TTY; unlimited when piped
 
 [list]
-columns = ["name", "type", "version", "description"]
+columns = ["name", "description"]
 
 [cache]
 max_age_seconds = 86400

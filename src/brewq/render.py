@@ -80,6 +80,15 @@ def _clip(text: str, width: int) -> str:
     return text[:width - 1].rstrip() + "…"
 
 
+def _clip_name(text: str, width: int) -> str:
+    if len(text) > width and "/" in text and width >= 3:
+        prefix, name = text.rsplit("/", 1)
+        if len(name) + 2 > width:
+            return "…/" + _clip(name, width - 2)
+        return _clip(prefix, width - len(name) - 1) + "/" + name
+    return _clip(text, width)
+
+
 def _status_prefix(pkg: Package, color: bool) -> str:
     text = _plain_status_prefix(pkg)
     if not text or not color:
@@ -100,7 +109,7 @@ def render_table(
     if out is None:
         out = sys.stdout
     color = _use_color(out)
-    term_width = _terminal_width()
+    term_width = max(1, _terminal_width())
 
     # Compute raw cell values
     rows: list[list[str]] = [
@@ -133,16 +142,44 @@ def render_table(
                     visible_width += 2
                 widths[i] = max(widths[i], visible_width)
 
-    # Set description width: clip to available terminal space; wrap only when columns overflow.
-    fixed_width = sum(widths[i] for i in range(len(columns)) if i != desc_idx)
-    gaps = 2 * max(0, len(columns) - 1)  # 2-space padding between columns
-    columns_overflow = False
+    gaps = 2 * max(0, len(columns) - 1)
+    minimums = [len(header) for header in headers]
+    if name_idx is not None:
+        minimums[name_idx] = max(minimums[name_idx], min(8, widths[name_idx]))
+
+    # If even the labels cannot fit, keep all selected fields in a readable
+    # vertical layout rather than overflowing or silently dropping columns.
+    if sum(minimums) + gaps > term_width:
+        out.write("\n")
+        for pkg, row in zip(packages, rows, strict=False):
+            for col, header, cell in zip(columns, headers, row, strict=False):
+                if col.key == "name" and pkg.installed:
+                    cell += " ✔"
+                if col.key == "description" and not any(c.key == "status" for c in columns):
+                    cell = _plain_status_prefix(pkg) + cell
+                out.write("\n".join(_wrap(f"{header}: {cell}", term_width)) + "\n")
+            out.write("\n")
+        return
+
+    # A single long tap/name must not monopolize the entire table.
+    if name_idx is not None and len(columns) > 1:
+        widths[name_idx] = min(widths[name_idx], max(minimums[name_idx], term_width // 4))
     if desc_idx is not None:
-        min_desc_width = len(headers[desc_idx])
-        available = max(min_desc_width, term_width - fixed_width - gaps)
         max_content = max((len(row[desc_idx]) for row in rows), default=0)
-        widths[desc_idx] = max(min_desc_width, min(max_content, available))
-        columns_overflow = (fixed_width + gaps + min_desc_width) > term_width
+        widths[desc_idx] = max(minimums[desc_idx], min(max_content, max(20, term_width // 3)))
+
+    # Reserve description context before reducing oversized metadata cells.
+    excess = max(0, sum(widths) + gaps - term_width)
+    for i in sorted(
+        (i for i in range(len(columns)) if i != desc_idx),
+        key=lambda i: widths[i] - minimums[i], reverse=True,
+    ):
+        reduction = min(excess, widths[i] - minimums[i])
+        widths[i] -= reduction
+        excess -= reduction
+    if desc_idx is not None:
+        fixed_width = sum(widths[i] for i in range(len(columns)) if i != desc_idx)
+        widths[desc_idx] = max(minimums[desc_idx], min(max_content, term_width - fixed_width - gaps))
 
     # Header
     header_parts = []
@@ -168,15 +205,11 @@ def render_table(
         pkg_type = pkg.type
         is_installed = pkg.installed
 
-        # Clip description to column width; wrap only when columns overflow the terminal.
-        # Status prefix is embedded before clip/wrap so word boundaries are respected.
+        # Include status text in the description's width budget before styling.
         if desc_idx is not None:
             plain_prefix = _plain_status_prefix(pkg) if show_status_in_description else ""
             desc_text = plain_prefix + row[desc_idx]
-            if columns_overflow:
-                desc_lines = _wrap(desc_text, widths[desc_idx])
-            else:
-                desc_lines = [_clip(desc_text, widths[desc_idx])]
+            desc_lines = [_clip(desc_text, widths[desc_idx])]
             if plain_prefix and desc_lines and desc_lines[0].startswith(plain_prefix):
                 desc_lines[0] = _status_prefix(pkg, color) + desc_lines[0][len(plain_prefix):]
         else:
@@ -193,6 +226,7 @@ def render_table(
 
                 if line_no == 0 and i == name_idx:
                     marker_width = 2 if is_installed else 0
+                    cell = _clip_name(cell, max(0, w - marker_width))
                     if color:
                         pkg_color = _COLOR_CASK if pkg_type == "cask" else _COLOR_FORMULA
                         marker = (" " + _COLOR_GREEN + "✔" + _RESET) if is_installed else ""
@@ -204,10 +238,13 @@ def render_table(
                     parts.append(styled + " " * max(0, pad))
                     continue
 
+                if i != desc_idx:
+                    cell = _clip(cell, w)
+
                 if color and line_no == 0 and i == status_idx and cell:
-                    if cell == "disabled":
+                    if pkg.disabled:
                         parts.append(_COLOR_DISABLED + f"{cell:<{w}}" + _RESET)
-                    elif cell == "deprecated":
+                    elif pkg.deprecated:
                         parts.append(_COLOR_DEPRECATED + f"{cell:<{w}}" + _RESET)
                     else:
                         parts.append(f"{cell:<{w}}")

@@ -70,7 +70,7 @@ def check_cli_smoke() -> Result:
         ("full_help", _brewq("--full-help"), ["columns:", "trending:", "cache:"]),
         ("search_table", _brewq("-t", "5", "json"), ["NAME"]),
         ("search_tsv", _brewq("--tsv", "-c", "name,30d", "ripgrep"), []),
-        ("list_default", _brewq("list", "-t", "5"), ["NAME", "TYPE"]),
+        ("list_default", _brewq("list", "-t", "5"), ["NAME", "DESCRIPTION"]),
         ("list_metrics", _brewq("list", "-c", "name,90d", "--top", "5"), []),
         ("list_tsv", _brewq("list", "--tsv", "-c", "name,type", "--limit", "5"), []),
     ]
@@ -191,6 +191,15 @@ def check_installed_shim() -> Result:
                 )
                 if proc.returncode != 0 or proc.stdout.splitlines() != ["zzverify-installed-a"]:
                     failures.append(f"{name} {' '.join(args)}: installed behavior mismatch")
+            for args in (["-i", "-t", "1"], ["list", "-t", "1"]):
+                proc = subprocess.run(
+                    [path, *args], cwd=directory, env=env,
+                    capture_output=True, text=True, timeout=20.0,
+                )
+                header = next((line for line in proc.stdout.splitlines() if line.startswith("NAME")), "")
+                if (proc.returncode != 0 or "DESCRIPTION" not in header
+                        or any(field in header for field in ("TYPE", "VERSION", "TREND", "90d"))):
+                    failures.append(f"{name} {' '.join(args)}: installed default layout mismatch")
             completion = subprocess.run(
                 [path, "completion", "zsh"], cwd=directory, env=env,
                 capture_output=True, text=True, timeout=20.0,

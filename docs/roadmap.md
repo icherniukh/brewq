@@ -116,6 +116,13 @@ use `-t` / `--top` for explicit positive caps and retain `--limit` as an alias;
 no `-n` shorthand is added. This unifies explicit controls without changing the
 existing automatic-cap defaults or making `--all` mean unlimited output.
 
+**Installed-view presentation:** the owner brought the narrow-output fix
+forward. Both `list` and installed-only search use the configured list columns,
+defaulting to name/description; normal search retains its analytics layout.
+Bound the name column, favor description context, and retain requested metadata
+through explicit columns rather than crowding the default. This is display-only:
+TSV keeps full identifiers and values, and cap/sort policies are unchanged.
+
 ### 4. Clean public Git history in an isolated copy
 
 Execute `brewq-history-scrub` after the sanitized seed and M1 candidate/docs are

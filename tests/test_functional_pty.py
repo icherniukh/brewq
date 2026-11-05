@@ -162,6 +162,27 @@ def test_pty_limit_aliases_cap_both_commands(tmp_path, command, flag):
     assert "zzflags-2" not in output
 
 
+@pytest.mark.parametrize("command", [["-i"], ["list"]])
+@pytest.mark.parametrize("width", [40, 60, 100])
+def test_pty_installed_view_preserves_description_with_long_names(tmp_path, command, width):
+    long_name = "a-very-long-vendor/tap/ghostty-ai-themes"
+    _write_cache(tmp_path, [
+        _formula(long_name, installed=True, desc="Useful description for this package"),
+        _formula("short", installed=True, desc="Useful description for this package"),
+    ])
+    rc, output = _run_in_pty(_brewq(*command, "-t", "2"), _env(tmp_path), cols=width)
+    assert rc == 0
+    lines = _strip_ansi(output).splitlines()
+    assert all(len(line) <= width for line in lines)
+    header = next(line for line in lines if line.startswith("NAME"))
+    assert "TYPE" not in header and "VERSION" not in header and "TREND" not in header
+    rows = [line for line in lines if "Useful" in line]
+    assert len(rows) == 2
+    assert {line.index("Useful") for line in rows} == {header.index("DESCRIPTION")}
+    assert all("✔" in line for line in rows)
+    assert any("…/" in line for line in rows)
+
+
 def test_pty_non_tty_pipe_emits_no_ansi(tmp_path):
     _write_cache(tmp_path, [_formula("zzpipe-tool", installed=True)])
     proc = subprocess.run(

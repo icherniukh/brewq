@@ -214,6 +214,58 @@ def test_render_table_fits_sixty_column_terminal(monkeypatch):
     assert all(len(line) <= 60 for line in lines)
 
 
+@pytest.mark.parametrize("width", [40, 60, 80, 100, 160])
+@pytest.mark.parametrize("spec", ["name,description", "name,type,version,description"])
+@pytest.mark.parametrize("no_color", [False, True])
+def test_long_names_leave_description_space_and_fit(monkeypatch, width, spec, no_color):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: width)
+    if no_color:
+        monkeypatch.setenv("NO_COLOR", "1")
+    else:
+        monkeypatch.delenv("NO_COLOR", raising=False)
+    packages = [
+        _pkg("a-very-long-vendor/tap/ghostty-ai-themes", installed=True,
+             version="20261104-123456,abcdef012345", desc="Useful description for this package"),
+        _pkg("short", desc="Useful description for this package"),
+    ]
+    out = TtyStringIO()
+    render_table(packages, resolve(spec, []), out=out)
+    lines = [_strip_ansi(line) for line in out.getvalue().splitlines() if line]
+    assert all(len(line) <= width for line in lines)
+    header = lines[0]
+    rows = [line for line in lines if "Useful" in line]
+    assert len(rows) == 2
+    assert {line.index("Useful") for line in rows} == {header.index("DESCRIPTION")}
+    assert "✔" in rows[0] and "✔" not in rows[1]
+    assert "…" in rows[0]
+    if spec == "name,description":
+        assert header.index("DESCRIPTION") <= max(8, width // 4) + 2
+        assert all("Useful description" in line for line in rows)
+
+
+def test_long_tap_names_keep_basename_and_tsv_identity(monkeypatch):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 100)
+    name = "a-very-long-vendor/tap/ghostty-ai-themes"
+    package = _pkg(name, installed=True)
+    table, tsv = io.StringIO(), io.StringIO()
+    columns = resolve("name,description", [])
+    render_table([package], columns, out=table)
+    render_tsv([package], columns, out=tsv)
+    assert "…/ghostty-ai-themes ✔" in table.getvalue()
+    assert tsv.getvalue().startswith(name + "\t")
+
+
+def test_too_narrow_tables_keep_selected_fields_in_vertical_records(monkeypatch):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 20)
+    out = io.StringIO()
+    render_table([_pkg("vendor/tap/very-long-name", installed=True, status="disabled")],
+                 resolve("name,type,version,description", []), out=out)
+    text = out.getvalue()
+    assert all(len(line) <= 20 for line in text.splitlines())
+    assert "NAME:" in text and "TYPE:" in text and "VERSION:" in text
+    assert "DESCRIPTION:" in text and "(disabled)" in text and "✔" in text
+
+
 def test_render_table_installed_marker_keeps_columns_aligned(monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     out = TtyStringIO()
