@@ -12,24 +12,24 @@ from brewq import render as render_mod
 from brewq import scheduler as scheduler_mod
 from brewq import seed as seed_mod
 
-_COMMANDS = frozenset({"list", "refresh", "config", "random", "completion"})
+_COMMANDS = frozenset({"list", "update", "config", "random", "completion"})
 _FORMATTER = argparse.RawDescriptionHelpFormatter
 _SEARCH_EPILOG = """\
-commands: list, refresh, config path, completion zsh
-examples: brewq ripgrep | brewq -t 10 rust | brewq list
+commands: list, update, config path, completion zsh
+examples: brewq ripgrep | brewq -t 10 rust | brewq -u ripgrep
 """
 
 _LIST_EPILOG = """\
 Use `brewq --full-help` for columns, trending, and cache behavior.
 """
 
-_REFRESH_EPILOG = """\
+_UPDATE_EPILOG = """\
 Examples:
-  brewq refresh
-  brewq refresh --force
-  brewq -r ripgrep
+  brewq update
+  brewq update --force
+  brewq -u ripgrep
 
-Use `brewq config path` to find the config file.
+refresh and update-cache remain aliases. BREWQ_NO_REVERSE=1 disables reverse sort.
 """
 
 _CONFIG_EPILOG = """\
@@ -44,7 +44,8 @@ _COLUMN_HELP = "fields, +add, -remove, all; -c help lists fields"
 _FULL_HELP_DETAILS = """\
 advanced search:
   --all               include deprecated and disabled packages
-  -r, --refresh       refresh before searching
+  -r, --refresh       alias for -u/--update
+  --url               add the URL column; prefer -c +url
 
 columns:
 {columns}
@@ -66,8 +67,11 @@ trending:
 
 cache:
   A bundled seed makes the first query immediate. Fresh snapshots are read
-  locally. Stale data is shown immediately, then refreshed in the background.
-  `brewq refresh` refreshes stale data; `brewq refresh --force` refreshes now.
+  locally. Stale data is shown immediately, then updated in the background.
+  `brewq update` updates stale data; `brewq update --force` updates now.
+  `-R` reverses the chosen order after `-t`, so the best row is last.
+  It is off unless `-R` or `[search] reverse` asks for it. `BREWQ_NO_REVERSE=1`
+  turns it off immediately, even when the flag or config enables it.
   If analytics fail, counts from the previous user snapshot are retained and
   retried later.
   `brewq config path` shows the configuration file.
@@ -102,16 +106,27 @@ def _add_limit_flag(parser: argparse.ArgumentParser, *, dest: str) -> None:
 
 def _add_column_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-c", "--columns", metavar="COLS", help=_COLUMN_HELP)
-    parser.add_argument("-u", "--url", action="store_true",
-                        help=argparse.SUPPRESS)
+    parser.add_argument("--url", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("-v", "--verbose", action="store_true",
                         help=argparse.SUPPRESS)
+
+
+def _add_reverse_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("-R", "--reverse", action=argparse.BooleanOptionalAction,
+                        default=None,
+                        help="reverse sort order so the best rows are last")
+
+
+def _add_update_flag(parser: argparse.ArgumentParser, *, then: str) -> None:
+    parser.add_argument("-u", "--update", action="store_true",
+                        help=f"update the package register, then {then}")
+    parser.add_argument("-r", "--refresh", action="store_true", help=argparse.SUPPRESS)
 
 
 def _build_search_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="brewq",
-        usage="brewq [options] [query ...]\n       brewq {list,refresh,config,completion} ...",
+        usage="brewq [options] [query ...]\n       brewq {list,update,config,completion} ...",
         description="Fast, read-only Homebrew package search.",
         epilog=_SEARCH_EPILOG,
         formatter_class=_FORMATTER,
@@ -119,14 +134,15 @@ def _build_search_parser() -> argparse.ArgumentParser:
     parser.add_argument("query", nargs="*", help=argparse.SUPPRESS)
     parser.add_argument("-s", "--sort", metavar="FIELD",
                         help=f"sort by {options_mod.sort_choices_text()} (default: 90d)")
+    _add_reverse_flag(parser)
     _add_limit_flag(parser, dest="top")
     parser.add_argument("-i", "--installed", action="store_true",
                         help="search installed packages only")
     parser.add_argument("--all", action="store_true", help=argparse.SUPPRESS)
     _add_column_flags(parser)
+    _add_update_flag(parser, then="search")
     parser.add_argument("--tsv", action="store_true",
                         help="tab-separated rows without a header")
-    parser.add_argument("-r", "--refresh", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--full-help", action="store_true",
                         help="show columns, trending, and cache behavior")
     parser.add_argument("--version", action=_VersionAction,
@@ -149,21 +165,22 @@ def _build_command_parser() -> argparse.ArgumentParser:
     )
     lst.add_argument("--analytics", action="store_true",
                      help=argparse.SUPPRESS)
+    _add_reverse_flag(lst)
     _add_column_flags(lst)
+    _add_update_flag(lst, then="list")
     _add_limit_flag(lst, dest="limit")
     lst.add_argument("--tsv", action="store_true",
                      help="tab-separated output for scripting")
 
-    # refresh
-    refresh_p = subparsers.add_parser(
-        "refresh",
-        help="Refresh local cache data",
-        description="Refresh local Homebrew metadata and analytics cache.",
-        epilog=_REFRESH_EPILOG,
+    update_p = subparsers.add_parser(
+        "update",
+        help="Update the local package register",
+        description="Update local Homebrew metadata and analytics.",
+        epilog=_UPDATE_EPILOG,
         formatter_class=_FORMATTER,
     )
-    refresh_p.add_argument("--force", action="store_true",
-                           help="Refresh even when cache is fresh")
+    update_p.add_argument("--force", action="store_true",
+                          help="Update even when the register is fresh")
 
     # config
     config_p = subparsers.add_parser(
@@ -200,9 +217,13 @@ def _full_help_text() -> str:
 
 
 def _normalize_argv(argv: list[str]) -> list[str]:
-    if argv and argv[0] == "update-cache":
-        return ["refresh", *argv[1:]]
+    if argv and argv[0] in {"update-cache", "refresh"}:
+        return ["update", *argv[1:]]
     return argv
+
+
+def _explicit_update(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "update", False) or getattr(args, "refresh", False))
 
 
 def _validate_column_flags(args: argparse.Namespace) -> str | None:
@@ -235,6 +256,9 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
 
     col_defs = _apply_column_shortcuts(args, col_defs)
 
+    if _explicit_update(args) and (failed := _update_register(force=True)):
+        return failed
+
     if opts.with_analytics:
         col_defs = _ensure_list_analytics_column(col_defs)
 
@@ -266,33 +290,50 @@ def _ensure_list_analytics_column(col_defs: list) -> list:
     return [*col_defs[:desc_idx], installs_col, *col_defs[desc_idx:]]
 
 
-def _cmd_refresh(args: argparse.Namespace) -> int:
-    force = getattr(args, "force", False)
-    print("Refreshing cache...", file=sys.stderr)
+def _update_register(*, force: bool) -> int:
+    """Update the register. Return 0 to continue, or a nonzero exit code."""
+    print("Updating register...", file=sys.stderr)
     try:
         result = cache_mod.refresh(force=force)
     except Exception as exc:
-        print(f"brewq: cache refresh failed: {exc}", file=sys.stderr)
+        print(f"brewq: register update failed: {exc}", file=sys.stderr)
         return 1
-    return _report_refresh_result(result)
+    if result.outcome is cache_mod.RefreshOutcome.LOCKED:
+        print("register: update already in progress; using available data", file=sys.stderr)
+    elif result.outcome is cache_mod.RefreshOutcome.METADATA_ONLY:
+        print(
+            f"register: metadata updated; analytics incomplete ({result.analytics_error})",
+            file=sys.stderr,
+        )
+    return 0
 
 
-def _report_refresh_result(result: cache_mod.RefreshResult) -> int:
+def _cmd_update(args: argparse.Namespace) -> int:
+    print("Updating register...", file=sys.stderr)
+    try:
+        result = cache_mod.refresh(force=getattr(args, "force", False))
+    except Exception as exc:
+        print(f"brewq: register update failed: {exc}", file=sys.stderr)
+        return 1
+    return _report_update_result(result)
+
+
+def _report_update_result(result: cache_mod.RefreshResult) -> int:
     if result.outcome is cache_mod.RefreshOutcome.FRESH:
-        print("cache: already fresh", file=sys.stderr)
+        print("register: already fresh", file=sys.stderr)
         return 0
     if result.outcome is cache_mod.RefreshOutcome.LOCKED:
-        print("cache: refresh already in progress", file=sys.stderr)
+        print("register: update already in progress", file=sys.stderr)
         return 1
     if result.outcome is cache_mod.RefreshOutcome.METADATA_ONLY:
         print(
-            f"cache: metadata refreshed; analytics incomplete ({result.analytics_error})",
+            f"register: metadata updated; analytics incomplete ({result.analytics_error})",
             file=sys.stderr,
         )
         return 1
     status = cache_mod.status()
     print(
-        f"cache: refreshed; {status['formula_count']} formulae, {status['cask_count']} casks",
+        f"register: updated; {status['formula_count']} formulae, {status['cask_count']} casks",
         file=sys.stderr,
     )
     return 0
@@ -341,7 +382,9 @@ def _cmd_random(args: argparse.Namespace, cfg: dict) -> int:
         url=False,
         verbose=False,
         top=top,
+        update=False,
         refresh=False,
+        reverse=None,
         tsv=False,
         all=False,
     )
@@ -378,20 +421,8 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
             print(f"brewq: {exc}", file=sys.stderr)
             return 1
 
-    if getattr(args, "refresh", False):
-        try:
-            print("Refreshing cache...", file=sys.stderr)
-            result = cache_mod.refresh(force=True)
-        except Exception as exc:
-            print(f"brewq: cache refresh failed: {exc}", file=sys.stderr)
-            return 1
-        if result.outcome is cache_mod.RefreshOutcome.LOCKED:
-            print("cache: refresh already in progress; using available data", file=sys.stderr)
-        elif result.outcome is cache_mod.RefreshOutcome.METADATA_ONLY:
-            print(
-                f"cache: metadata refreshed; analytics incomplete ({result.analytics_error})",
-                file=sys.stderr,
-            )
+    if _explicit_update(args) and (failed := _update_register(force=True)):
+        return failed
 
     loaded = _load_cache()
     if loaded is None:
@@ -454,18 +485,20 @@ def _load_cache() -> cache_mod.CacheLoad | None:
 def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict) -> None:
     max_age = int(cfg["cache"]["max_age_seconds"])
     failure_detail = "unknown scheduler error"
-    try:
-        scheduler_state = scheduler_mod.schedule_if_needed(loaded, max_age)
-    except Exception as exc:
-        scheduler_state = "failed"
-        failure_detail = " ".join(str(exc).splitlines())[:120]
+    scheduler_state = "disabled"
+    if config_mod.auto_refresh_enabled(cfg):
+        try:
+            scheduler_state = scheduler_mod.schedule_if_needed(loaded, max_age)
+        except Exception as exc:
+            scheduler_state = "failed"
+            failure_detail = " ".join(str(exc).splitlines())[:120]
 
     suffixes = {
-        "scheduled": "refresh scheduled",
-        "pending": "refresh pending",
-        "cooldown": "refresh deferred (cooldown)",
-        "deferred": "refresh deferred",
-        "failed": f"refresh not scheduled ({failure_detail})",
+        "scheduled": "update scheduled",
+        "pending": "update pending",
+        "cooldown": "update deferred (cooldown)",
+        "deferred": "update deferred",
+        "failed": f"update not scheduled ({failure_detail})",
     }
     suffix = suffixes.get(scheduler_state)
 
@@ -527,8 +560,8 @@ def _main(argv: Sequence[str] | None = None) -> int:
     # default command even when query terms are named like subcommands.
     if raw_argv and raw_argv[0] in _COMMANDS:
         args = _build_command_parser().parse_args(raw_argv)
-        if args.command == "refresh":
-            return _cmd_refresh(args)
+        if args.command == "update":
+            return _cmd_update(args)
         if args.command == "config":
             return _cmd_config(args)
         if args.command == "completion":
@@ -545,7 +578,8 @@ def _main(argv: Sequence[str] | None = None) -> int:
         if args.command == "random":
             return _cmd_random(args, cfg)
 
-    args = _build_search_parser().parse_args(raw_argv)
+    # Flags may sit between query terms. Subcommands stay first-token only.
+    args = _build_search_parser().parse_intermixed_args(raw_argv)
     if args.full_help:
         print(_full_help_text(), end="")
         return 0

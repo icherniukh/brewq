@@ -1,5 +1,7 @@
 """Port of Ruby's DidYouMean::SpellChecker, which `brew search` uses for fuzzy hits.
 
+The algorithm is adapted from Yuki Nishijima's DidYouMean (MIT). See NOTICE.
+
 Homebrew adds spell-checker suggestions to substring name matches for both
 formulae and casks. Reproducing the algorithm keeps brewq's result set a
 superset of `brew search`. Membership matches Ruby; ordering is irrelevant

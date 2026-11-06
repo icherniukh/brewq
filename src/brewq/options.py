@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -45,6 +46,7 @@ class SearchOptions:
     tsv_output: bool = False
     installed_only: bool = False
     show_all: bool = False
+    reverse: bool = False
     regex: re.Pattern[str] | None = None
     # Matches before a positive view limit is applied; used for honest counts.
     eligible_total: int = 0
@@ -56,7 +58,17 @@ class ListOptions:
     columns_spec: str | list = "default"
     limit: int = 0
     tsv_output: bool = False
+    reverse: bool = False
     eligible_total: int = 0
+
+
+def resolve_reverse(explicit: bool | None, cfg: dict) -> bool:
+    """Resolve reverse order. BREWQ_NO_REVERSE=1 is the immediate kill switch."""
+    if os.environ.get("BREWQ_NO_REVERSE", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    if explicit is not None:
+        return explicit
+    return bool(cfg.get("search", {}).get("reverse", False))
 
 
 def build_search_options(args: Any, cfg: dict) -> SearchOptions:
@@ -90,6 +102,7 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
         tsv_output=getattr(args, "tsv", False),
         installed_only=getattr(args, "installed", False),
         show_all=getattr(args, "all", False),
+        reverse=resolve_reverse(getattr(args, "reverse", None), cfg),
     )
 
 
@@ -104,6 +117,7 @@ def build_list_options(args: Any, cfg: dict) -> ListOptions:
         columns_spec=columns_spec,
         limit=getattr(args, "limit", None) or 0,
         tsv_output=getattr(args, "tsv", False),
+        reverse=resolve_reverse(getattr(args, "reverse", None), cfg),
     )
 
 
@@ -251,7 +265,8 @@ def rank(
     opts.eligible_total = len(result)
     if opts.limit > 0:
         result = result[: opts.limit]
-
+    if opts.reverse:
+        result.reverse()
     return result
 
 
@@ -260,4 +275,6 @@ def rank_installed(packages: list[Package], opts: ListOptions) -> list[Package]:
     opts.eligible_total = len(packages)
     if opts.limit > 0:
         packages = packages[: opts.limit]
+    if opts.reverse:
+        packages.reverse()
     return packages

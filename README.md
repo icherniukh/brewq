@@ -52,7 +52,9 @@ brewq --tsv -c name,90d,url ripgrep
 `brewq --help` shows the common search path. `brewq --full-help` adds the full
 column reference plus concise trending and cache behavior.
 
-Search matches names, formula aliases, and descriptions. All query terms must
+Search matches names, formula aliases, and descriptions. Flags may appear
+before, between, or after query terms; a command name is recognized only as the
+first token. All query terms must
 match; name normalization applies. For homebrew/core and homebrew/cask, results are
 a superset of `brew search`: its substring and spell-correction (DidYouMean) matches
 are reproduced for formulae and casks, and `/regex/` queries are supported. Packages
@@ -65,9 +67,10 @@ other active matches under metric sorts; disabled/deprecated results rank last.
 | Search option | Current behavior |
 | --- | --- |
 | `-s`, `--sort FIELD` | `90d` (built-in default), `30d`, `365d`, `trending`, or `name` |
-| `-t`, `--top N` | Positive result cap; overrides configuration and terminal sizing |
+| `-R`, `--reverse` | Reverse the chosen order after the cap, so the best row is last. Off by default |
+| `-t`, `--top N` | Positive result cap; overrides configuration |
 | `-i`, `--installed` | Filter to packages marked installed |
-| `-r`, `--refresh` | Force foreground refresh before searching |
+| `-u`, `--update` | Update the package register, then search |
 | `--all` | Retain deprecated/disabled matches when the cap would otherwise hide them |
 
 Search cap precedence is `-t`, then positive `output.limit`, then unlimited.
@@ -158,15 +161,20 @@ rows; the catalog's available version remains separate internally.
 ## Cache and recovery
 
 The cache footer uses subdued neutral text on a color terminal. Age, incomplete
-analytics, and refresh scheduling remain visible without red freshness accents.
+analytics, and background update scheduling remain visible without red freshness accents.
 
 Releases bundle a seed catalog, with builder-local home paths and installed
 state removed during seed generation. Loads validate the user snapshot before using it,
 fall back to the seed after corruption, and reconcile installed state from local
 Homebrew roots. A successful empty inventory clears stale installed markers;
 missing or unreadable roots preserve the last known state. Stale, seed, and
-incomplete snapshots can schedule a detached refresh with a five-minute delay
-and system-load checks. Cache information goes to stderr after rows are flushed.
+incomplete snapshots can schedule a detached update with a five-minute delay
+and system-load checks. That background process is on by default. Set
+`[cache] auto_refresh = false` or `BREWQ_NO_AUTO_REFRESH=1` to render the same
+rows without spawning it or writing scheduler state. The environment value wins
+over configuration; an invalid value warns and leaves the configured setting.
+Explicit `brewq update` still runs in the foreground. Cache information goes to
+stderr after rows are flushed.
 
 Snapshots record analytics completeness independently of file age. If metadata
 refresh succeeds while analytics is unavailable, brewq retains usable counts
@@ -174,13 +182,15 @@ from the previous snapshot, marks the new snapshot for repair, and retries after
 the scheduler cooldown. JSON, pickle, and scheduler state use atomic replacement.
 
 ```sh
-brewq refresh           # refresh if stale
-brewq refresh --force   # force recovery, including a recently corrupted cache
-brewq -r ripgrep        # force refresh, then search
+brewq update            # update the register if stale
+brewq update --force    # force recovery, including a recently corrupted cache
+brewq -u ripgrep        # update the register, then search
+brewq -R -i             # all installed matches, best row last
 brewq config path
 ```
 
-`update-cache` remains a compatibility alias for `refresh`. `random [--seed N]`
+`refresh`, `update-cache`, and `-r` remain compatibility aliases for `update` /
+`-u`. `--url` still adds the URL column; prefer `-c +url`. `random [--seed N]`
 remains a development layout lab, not a product discovery workflow.
 
 ## Configuration
@@ -191,6 +201,7 @@ Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless
 ```toml
 [search]
 sort = "90d"
+reverse = false # -R or true reverses after the cap; BREWQ_NO_REVERSE=1 wins
 
 [output]
 columns = ["name", "installs_90d", "trending", "description"]
@@ -201,6 +212,7 @@ columns = ["name", "description"]
 
 [cache]
 max_age_seconds = 86400
+auto_refresh = true # false, or BREWQ_NO_AUTO_REFRESH=1, skips background updates
 ```
 
 `BREWQ_CACHE_DIR` overrides the cache directory, otherwise
@@ -215,6 +227,12 @@ Invalid sections, fields, types, ranges, sort names, and columns emit a concise
 stderr diagnostic and fall back field-by-field. Invalid `BREWQ_CACHE_MAX_AGE`
 keeps the validated configured value. Help, version, and `config path` do not
 load operational configuration.
+
+## License
+
+Original brewq code is MIT, Copyright (c) 2026 Ivan Cherniukh. The bundled
+catalog is Homebrew data under the BSD-2-Clause license, and spell correction
+adapts Yuki Nishijima's DidYouMean under MIT. Both notices are in `NOTICE`.
 
 ## Stability and development
 

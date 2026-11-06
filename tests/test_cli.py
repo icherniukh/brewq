@@ -277,7 +277,7 @@ def test_main_search_rejects_explicit_auto_column(capsys):
 def test_main_search_url_flag_adds_url_column(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "-u"])
+        rc = main(["ripgrep", "--url"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "URL" in out
@@ -290,6 +290,72 @@ def test_main_search_rejects_columns_with_verbose(capsys):
         rc = main(["ripgrep", "-c", "name", "-v"])
     assert rc == 1
     assert "cannot use both" in capsys.readouterr().err
+
+
+def test_reverse_puts_the_best_row_last_and_kill_switch_wins(capsys, monkeypatch):
+    pkgs = [_pkg("low", installed=True), _pkg("high", installed=True)]
+    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
+        assert main(["-i", "-c", "name", "--tsv", "-R"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["low", "high"]
+    monkeypatch.setenv("BREWQ_NO_REVERSE", "1")
+    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
+        assert main(["-i", "-c", "name", "--tsv", "-R"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["high", "low"]
+
+
+def test_update_flag_and_command_alias_update_before_search(capsys):
+    pkgs = [_pkg("ripgrep")]
+    with patch("brewq.cache.refresh", return_value=RefreshResult(
+             RefreshOutcome.COMPLETE, Path("/cache/brew-all.json")
+         )) as refresh, \
+         patch("brewq.cache.load", return_value=_loaded(pkgs)), \
+         patch("brewq.cache.status", return_value={"formula_count": 1, "cask_count": 0}):
+        assert main(["-u", "ripgrep"]) == 0
+        assert main(["update-cache"]) == 0
+    assert refresh.call_count == 2
+    err = capsys.readouterr().err
+    assert "Updating register..." in err
+    assert "register: updated" in err
+
+
+def test_flags_between_query_terms_match_other_placements(capsys):
+    pkgs = [_pkg(f"tool-{i:02d}", installs_30d=100 - i) for i in range(4)]
+
+    def rows(argv: list[str]) -> str:
+        with patch("brewq.cache.load", return_value=_loaded(pkgs)):
+            assert main(argv) == 0
+        return capsys.readouterr().out
+
+    expected = rows(["-t", "2", "-c", "name", "--tsv", "to", "ol"])
+    assert rows(["to", "-t", "2", "-c", "name", "--tsv", "ol"]) == expected
+    assert rows(["to", "ol", "-c", "name", "--tsv", "-t", "2"]) == expected
+    assert expected.splitlines() == ["tool-00", "tool-01"]
+
+
+def test_intermixed_regex_and_column_edit(capsys):
+    pkgs = [_pkg("tool-00"), _pkg("other")]
+    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
+        assert main(["/tool/", "-c", "+version", "-t", "1"]) == 0
+    out = capsys.readouterr().out
+    assert "tool-00" in out and "other" not in out and "VERSION" in out
+
+
+def test_option_terminator_keeps_dash_terms_out_of_flags(capsys):
+    with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])):
+        assert main(["--", "-t"]) == 0
+    assert "No results for: -t" in capsys.readouterr().err
+
+
+def test_first_token_still_selects_a_command(capsys):
+    with patch("brewq.cache.refresh") as refresh, \
+         patch("brewq.cache.status", return_value={"formula_count": 1, "cask_count": 0}):
+        assert main(["update", "--force"]) == 0
+        refresh.assert_called_once()
+        with pytest.raises(SystemExit) as exc:
+            main(["--force", "update"])
+    assert exc.value.code == 2
+    assert refresh.call_count == 1
+    assert "unrecognized arguments" in capsys.readouterr().err
 
 
 def test_main_search_sort_by_name(capsys):
@@ -371,7 +437,7 @@ def test_main_search_discloses_stale_cache(capsys):
          patch("brewq.scheduler.schedule_if_needed", return_value="scheduled"):
         rc = main(["ripgrep"])
     assert rc == 0
-    assert "cache: 25h old; refresh scheduled" in capsys.readouterr().err
+    assert "cache: 25h old; update scheduled" in capsys.readouterr().err
 
 
 def test_main_list_columns_short_alias(capsys):
@@ -389,7 +455,7 @@ def test_main_list_url_flag_adds_url_column(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True),
     ])):
-        rc = main(["list", "-u"])
+        rc = main(["list", "--url"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "URL" in out
@@ -492,7 +558,7 @@ def test_main_search_tsv(capsys):
 
 def test_main_tsv_url_flag_adds_url_field(capsys):
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])):
-        rc = main(["-u", "--tsv", "-c", "name", "ripgrep"])
+        rc = main(["--url", "--tsv", "-c", "name", "ripgrep"])
     assert rc == 0
     assert capsys.readouterr().out == "ripgrep\thttps://example.com\n"
 
@@ -506,16 +572,16 @@ def test_stale_cache_warning_respects_no_color(monkeypatch):
          patch("brewq.scheduler.schedule_if_needed", return_value="scheduled"):
         rc = main(["ripgrep"])
     assert rc == 0
-    assert "25h old; refresh scheduled" in stderr.getvalue()
+    assert "25h old; update scheduled" in stderr.getvalue()
     assert "\033[" not in stderr.getvalue()
 
 
 @pytest.mark.parametrize(
     ("source", "age", "complete", "message"),
     [("user", 90, True, "cache: 1min old"),
-     ("user", 90_000, True, "cache: 25h old; refresh scheduled"),
-     ("user", 90, False, "cache: metadata 1min old; analytics incomplete; refresh scheduled"),
-     ("seed", 0, True, "cache: bundled seed; refresh scheduled")],
+     ("user", 90_000, True, "cache: 25h old; update scheduled"),
+     ("user", 90, False, "cache: metadata 1min old; analytics incomplete; update scheduled"),
+     ("seed", 0, True, "cache: bundled seed; update scheduled")],
 )
 def test_cache_footer_is_neutral_and_subdued(monkeypatch, source, age, complete, message):
     stderr = io.StringIO()
@@ -592,7 +658,31 @@ def test_seed_search_renders_before_scheduling(capsys):
 
     assert rc == 0
     assert events == ["render", "schedule"]
-    assert "cache: bundled seed; refresh scheduled" in capsys.readouterr().err
+    assert "cache: bundled seed; update scheduled" in capsys.readouterr().err
+
+
+def test_background_update_opt_out_renders_without_scheduler_state(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("BREWQ_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("BREWQ_NO_AUTO_REFRESH", "1")
+    loaded = _loaded([_pkg("ripgrep")], age=90_000)
+    with patch("brewq.cache.load", return_value=loaded), \
+         patch("brewq.scheduler.subprocess.Popen") as spawn:
+        assert main(["ripgrep"]) == 0
+    spawn.assert_not_called()
+    assert list(tmp_path.iterdir()) == []
+    captured = capsys.readouterr()
+    assert "ripgrep" in captured.out
+    assert "25h old" in captured.err
+    assert "update scheduled" not in captured.err
+
+
+def test_explicit_update_still_runs_when_background_updates_are_disabled(monkeypatch):
+    monkeypatch.setenv("BREWQ_NO_AUTO_REFRESH", "1")
+    with patch("brewq.cache.refresh", return_value=RefreshResult(
+             RefreshOutcome.FRESH, Path("/cache/brew-all.json")
+         )) as refresh:
+        assert main(["update"]) == 0
+    refresh.assert_called_once_with(force=False)
 
 
 def test_scheduler_failure_does_not_suppress_search_output(capsys):
@@ -603,7 +693,7 @@ def test_scheduler_failure_does_not_suppress_search_output(capsys):
     captured = capsys.readouterr()
     assert rc == 0
     assert "ripgrep" in captured.out
-    assert "refresh not scheduled (unavailable)" in captured.err
+    assert "update not scheduled (unavailable)" in captured.err
 
 
 def test_scheduler_cooldown_is_reported_truthfully(capsys):
@@ -611,7 +701,7 @@ def test_scheduler_cooldown_is_reported_truthfully(capsys):
     with patch("brewq.cache.load", return_value=loaded), \
          patch("brewq.scheduler.schedule_if_needed", return_value="cooldown"):
         assert main(["ripgrep"]) == 0
-    assert "refresh deferred (cooldown)" in capsys.readouterr().err
+    assert "update deferred (cooldown)" in capsys.readouterr().err
 
 
 def test_partial_cache_reports_metadata_age_and_incomplete_analytics(capsys):
@@ -626,7 +716,7 @@ def test_partial_cache_reports_metadata_age_and_incomplete_analytics(capsys):
         assert main(["ripgrep"]) == 0
 
     assert (
-        "cache: metadata 5s old; analytics incomplete; refresh deferred (cooldown)"
+        "cache: metadata 5s old; analytics incomplete; update deferred (cooldown)"
         in capsys.readouterr().err
     )
 
@@ -639,7 +729,7 @@ def test_stale_user_cache_renders_and_schedules(capsys):
 
     assert rc == 0
     schedule.assert_called_once()
-    assert "cache: 25h old; refresh scheduled" in capsys.readouterr().err
+    assert "cache: 25h old; update scheduled" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -647,7 +737,7 @@ def test_stale_user_cache_renders_and_schedules(capsys):
     [
         (RefreshOutcome.FRESH, None, 0, "already fresh"),
         (RefreshOutcome.LOCKED, None, 1, "already in progress"),
-        (RefreshOutcome.COMPLETE, None, 0, "cache: refreshed"),
+        (RefreshOutcome.COMPLETE, None, 0, "register: updated"),
         (RefreshOutcome.METADATA_ONLY, "formula_30d: offline", 1, "analytics incomplete"),
     ],
 )
@@ -669,4 +759,4 @@ def test_main_list_missing_cache_is_empty_and_quick(capsys):
     assert rc == 0
     captured = capsys.readouterr()
     assert "brew not found" not in captured.err
-    assert "cache: bundled seed; refresh scheduled" in captured.err
+    assert "cache: bundled seed; update scheduled" in captured.err

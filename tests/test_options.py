@@ -148,6 +148,12 @@ def test_rank_popular_description_match_can_beat_weaker_name_match():
     assert [p.name for p in result] == ["gh", "git-small"]
 
 
+def test_rank_reverse_flips_after_the_cap():
+    local = [_pkg("low", installs_90d=1), _pkg("high", installs_90d=9), _pkg("mid", installs_90d=5)]
+    opts = SearchOptions(query=[], sort="installs_90d", limit=2, reverse=True)
+    assert [pkg.name for pkg in rank(local, opts)] == ["mid", "high"]
+
+
 def test_rank_by_name():
     opts = SearchOptions(query=["ripgrep"], sort="name")
     result = rank(list(pkgs), opts)

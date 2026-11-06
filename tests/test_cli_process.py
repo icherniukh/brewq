@@ -37,11 +37,14 @@ def test_compact_help_hides_legacy_and_advanced_shortcuts(tmp_path):
     assert proc.returncode == 0
     assert "-c, --columns" in proc.stdout
     assert "--full-help" in proc.stdout
+    assert "-u, --update" in proc.stdout
+    assert "-R, --reverse" in proc.stdout
     for hidden in ("-u, --url", "-v, --verbose", "--all", "-r, --refresh"):
         assert hidden not in proc.stdout
 
     list_proc = _run(tmp_path, "list", "--help")
     assert list_proc.returncode == 0
+    assert "-u, --update" in list_proc.stdout
     for hidden in ("--analytics", "-u, --url", "-v, --verbose"):
         assert hidden not in list_proc.stdout
 

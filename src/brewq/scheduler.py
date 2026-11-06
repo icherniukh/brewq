@@ -102,6 +102,8 @@ def schedule_if_needed(
     *,
     now: float | None = None,
 ) -> str:
+    if not config_mod.auto_refresh_enabled(config_mod.load()):
+        return "disabled"
     current_time = time.time() if now is None else now
     if not load.requires_refresh and load.source == "user" and load.age_seconds < max_age:
         return "fresh"

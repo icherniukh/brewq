@@ -11,6 +11,8 @@ from brewq import cache, scheduler
 @pytest.fixture(autouse=True)
 def isolated_cache(tmp_path, monkeypatch):
     monkeypatch.setenv("BREWQ_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("BREWQ_CONFIG", str(tmp_path / "config.toml"))
+    monkeypatch.delenv("BREWQ_NO_AUTO_REFRESH", raising=False)
 
 
 def _load(
@@ -25,6 +27,15 @@ def _load(
         age_seconds=age,
         repair_needed=repair_needed,
     )
+
+
+def test_opt_out_does_not_spawn_or_write_scheduler_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("BREWQ_NO_AUTO_REFRESH", "1")
+    with patch("brewq.scheduler.subprocess.Popen") as spawn:
+        outcome = scheduler.schedule_if_needed(_load("seed", age=100), max_age=10)
+    assert outcome == "disabled"
+    spawn.assert_not_called()
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_fresh_user_cache_does_not_spawn():

@@ -51,8 +51,9 @@ proof of a newly built public artifact; skipped checks are not release evidence.
 The owner has confirmed that the seed must be sanitized and public Git history
 cleaned before release. Short-command convenience should remain; collision-aware
 `bq` creation is the desired direction, while `brq` is a proposed fallback, not a
-settled contract. License choice, the exact history-redaction scope, and the
-supported shortcut setup mechanism still need explicit decisions. Record
+settled contract. The license is MIT for original code, with Homebrew and
+DidYouMean notices retained. History-redaction scope and the supported shortcut
+setup mechanism still need explicit decisions. Record
 entrypoint/flag decisions in `brewq-h7m`; do not silently remove aliases or change
 defaults. Completing M1 means ready to recommend a first public 0.x release, not
 automatic publication or a 1.0 stability claim.
@@ -262,7 +263,10 @@ overlay; its timing alone cannot establish user-visible performance.
 ## Decisions to preserve or settle
 
 Search remains the root command, TSV the only script format, and columns the
-extension mechanism. Raw 90-day installs remain the default sort. TREND currently
+extension mechanism. Raw 90-day installs remain the default sort. `-u`/`update`
+is the public register-update spelling; `refresh`, `update-cache`, and `-r` stay
+as aliases. `-R` reverses already ranked rows and is off unless requested.
+`BREWQ_NO_REVERSE=1` disables it immediately. TREND currently
 remains in the default table: making it opt-in is a product decision for the CLI
 contract issue, not a claim about current behavior. Historical calibration and
 rejected popularity/clamp approaches remain in the archive.

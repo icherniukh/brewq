@@ -13,6 +13,7 @@ from brewq.options import parse_sort, sort_choices_text
 
 class SearchSettings(TypedDict):
     sort: str
+    reverse: bool
 
 
 class OutputSettings(TypedDict):
@@ -26,6 +27,7 @@ class ListSettings(TypedDict):
 
 class CacheSettings(TypedDict):
     max_age_seconds: int
+    auto_refresh: bool
 
 
 class Settings(TypedDict):
@@ -38,6 +40,7 @@ class Settings(TypedDict):
 DEFAULTS: Settings = {
     "search": {
         "sort": "90d",
+        "reverse": False,
     },
     "output": {
         "columns": ["name", "installs_90d", "trending", "description"],
@@ -48,6 +51,7 @@ DEFAULTS: Settings = {
     },
     "cache": {
         "max_age_seconds": 86400,
+        "auto_refresh": True,
     },
 }
 
@@ -78,6 +82,9 @@ def _validate_value(section: str, key: str, value: Any) -> None:
             parse_sort(value)
         except ValueError:
             raise ValueError(f"expected one of: {sort_choices_text()}") from None
+    elif key in {"reverse", "auto_refresh"}:
+        if type(value) is not bool:
+            raise ValueError("expected true or false")
     elif type(value) is not int or value < 0:
         raise ValueError("expected a nonnegative integer")
 
@@ -132,6 +139,19 @@ def load() -> Settings:
             cfg["cache"]["max_age_seconds"] = age
 
     return cfg
+
+
+def auto_refresh_enabled(cfg: dict) -> bool:
+    """Config enables background updates unless BREWQ_NO_AUTO_REFRESH opts out."""
+    raw = os.environ.get("BREWQ_NO_AUTO_REFRESH")
+    if raw is not None:
+        value = raw.strip().lower()
+        if value in {"1", "true", "yes", "on"}:
+            return False
+        if value not in {"", "0", "false", "no", "off"}:
+            print("brewq: config error: BREWQ_NO_AUTO_REFRESH: expected true or false"
+                  " — using configured value", file=sys.stderr)
+    return bool(cfg["cache"]["auto_refresh"])
 
 
 def cache_dir() -> Path:
