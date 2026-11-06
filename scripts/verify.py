@@ -122,7 +122,8 @@ def check_installed_shim() -> Result:
     for name in ("brewq", "bq"):
         path = _external_entrypoint(name)
         if path is None:
-            failures.append(f"{name}: entry point missing from PATH")
+            missing = "shortcut missing; run brewq setup" if name == "bq" else "entry point missing from PATH"
+            failures.append(f"{name}: {missing}")
             continue
         version = subprocess.run(
             [path, "--version"], capture_output=True, text=True, timeout=20.0

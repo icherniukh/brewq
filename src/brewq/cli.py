@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from brewq import cache as cache_mod
 from brewq import columns as columns_mod
@@ -12,7 +13,7 @@ from brewq import render as render_mod
 from brewq import scheduler as scheduler_mod
 from brewq import seed as seed_mod
 
-_COMMANDS = frozenset({"list", "update", "config", "random", "completion"})
+_COMMANDS = frozenset({"list", "update", "setup", "config", "random", "completion"})
 _FORMATTER = argparse.RawDescriptionHelpFormatter
 _SEARCH_EPILOG = """\
 commands: list, update, config path, completion zsh
@@ -182,6 +183,15 @@ def _build_command_parser() -> argparse.ArgumentParser:
     update_p.add_argument("--force", action="store_true",
                           help="Update even when the register is fresh")
 
+    setup_p = subparsers.add_parser(
+        "setup",
+        help="Link bq when that command name is free",
+        description="Link bq to this brewq if the name is not already taken.",
+        formatter_class=_FORMATTER,
+    )
+    setup_p.add_argument("--remove", action="store_true",
+                         help="Remove brewq's own bq shortcut")
+
     # config
     config_p = subparsers.add_parser(
         "config",
@@ -337,6 +347,32 @@ def _report_update_result(result: cache_mod.RefreshResult) -> int:
         file=sys.stderr,
     )
     return 0
+
+
+def _cmd_setup(args: argparse.Namespace) -> int:
+    from brewq import shortcut
+
+    invoked = Path(sys.argv[0])
+    # Link beside the invoked shim. Resolving first would hide the shortcut inside the tool env.
+    brewq = invoked if invoked.name in {"brewq", "bq"} and invoked.exists() else None
+    if brewq is None:
+        found = shutil_which("brewq")
+        if found is None:
+            print("brewq: setup could not find the brewq executable", file=sys.stderr)
+            return 1
+        brewq = Path(found)
+    state = config_mod.cache_dir() / "shortcut.json"
+    if args.remove:
+        print(shortcut.remove(brewq, brewq.parent, state))
+        return 0
+    block = shortcut.path_block(shutil_which("bq"), brewq, state)
+    print(block or shortcut.ensure(brewq, brewq.parent, state, shortcut.shell_claim("bq")))
+    return 0
+
+
+def shutil_which(name: str) -> str | None:
+    import shutil
+    return shutil.which(name)
 
 
 def _cmd_config(args: argparse.Namespace) -> int:
@@ -562,6 +598,8 @@ def _main(argv: Sequence[str] | None = None) -> int:
         args = _build_command_parser().parse_args(raw_argv)
         if args.command == "update":
             return _cmd_update(args)
+        if args.command == "setup":
+            return _cmd_setup(args)
         if args.command == "config":
             return _cmd_config(args)
         if args.command == "completion":

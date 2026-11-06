@@ -9,15 +9,21 @@ upgrade, uninstall, manage services, or manage Brewfiles.
 Requires Python 3.12+ and Homebrew for local inventory and refresh operations.
 
 ```sh
-uv tool install .
+uv tool install <wheel>
+brewq setup
 brewq ripgrep
 bq ripgrep
 ```
 
-`brewq` and `bq` are identical entry points. Use `uv run brewq` in a checkout to
-run its source rather than an older user-level installation. After verifying an
-updated build, `uv tool install --force .` replaces the installed copy. Compare
-`brewq --version` with `uv run brewq --version` when diagnosing drift.
+`uv tool install` installs `brewq` only. `brewq setup` links `bq` beside it when
+that name is free in the command directory and is not a shell alias or function.
+An existing foreign `bq` is left unchanged. `brq` is not created. `brewq setup
+--remove` deletes only the shortcut brewq created; `uv tool uninstall brewq`
+then removes the package. Use `uv run brewq` in a checkout to run its source
+rather than an older user-level installation. After verifying an updated build,
+`uv tool install --force <wheel>` replaces the installed copy, then run `brewq
+setup` again. Compare `brewq --version` with `uv run brewq --version` when
+diagnosing drift.
 
 ### Zsh completion
 

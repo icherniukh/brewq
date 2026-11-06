@@ -266,7 +266,10 @@ Search remains the root command, TSV the only script format, and columns the
 extension mechanism. Raw 90-day installs remain the default sort. `-u`/`update`
 is the public register-update spelling; `refresh`, `update-cache`, and `-r` stay
 as aliases. `-R` reverses already ranked rows and is off unless requested.
-`BREWQ_NO_REVERSE=1` disables it immediately. TREND currently
+`BREWQ_NO_REVERSE=1` disables it immediately. The package installs `brewq`
+only; `brewq setup` links `bq` when that name is free and never overwrites a
+foreign command, alias, or function. `brq` is not a fallback in this release.
+TREND currently
 remains in the default table: making it opt-in is a product decision for the CLI
 contract issue, not a claim about current behavior. Historical calibration and
 rejected popularity/clamp approaches remain in the archive.
