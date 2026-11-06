@@ -14,7 +14,7 @@ from brewq import render as render_mod
 from brewq import scheduler as scheduler_mod
 from brewq import seed as seed_mod
 
-_ACTIONS = frozenset({"list", "update", "setup", "config", "random", "completion"})
+_ACTIONS = frozenset({"list", "update", "setup", "config", "random", "completion", "preload"})
 _ACTION_ALIASES = {"+refresh": "+update", "+update-cache": "+update"}
 _FORMATTER = argparse.RawDescriptionHelpFormatter
 
@@ -46,7 +46,7 @@ def _error_label() -> str:
         return "Error"
     return "\033[1mError\033[0m"
 _SEARCH_EPILOG = """\
-actions: +list, +update, +setup, +config path, +completion zsh
+actions: +list, +update, +preload, +setup, +config path, +completion zsh
 examples: brewq ripgrep | brewq -i | brewq +update
 """
 
@@ -249,6 +249,13 @@ def _build_command_parser() -> argparse.ArgumentParser:
     rand_p.add_argument("--seed", type=int, metavar="N",
                         help="Fix the random seed for a reproducible lab run")
 
+    subparsers.add_parser(
+        "+preload",
+        help="Install the bundled catalog as the local cache",
+        description="Write the bundled catalog into the cache directory without contacting Homebrew.",
+        formatter_class=_FORMATTER,
+    )
+
     return parser
 
 
@@ -404,6 +411,12 @@ def _cmd_setup(args: argparse.Namespace) -> int:
 def shutil_which(name: str) -> str | None:
     import shutil
     return shutil.which(name)
+
+
+def _cmd_preload() -> int:
+    path, formulae, casks = cache_mod.preload_bundled()
+    print(f"cache: preloaded {formulae} formulae, {casks} casks at {path}")
+    return 0
 
 
 def _cmd_config(args: argparse.Namespace) -> int:
@@ -646,6 +659,8 @@ def _main(argv: Sequence[str] | None = None) -> int:
             return _cmd_list(args, cfg)
         if args.command == "+random":
             return _cmd_random(args, cfg)
+        if args.command == "+preload":
+            return _cmd_preload()
 
     if raw_argv and raw_argv[0].startswith("+") and raw_argv[0] != "+":
         _build_search_parser().print_help(sys.stderr)

@@ -202,9 +202,10 @@ the scheduler cooldown. JSON, pickle, and scheduler state use atomic replacement
 ```sh
 brewq +update            # update the register if stale
 brewq +update --force    # force recovery, including a recently corrupted cache
+brewq +preload           # install the bundled catalog as the local cache, offline
 brewq -u ripgrep        # update the register, then search
 brewq -R -i             # all installed matches, best row last
-brewq config path
+brewq +config path
 ```
 
 `refresh`, `update-cache`, and `-r` remain compatibility aliases for `update` /

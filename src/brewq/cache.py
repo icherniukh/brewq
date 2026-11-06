@@ -108,6 +108,33 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
         json.dump(payload, handle)
 
 
+def materialize(raw: dict[str, Any], directory: Path) -> Path:
+    """Write a validated user snapshot. No network, Homebrew, or inventory scan."""
+    snapshot = _validate_snapshot(raw)
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / _CACHE_FILE
+    lock = directory / _LOCK_FILE
+    with lock.open("a+") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        (directory / _PICKLE_FILE).unlink(missing_ok=True)
+        (directory / _INVENTORY_INDEX_FILE).unlink(missing_ok=True)
+        _write_json(path, snapshot.raw)
+    return path
+
+
+def preload_bundled(directory: Path | None = None) -> tuple[Path, int, int]:
+    """Install the bundled catalog as the user cache, keeping its original age."""
+    raw, metadata = seed_mod.load_resource()
+    payload = {
+        "formulae": raw["formulae"],
+        "casks": raw["casks"],
+        _CACHE_METADATA: _snapshot_metadata(analytics_complete=True, repair_needed=False),
+    }
+    path = materialize(payload, directory or _dir())
+    os.utime(path, (metadata.generated_at, metadata.generated_at))
+    return path, len(payload["formulae"]), len(payload["casks"])
+
+
 def _write_pickle(
     path: Path,
     packages: list[Package],
