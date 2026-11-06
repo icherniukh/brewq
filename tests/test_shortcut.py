@@ -40,6 +40,14 @@ def test_remove_does_not_delete_a_foreign_command(tmp_path):
     assert foreign.read_text() == "foreign"
 
 
+def test_zsh_none_means_the_name_is_free(monkeypatch):
+    import subprocess
+    from brewq import shortcut
+    monkeypatch.setattr(shortcut, "shutil_which", lambda name: "/bin/zsh")
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, 1, "bq: none\n", ""))
+    assert shortcut.shell_claim("bq") == "absent"
+
+
 def test_path_block_reports_a_foreign_command(tmp_path):
     brewq = tmp_path / "brewq"
     brewq.write_text("brewq")

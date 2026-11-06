@@ -43,7 +43,7 @@ def shell_claim(name: str) -> str:
     except (OSError, subprocess.TimeoutExpired):
         return "unknown"
     text = (proc.stdout or proc.stderr).strip().lower()
-    if "not found" in text or proc.returncode != 0 and not text:
+    if "not found" in text or text.endswith(": none") or text == "none":
         return "absent"
     for kind in ("alias", "function", "reserved", "builtin"):
         if kind in text:
