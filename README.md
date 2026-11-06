@@ -10,18 +10,18 @@ Requires Python 3.12+ and Homebrew for local inventory and refresh operations.
 
 ```sh
 uv tool install <wheel>
-brewq setup
+brewq +setup
 brewq ripgrep
 bq ripgrep
 ```
 
-`uv tool install` installs `brewq` only. `brewq setup` links `bq` beside it when
+`uv tool install` installs `brewq` only. `brewq +setup` links `bq` beside it when
 that name is free in the command directory and is not a shell alias or function.
 An existing foreign `bq` is left unchanged. `brq` is not created. Remove the
 shortcut and package with:
 
 ```sh
-brewq setup --remove
+brewq +setup --remove
 uv tool uninstall brewq
 ```
 
@@ -33,7 +33,7 @@ rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/brewq" "${XDG_CONFIG_HOME:-$HOME/.config
 
 Use `uv run brewq` in a checkout to run its source rather than an older
 user-level installation. After verifying an updated build, `uv tool install
---force <wheel>` replaces the installed copy, then run `brewq setup` again.
+--force <wheel>` replaces the installed copy, then run `brewq +setup` again.
 Compare `brewq --version` with `uv run brewq --version` when diagnosing drift.
 
 ### Zsh completion
@@ -123,7 +123,7 @@ brewq -c help                       # field reference and short names; no cache 
 brewq ripgrep -c +version,bin        # keep your layout, add version and binaries
 brewq rust -c +home,-trend           # add homepage, remove trend
 brewq rust -c=-desc                  # remove description; = protects the leading minus
-brewq list -c +90d,trend             # extend the installed-package layout
+brewq +list -c +90d,trend             # extend the installed-package layout
 brewq ripgrep -c all --tsv           # every field, with raw values
 brewq ripgrep -c name,version,90d    # exact selection and order
 ```
@@ -163,10 +163,10 @@ remain visible without color.
 ## Installed packages
 
 ```sh
-brewq list
-brewq list -c name,type,version,90d,description
-brewq list -t 10
-brewq list --tsv -c name,type,version
+brewq +list
+brewq +list -c name,type,version,90d,description
+brewq +list -t 10
+brewq +list --tsv -c name,type,version
 ```
 
 Rows sort by type, then name. Like search, `list` is uncapped unless you pass a
@@ -190,7 +190,7 @@ delay, and only when the system is not busy. That process is on by default and
 can use the network. Set `[cache] auto_refresh = false` or
 `BREWQ_NO_AUTO_REFRESH=1` to render the same rows without starting it or writing
 scheduler state. The environment value wins over configuration; an invalid value
-warns and leaves the configured setting. `brewq update` still runs in the
+warns and leaves the configured setting. `brewq +update` still runs in the
 foreground when you ask for it. Cache information goes to stderr after rows are
 flushed.
 
@@ -200,8 +200,8 @@ from the previous snapshot, marks the new snapshot for repair, and retries after
 the scheduler cooldown. JSON, pickle, and scheduler state use atomic replacement.
 
 ```sh
-brewq update            # update the register if stale
-brewq update --force    # force recovery, including a recently corrupted cache
+brewq +update            # update the register if stale
+brewq +update --force    # force recovery, including a recently corrupted cache
 brewq -u ripgrep        # update the register, then search
 brewq -R -i             # all installed matches, best row last
 brewq config path
@@ -257,7 +257,7 @@ adapts Yuki Nishijima's DidYouMean under MIT. Both notices are in `NOTICE`.
 - Results are not limited by terminal height. A long list scrolls; `-t` is the
   explicit cap, and `-R` puts the best row last when you want it in view.
 - The catalog is Homebrew core and cask data. Third-party taps are absent.
-- `bq` exists only after `brewq setup`, and only when that name is free.
+- `bq` exists only after `brewq +setup`, and only when that name is free.
 - Colors follow the terminal theme and turn off when `NO_COLOR` is set.
 - There is no install, upgrade, uninstall, or service command.
 

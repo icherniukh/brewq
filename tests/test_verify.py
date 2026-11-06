@@ -29,7 +29,7 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
                 output += " -i, --installed"
             if metavars:
                 output = output.replace("-c, --columns", "-c COLS, --columns COLS")
-        elif args == ["completion", "zsh"]:
+        elif args == ["+completion", "zsh"]:
             output = "" if broken == "completion" else "compdef _brewq brewq bq\n"
         else:
             output = "zzverify-hidden\n" if broken == "filter" else "zzverify-installed-a\n"

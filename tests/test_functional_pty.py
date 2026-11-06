@@ -148,7 +148,7 @@ def test_pty_default_output_caps_by_real_terminal_height(tmp_path):
     assert "showing" not in output
 
 
-@pytest.mark.parametrize("command", [[], ["list"]])
+@pytest.mark.parametrize("command", [[], ["+list"]])
 @pytest.mark.parametrize("flag", ["-t", "--top", "--limit"])
 def test_pty_limit_aliases_cap_both_commands(tmp_path, command, flag):
     _write_cache(tmp_path, [_formula(f"zzflags-{i}", installed=True) for i in range(8)])
@@ -163,7 +163,7 @@ def test_pty_limit_aliases_cap_both_commands(tmp_path, command, flag):
     assert "zzflags-2" not in output
 
 
-@pytest.mark.parametrize("command", [["-i"], ["list"]])
+@pytest.mark.parametrize("command", [["-i"], ["+list"]])
 @pytest.mark.parametrize("width", [40, 60, 100])
 def test_pty_installed_view_preserves_description_with_long_names(tmp_path, command, width):
     long_name = "a-very-long-vendor/tap/ghostty-ai-themes"

@@ -503,7 +503,7 @@ def _load_user_cache(path: Path, current_time: float) -> CacheLoad | None:
         )
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
         print(
-            f"brewq: cache corrupt ({path}) — using bundled data; run 'brewq refresh' to recover ({exc})",
+            f"brewq: cache corrupt ({path}) — using bundled data; run 'brewq +update' to recover ({exc})",
             file=sys.stderr,
         )
         return None

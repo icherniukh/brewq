@@ -49,7 +49,9 @@ def test_main_no_args_prints_help(capsys):
     rc = main([])
     assert rc == 2
     out = capsys.readouterr().out
-    assert "commands:" in out
+    assert "actions:" in out
+    assert "+update" in out
+    assert "commands:" not in out
     assert "examples:" in out
     assert "-s" in out
 
@@ -144,7 +146,7 @@ def test_main_search_explicit_top_overrides_default(capsys):
     assert "git-tool-10" not in out
 
 
-@pytest.mark.parametrize("command", [[], ["list"]])
+@pytest.mark.parametrize("command", [[], ["+list"]])
 @pytest.mark.parametrize("flag", ["-t", "--top", "--limit"])
 @pytest.mark.parametrize("value", ["0", "-1", "nope", "1.5"])
 def test_main_rejects_invalid_row_limits(command, flag, value):
@@ -153,7 +155,7 @@ def test_main_rejects_invalid_row_limits(command, flag, value):
     assert exc.value.code == 2
 
 
-@pytest.mark.parametrize("command", [[], ["list"]])
+@pytest.mark.parametrize("command", [[], ["+list"]])
 @pytest.mark.parametrize("flag", ["-t", "--top", "--limit"])
 @pytest.mark.parametrize("tsv", [False, True])
 def test_main_limit_spellings_cap_search_and_list(command, flag, tsv, capsys):
@@ -210,7 +212,7 @@ def test_config_auto_column_picks_available_window_via_top_result(capsys, tmp_pa
     ("argv", "expected"),
     [(["ripgrep", "-c", "+version,bin", "--tsv"], "ripgrep\t\t\t1.0\t\tDescription of ripgrep\n"),
      (["ripgrep", "-c", "+home,-trend", "--tsv"], "ripgrep\t\thttps://example.com\tDescription of ripgrep\n"),
-     (["list", "-c", "+90d,trend", "--tsv"], "ripgrep\t\t\tDescription of ripgrep\n")],
+     (["+list", "-c", "+90d,trend", "--tsv"], "ripgrep\t\t\tDescription of ripgrep\n")],
 )
 def test_column_edits_search_and_list_tsv(capsys, argv, expected):
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep", installed=True)])):
@@ -311,7 +313,7 @@ def test_update_flag_and_command_alias_update_before_search(capsys):
          patch("brewq.cache.load", return_value=_loaded(pkgs)), \
          patch("brewq.cache.status", return_value={"formula_count": 1, "cask_count": 0}):
         assert main(["-u", "ripgrep"]) == 0
-        assert main(["update-cache"]) == 0
+        assert main(["+update"]) == 0
     assert refresh.call_count == 2
     err = capsys.readouterr().err
     assert "Updating register..." in err
@@ -346,14 +348,20 @@ def test_option_terminator_keeps_dash_terms_out_of_flags(capsys):
     assert "No results for: -t" in capsys.readouterr().err
 
 
+def test_bare_list_is_a_query_not_an_action(capsys):
+    with patch("brewq.cache.load", return_value=_loaded([_pkg("list", installed=True), _pkg("other")])):
+        assert main(["-c", "name", "--tsv", "list"]) == 0
+    assert capsys.readouterr().out.strip() == "list"
+
+
 def test_invalid_list_flag_shows_list_help_and_a_separated_error(capsys, monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     with pytest.raises(SystemExit) as exc:
-        main(["list", "-i"])
+        main(["+list", "-i"])
     assert exc.value.code == 2
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert "usage: brewq list" in captured.err
+    assert "usage: brewq +list" in captured.err
     assert "\n\nError: unrecognized arguments: -i" in captured.err
     assert "\033" not in captured.err
 
@@ -361,7 +369,7 @@ def test_invalid_list_flag_shows_list_help_and_a_separated_error(capsys, monkeyp
 def test_first_token_still_selects_a_command(capsys):
     with patch("brewq.cache.refresh") as refresh, \
          patch("brewq.cache.status", return_value={"formula_count": 1, "cask_count": 0}):
-        assert main(["update", "--force"]) == 0
+        assert main(["+update", "--force"]) == 0
         refresh.assert_called_once()
         with pytest.raises(SystemExit) as exc:
             main(["--force", "update"])
@@ -399,7 +407,7 @@ def test_main_search_installed_filter(capsys, flag):
     assert "other-tool" not in out
 
 
-@pytest.mark.parametrize("args", [["-i", "-t", "2"], ["list", "-t", "2"]])
+@pytest.mark.parametrize("args", [["-i", "-t", "2"], ["+list", "-t", "2"]])
 def test_installed_views_default_to_name_and_description(args, capsys):
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep", installed=True)])):
         assert main(args) == 0
@@ -409,7 +417,7 @@ def test_installed_views_default_to_name_and_description(args, capsys):
     assert "TREND" not in output and "90d" not in output
 
 
-@pytest.mark.parametrize("command", [["-i"], ["list"]])
+@pytest.mark.parametrize("command", [["-i"], ["+list"]])
 def test_installed_views_honor_list_config_and_explicit_columns(command, tmp_path, capsys):
     (tmp_path / "config.toml").write_text('[list]\ncolumns = ["name", "version"]\n')
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep", installed=True)])):
@@ -424,7 +432,7 @@ def test_installed_views_honor_list_config_and_explicit_columns(command, tmp_pat
         assert "TYPE" in output and "VERSION" in output and "TREND" in output
 
 
-@pytest.mark.parametrize("argv", [["-t", "2", "tool"], ["list", "-t", "2"]])
+@pytest.mark.parametrize("argv", [["-t", "2", "tool"], ["+list", "-t", "2"]])
 def test_view_cap_discloses_shown_and_eligible_counts(argv, capsys):
     packages = [_pkg(f"git-tool-{i:02d}", installed=True) for i in range(5)]
     with patch("brewq.cache.load", return_value=_loaded(packages)):
@@ -456,7 +464,7 @@ def test_main_list_columns_short_alias(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True),
     ])):
-        rc = main(["list", "-c", "name,version"])
+        rc = main(["+list", "-c", "name,version"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "ripgrep" in out
@@ -467,7 +475,7 @@ def test_main_list_url_flag_adds_url_column(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True),
     ])):
-        rc = main(["list", "--url"])
+        rc = main(["+list", "--url"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "URL" in out
@@ -478,7 +486,7 @@ def test_main_list_analytics_inserts_installs_before_description(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True, installs_30d=80_000),
     ])):
-        rc = main(["list", "--analytics"])
+        rc = main(["+list", "--analytics"])
     assert rc == 0
     header = next(line for line in capsys.readouterr().out.splitlines() if "NAME" in line)
     assert header.index("90d") < header.index("DESCRIPTION")
@@ -488,7 +496,7 @@ def test_main_list_analytics_adds_90d_alongside_other_metric(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True, installs_30d=80_000),
     ])):
-        rc = main(["list", "--analytics", "-c", "name,installs_365d,description"])
+        rc = main(["+list", "--analytics", "-c", "name,installs_365d,description"])
     assert rc == 0
     header = next(line for line in capsys.readouterr().out.splitlines() if "NAME" in line)
     assert "365d" in header
@@ -503,7 +511,7 @@ def test_main_list_uses_cache_without_brew(capsys):
     ]
     with patch("brewq.cache.load", return_value=_loaded(pkgs, age=120)), \
          patch("subprocess.run", side_effect=AssertionError("called Homebrew")):
-        rc = main(["list"])
+        rc = main(["+list"])
     assert rc == 0
     captured = capsys.readouterr()
     assert "ripgrep" in captured.out
@@ -517,7 +525,7 @@ def test_main_list_does_not_inherit_search_result_limit(capsys):
         for i in range(20)
     ]
     with patch("brewq.cache.load", return_value=_loaded(packages)):
-        rc = main(["list", "-c", "name"])
+        rc = main(["+list", "-c", "name"])
     assert rc == 0
     assert "installed-19" in capsys.readouterr().out
 
@@ -609,7 +617,7 @@ def test_cache_footer_is_neutral_and_subdued(monkeypatch, source, age, complete,
 
 def test_random_runs_generated_search(capsys):
     with patch("brewq.cli._cmd_search", return_value=0) as search:
-        rc = main(["random", "--seed", "7"])
+        rc = main(["+random", "--seed", "7"])
     assert rc == 0
     generated = capsys.readouterr().err.strip()
     assert generated.startswith("brewq -t ")
@@ -632,7 +640,7 @@ def test_main_refresh_command(capsys):
          patch("brewq.cache.status", return_value={
              "formula_count": 1, "cask_count": 0
          }):
-        rc = main(["refresh"])
+        rc = main(["+update"])
     assert rc == 0
     mock_refresh.assert_called_once()
 
@@ -651,7 +659,7 @@ def test_main_search_refresh_flag_refreshes_before_query(capsys):
 
 
 def test_main_config_path(capsys):
-    rc = main(["config", "path"])
+    rc = main(["+config", "path"])
     assert rc == 0
     out = capsys.readouterr().out.strip()
     assert out.endswith("config.toml")
@@ -693,7 +701,7 @@ def test_explicit_update_still_runs_when_background_updates_are_disabled(monkeyp
     with patch("brewq.cache.refresh", return_value=RefreshResult(
              RefreshOutcome.FRESH, Path("/cache/brew-all.json")
          )) as refresh:
-        assert main(["update"]) == 0
+        assert main(["+update"]) == 0
     refresh.assert_called_once_with(force=False)
 
 
@@ -757,7 +765,7 @@ def test_manual_refresh_reports_truthful_outcome(capsys, outcome, error, expecte
     result = RefreshResult(outcome, Path("/cache/brew-all.json"), analytics_error=error)
     with patch("brewq.cache.refresh", return_value=result), \
          patch("brewq.cache.status", return_value={"formula_count": 1, "cask_count": 2}):
-        rc = main(["refresh"])
+        rc = main(["+update"])
 
     assert rc == expected_rc
     assert message in capsys.readouterr().err
@@ -767,7 +775,7 @@ def test_main_list_missing_cache_is_empty_and_quick(capsys):
     with patch("brewq.cache.load", return_value=_loaded([], source="seed")), \
          patch("brewq.scheduler.schedule_if_needed", return_value="scheduled"), \
          patch("subprocess.run", side_effect=AssertionError("called Homebrew")):
-        rc = main(["list"])
+        rc = main(["+list"])
     assert rc == 0
     captured = capsys.readouterr()
     assert "brew not found" not in captured.err

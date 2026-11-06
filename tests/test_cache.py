@@ -323,5 +323,5 @@ def test_corrupt_cache_warns_and_falls_back_to_seed(capsys):
 
     err = capsys.readouterr().err
     assert "cache corrupt" in err
-    assert "brewq refresh" in err
+    assert "brewq +update" in err
     assert result.source == "seed"

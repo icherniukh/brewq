@@ -51,7 +51,7 @@ def test_completion_bypasses_operational_paths(completion_cache, monkeypatch, ca
                          (cache.inventory_mod, "scan"), (cache, "_write_json"),
                          (cache, "_write_pickle"), (cli, "_finish_cache_command")):
         monkeypatch.setattr(module, name, forbidden)
-    assert cli.main(["completion", "zsh"]) == 0
+    assert cli.main(["+completion", "zsh"]) == 0
     script = capsys.readouterr().out
     assert "compdef _brewq brewq bq" in script
     assert "--_complete" in script
@@ -141,16 +141,16 @@ def _complete_in_zsh(tmp_path: Path, line: str) -> str:
     ("bq -c def", "bq -c default"),
     ("bq -c name,def", "bq -c name,def"),
     ("bq -c +version,hel", "bq -c +version,hel"),
-    ("bq list --li", "bq list --limit"),
+    ("bq +list --li", "bq +list --limit"),
     ("bq --li", "bq --limit"),
-    ("bq list --to", "bq list --top"),
+    ("bq +list --to", "bq +list --top"),
     ("bq --inst", "bq --installed"),
     ("bq -i zzcomplete-f", "bq -i zzcomplete-formula"),
-    ("bq refresh --fo", "bq refresh --force"),
-    ("bq update-cache --fo", "bq update-cache --force"),
-    ("bq config pa", "bq config path"),
-    ("bq completion zs", "bq completion zsh"),
-    ("bq ran", "bq random"),
+    ("bq +refresh --fo", "bq +refresh --force"),
+    ("bq +update-cache --fo", "bq +update-cache --force"),
+    ("bq +config pa", "bq +config path"),
+    ("bq +completion zs", "bq +completion zsh"),
+    ("bq +ran", "bq +random"),
     ("bq zzcomplete-f", "bq zzcomplete-formula"),
     ("brewq zzcomplete-c", "brewq zzcomplete-cask"),
     ("bq -- zzcomplete-f", "bq -- zzcomplete-formula"),
@@ -161,5 +161,5 @@ def test_actual_zsh_tab_completion(completion_cache, line, expected):
 
 @pytest.mark.skipif(not shutil.which("zsh"), reason="zsh is not installed")
 def test_zsh_commands_still_complete_without_cache(tmp_path):
-    assert _complete_in_zsh(tmp_path, "bq ran").rstrip() == "bq random"
+    assert _complete_in_zsh(tmp_path, "bq +ran").rstrip() == "bq +random"
     assert not (tmp_path / "brew-all.json").exists()

@@ -42,7 +42,7 @@ def test_compact_help_hides_legacy_and_advanced_shortcuts(tmp_path):
     for hidden in ("-u, --url", "-v, --verbose", "--all", "-r, --refresh"):
         assert hidden not in proc.stdout
 
-    list_proc = _run(tmp_path, "list", "--help")
+    list_proc = _run(tmp_path, "+list", "--help")
     assert list_proc.returncode == 0
     assert "-u, --update" in list_proc.stdout
     for hidden in ("--analytics", "-u, --url", "-v, --verbose"):
@@ -68,7 +68,7 @@ def test_version_ignores_invalid_operational_config(tmp_path):
 
 def test_config_path_ignores_invalid_operational_config(tmp_path):
     (tmp_path / "config.toml").write_text("output = []\n")
-    proc = _run(tmp_path, "config", "path", env_override={"BREWQ_CACHE_MAX_AGE": "invalid"})
+    proc = _run(tmp_path, "+config", "path", env_override={"BREWQ_CACHE_MAX_AGE": "invalid"})
     assert proc.returncode == 0
     assert proc.stdout.strip() == str(tmp_path / "config.toml")
     assert proc.stderr == ""
@@ -76,7 +76,7 @@ def test_config_path_ignores_invalid_operational_config(tmp_path):
 
 def test_field_help_ignores_config_and_does_not_initialize_cache(tmp_path):
     (tmp_path / "config.toml").write_text("output = []\n")
-    for args in [("-c", "help"), ("list", "-c", "help")]:
+    for args in [("-c", "help"), ("+list", "-c", "help")]:
         proc = _run(tmp_path, *args, env_override={"BREWQ_CACHE_MAX_AGE": "invalid"})
         assert proc.returncode == 0
         assert "Output fields" in proc.stdout
@@ -94,7 +94,7 @@ def test_retired_installed_shorthand_is_rejected_before_cache_access(tmp_path):
 
 
 def test_search_and_list_help_share_limit_spellings(tmp_path):
-    for command in [(), ("list",)]:
+    for command in [(), ("+list",)]:
         proc = _run(tmp_path, *command, "--help")
         assert proc.returncode == 0
         assert "--top" in proc.stdout and "--limit" in proc.stdout

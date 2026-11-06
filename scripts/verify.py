@@ -181,8 +181,8 @@ def check_installed_shim() -> Result:
         cases = [
             ["-i", "-t", "1", "--tsv", "-c", "name", "zzverify"],
             ["--installed", "--limit", "1", "--tsv", "-c", "name", "zzverify"],
-            ["list", "--top", "1", "--tsv", "-c", "name"],
-            ["list", "--limit", "1", "--tsv", "-c", "name"],
+            ["+list", "--top", "1", "--tsv", "-c", "name"],
+            ["+list", "--limit", "1", "--tsv", "-c", "name"],
         ]
         for name in ("brewq", "bq"):
             path = _external_entrypoint(name)
@@ -195,7 +195,7 @@ def check_installed_shim() -> Result:
                 )
                 if proc.returncode != 0 or proc.stdout.splitlines() != ["zzverify-installed-a"]:
                     failures.append(f"{name} {' '.join(args)}: installed behavior mismatch")
-            for args in (["-i", "-t", "1"], ["list", "-t", "1"]):
+            for args in (["-i", "-t", "1"], ["+list", "-t", "1"]):
                 proc = subprocess.run(
                     [path, *args], cwd=directory, env=env,
                     capture_output=True, text=True, timeout=20.0,
@@ -205,7 +205,7 @@ def check_installed_shim() -> Result:
                         or any(field in header for field in ("TYPE", "VERSION", "TREND", "90d"))):
                     failures.append(f"{name} {' '.join(args)}: installed default layout mismatch")
             completion = subprocess.run(
-                [path, "completion", "zsh"], cwd=directory, env=env,
+                [path, "+completion", "zsh"], cwd=directory, env=env,
                 capture_output=True, text=True, timeout=20.0,
             )
             if completion.returncode != 0 or "compdef _brewq brewq bq" not in completion.stdout:

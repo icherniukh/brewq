@@ -14,7 +14,8 @@ from brewq import render as render_mod
 from brewq import scheduler as scheduler_mod
 from brewq import seed as seed_mod
 
-_COMMANDS = frozenset({"list", "update", "setup", "config", "random", "completion"})
+_ACTIONS = frozenset({"list", "update", "setup", "config", "random", "completion"})
+_ACTION_ALIASES = {"+refresh": "+update", "+update-cache": "+update"}
 _FORMATTER = argparse.RawDescriptionHelpFormatter
 
 
@@ -45,8 +46,8 @@ def _error_label() -> str:
         return "Error"
     return "\033[1mError\033[0m"
 _SEARCH_EPILOG = """\
-commands: list, update, config path, completion zsh
-examples: brewq ripgrep | brewq -t 10 rust | brewq -u ripgrep
+actions: +list, +update, +setup, +config path, +completion zsh
+examples: brewq ripgrep | brewq -i | brewq +update
 """
 
 _LIST_EPILOG = """\
@@ -55,11 +56,11 @@ Use `brewq --full-help` for columns, trending, and cache behavior.
 
 _UPDATE_EPILOG = """\
 Examples:
-  brewq update
-  brewq update --force
+  brewq +update
+  brewq +update --force
   brewq -u ripgrep
 
-refresh and update-cache remain aliases. BREWQ_NO_REVERSE=1 disables reverse sort.
++refresh is an alias. BREWQ_NO_REVERSE=1 disables reverse sort.
 """
 
 _CONFIG_EPILOG = """\
@@ -98,7 +99,7 @@ trending:
 cache:
   A bundled seed makes the first query immediate. Fresh snapshots are read
   locally. Stale data is shown immediately, then updated in the background.
-  `brewq update` updates stale data; `brewq update --force` updates now.
+  `brewq +update` updates stale data; `brewq +update --force` updates now.
   `-R` reverses the chosen order after `-t`, so the best row is last.
   It is off unless `-R` or `[search] reverse` asks for it. `BREWQ_NO_REVERSE=1`
   turns it off immediately, even when the flag or config enables it.
@@ -156,7 +157,7 @@ def _add_update_flag(parser: argparse.ArgumentParser, *, then: str) -> None:
 def _build_search_parser() -> argparse.ArgumentParser:
     parser = _Parser(
         prog=_prog(),
-        usage=f"{_prog()} [options] [query ...]\n       {_prog()} {{list,update,config,completion}} ...",
+        usage=f"{_prog()} [options] [query ...]",
         description="Fast, read-only Homebrew package search.",
         epilog=_SEARCH_EPILOG,
         formatter_class=_FORMATTER,
@@ -187,9 +188,9 @@ def _build_command_parser() -> argparse.ArgumentParser:
 
     # list
     lst = subparsers.add_parser(
-        "list",
+        "+list",
         help="Show installed formulae and casks",
-        usage="brewq list [options]",
+        usage=f"{_prog()} +list [options]",
         description="Show installed formulae and casks.",
         epilog=_LIST_EPILOG,
         formatter_class=_FORMATTER,
@@ -204,7 +205,7 @@ def _build_command_parser() -> argparse.ArgumentParser:
                      help="tab-separated output for scripting")
 
     update_p = subparsers.add_parser(
-        "update",
+        "+update",
         help="Update the local package register",
         description="Update local Homebrew metadata and analytics.",
         epilog=_UPDATE_EPILOG,
@@ -214,7 +215,7 @@ def _build_command_parser() -> argparse.ArgumentParser:
                           help="Update even when the register is fresh")
 
     setup_p = subparsers.add_parser(
-        "setup",
+        "+setup",
         help="Link bq when that command name is free",
         description="Link bq to this brewq if the name is not already taken.",
         formatter_class=_FORMATTER,
@@ -224,7 +225,7 @@ def _build_command_parser() -> argparse.ArgumentParser:
 
     # config
     config_p = subparsers.add_parser(
-        "config",
+        "+config",
         help="Show configuration info",
         description="Show where brewq reads configuration.",
         epilog=_CONFIG_EPILOG,
@@ -234,13 +235,13 @@ def _build_command_parser() -> argparse.ArgumentParser:
                           help="Print the config file path")
 
     completion_p = subparsers.add_parser(
-        "completion", help="Generate shell completion", formatter_class=_FORMATTER,
+        "+completion", help="Generate shell completion", formatter_class=_FORMATTER,
     )
     completion_p.add_argument("shell", choices=["zsh"], help="Completion shell")
 
     # random
     rand_p = subparsers.add_parser(
-        "random",
+        "+random",
         help="Run a random layout lab search",
         description="Pick a random query and output layout, then run the normal search path.",
         formatter_class=_FORMATTER,
@@ -257,8 +258,8 @@ def _full_help_text() -> str:
 
 
 def _normalize_argv(argv: list[str]) -> list[str]:
-    if argv and argv[0] in {"update-cache", "refresh"}:
-        return ["update", *argv[1:]]
+    if argv and argv[0] in _ACTION_ALIASES:
+        return [_ACTION_ALIASES[argv[0]], *argv[1:]]
     return argv
 
 
@@ -624,15 +625,15 @@ def _main(argv: Sequence[str] | None = None) -> int:
 
     # Route subcommands only when they are the first token. Search remains the
     # default command even when query terms are named like subcommands.
-    if raw_argv and raw_argv[0] in _COMMANDS:
+    if raw_argv and raw_argv[0].startswith("+") and raw_argv[0][1:] in _ACTIONS:
         args = _build_command_parser().parse_args(raw_argv)
-        if args.command == "update":
+        if args.command == "+update":
             return _cmd_update(args)
-        if args.command == "setup":
+        if args.command == "+setup":
             return _cmd_setup(args)
-        if args.command == "config":
+        if args.command == "+config":
             return _cmd_config(args)
-        if args.command == "completion":
+        if args.command == "+completion":
             from brewq.completion import zsh_script
 
             print(zsh_script(_build_search_parser(), _build_command_parser()), end="")
@@ -641,12 +642,18 @@ def _main(argv: Sequence[str] | None = None) -> int:
             print(columns_mod.selection_help(), end="")
             return 0
         cfg = config_mod.load()
-        if args.command == "list":
+        if args.command == "+list":
             return _cmd_list(args, cfg)
-        if args.command == "random":
+        if args.command == "+random":
             return _cmd_random(args, cfg)
 
-    # Flags may sit between query terms. Subcommands stay first-token only.
+    if raw_argv and raw_argv[0].startswith("+") and raw_argv[0] != "+":
+        _build_search_parser().print_help(sys.stderr)
+        print(file=sys.stderr)
+        print(f"{_error_label()}: unknown action {raw_argv[0]}", file=sys.stderr)
+        return 2
+
+    # Flags may sit between query terms. Actions are +tokens, never bare words.
     args = _build_search_parser().parse_intermixed_args(raw_argv)
     if args.full_help:
         print(_full_help_text(), end="")
