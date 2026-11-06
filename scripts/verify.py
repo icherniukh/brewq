@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from brewq import __version__
+from brewq.cli import _build_command_parser
+from brewq.completion import script_errors
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -208,8 +210,12 @@ def check_installed_shim() -> Result:
                 [path, "+completion", "zsh"], cwd=directory, env=env,
                 capture_output=True, text=True, timeout=20.0,
             )
-            if completion.returncode != 0 or "compdef _brewq brewq bq" not in completion.stdout:
-                failures.append(f"{name}: installed completion generation failed")
+            errors = script_errors(completion.stdout, _build_command_parser())
+            if completion.returncode != 0 or completion.stderr or errors:
+                failures.append(
+                    f"{name}: installed completion print failed"
+                    + (f" ({'; '.join(errors)})" if errors else "")
+                )
 
     return Result("installed shim", not failures, "\n".join(failures))
 

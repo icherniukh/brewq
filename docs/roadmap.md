@@ -32,7 +32,9 @@ initialize a seed, reconcile inventory, or integrate with `brew`; broader shell
 and suggestion work remains separate. This does not add a release gate.
 
 M1 does not require a GIF, a pager, a palette redesign, autocomplete, more query
-modes, CI, or a Homebrew tap. One concrete versioned installation route is enough;
+modes, or a Homebrew tap. Contributor CI checks that `+completion zsh` prints a
+valid current script; it is not a release or distribution channel. One concrete
+versioned installation route is enough;
 the initial target is a release wheel installed with `uv tool install`, with the
 exact artifact location settled in Beads before publication. Registry availability
 and ownership must be verified if PyPI is chosen instead. Layout imperfections

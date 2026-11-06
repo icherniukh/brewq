@@ -7,6 +7,7 @@ import select
 import shlex
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -40,6 +41,36 @@ def test_missing_or_invalid_cache_is_quiet(tmp_path, monkeypatch, capsys, conten
     assert cli.main(["--_complete"]) == 0
     assert capsys.readouterr() == ("", "")
     assert sorted(tmp_path.rglob("*")) == before
+
+
+def _require_zsh() -> str:
+    zsh = shutil.which("zsh")
+    if zsh:
+        return zsh
+    if os.environ.get("BREWQ_REQUIRE_ZSH") == "1":
+        pytest.fail("zsh is required to validate printed completion")
+    pytest.skip("zsh is not installed")
+
+
+def test_printed_completion_is_the_current_zsh_script(tmp_path):
+    zsh = _require_zsh()
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
+    proc = subprocess.run(
+        [sys.executable, "-m", "brewq.cli", "+completion", "zsh"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=20,
+    )
+    assert proc.returncode == 0
+    assert proc.stderr == ""
+    from brewq.completion import script_errors
+
+    assert script_errors(proc.stdout, cli._build_command_parser()) == []
+    path = tmp_path / "completion.zsh"
+    path.write_text(proc.stdout)
+    syntax = subprocess.run([zsh, "-n", str(path)], capture_output=True, text=True)
+    assert syntax.returncode == 0, syntax.stderr
+    readme = Path(__file__).resolve().parents[1].joinpath("README.md").read_text()
+    assert "source <(brewq +completion zsh)" in readme
+    assert "brewq completion zsh" not in readme
 
 
 def test_completion_bypasses_operational_paths(completion_cache, monkeypatch, capsys):
@@ -126,7 +157,6 @@ def _complete_in_zsh(tmp_path: Path, line: str) -> str:
     return result.read_text().rstrip()
 
 
-@pytest.mark.skipif(not shutil.which("zsh"), reason="zsh is not installed")
 @pytest.mark.parametrize(("line", "expected"), [
     ("bq --so", "bq --sort"),
     ("brewq --sort tre", "brewq --sort trending"),
@@ -156,10 +186,11 @@ def _complete_in_zsh(tmp_path: Path, line: str) -> str:
     ("bq -- zzcomplete-f", "bq -- zzcomplete-formula"),
 ])
 def test_actual_zsh_tab_completion(completion_cache, line, expected):
+    _require_zsh()
     assert _complete_in_zsh(completion_cache, line).rstrip(" =") == expected
 
 
-@pytest.mark.skipif(not shutil.which("zsh"), reason="zsh is not installed")
 def test_zsh_commands_still_complete_without_cache(tmp_path):
+    _require_zsh()
     assert _complete_in_zsh(tmp_path, "bq +ran").rstrip() == "bq +random"
     assert not (tmp_path / "brew-all.json").exists()

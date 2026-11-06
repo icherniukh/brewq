@@ -42,11 +42,11 @@ After zsh's completion system is initialized (`autoload -Uz compinit; compinit`,
 if your shell setup does not already do this), load completion for both commands:
 
 ```zsh
-source <(brewq completion zsh)
+source <(brewq +completion zsh)
 ```
 
 Put that line after completion initialization in your zsh configuration to keep
-it enabled. For a checkout, use `source <(uv run brewq completion zsh)` instead.
+it enabled. For a checkout, use `source <(uv run brewq +completion zsh)` instead.
 Tab completes commands, flags, sort fields, comma-separated columns, and cached
 formula/cask names. Package suggestions use the existing user cache even when
 stale; a missing, unreadable, or invalid cache yields no package suggestions.

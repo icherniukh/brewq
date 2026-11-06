@@ -30,7 +30,13 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
             if metavars:
                 output = output.replace("-c, --columns", "-c COLS, --columns COLS")
         elif args == ["+completion", "zsh"]:
-            output = "" if broken == "completion" else "compdef _brewq brewq bq\n"
+            if broken == "completion":
+                output = "compdef _brewq brewq bq\n"
+            else:
+                from brewq.cli import _build_command_parser, _build_search_parser
+                from brewq.completion import zsh_script
+
+                output = zsh_script(_build_search_parser(), _build_command_parser())
         else:
             output = "zzverify-hidden\n" if broken == "filter" else "zzverify-installed-a\n"
             if "--tsv" not in args:
