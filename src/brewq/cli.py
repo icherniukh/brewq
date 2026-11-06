@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -15,6 +16,34 @@ from brewq import seed as seed_mod
 
 _COMMANDS = frozenset({"list", "update", "setup", "config", "random", "completion"})
 _FORMATTER = argparse.RawDescriptionHelpFormatter
+
+
+class _Parser(argparse.ArgumentParser):
+    """Help first, then a visually separated error. No cache or network."""
+
+    def parse_args(self, args=None, namespace=None):
+        self._brewq_argv = list(sys.argv[1:] if args is None else args)
+        return super().parse_args(args, namespace)
+
+    def error(self, message: str) -> None:
+        subs = getattr(self, "_brewq_subcommands", {})
+        argv = getattr(self, "_brewq_argv", [])
+        target = subs.get(argv[0], self) if argv else self
+        target.print_help(sys.stderr)
+        print(file=sys.stderr)
+        print(f"{_error_label()}: {message}", file=sys.stderr)
+        self.exit(2)
+
+
+def _prog() -> str:
+    name = Path(sys.argv[0]).name
+    return name if name in {"brewq", "bq"} else "brewq"
+
+
+def _error_label() -> str:
+    if not sys.stderr.isatty() or os.environ.get("NO_COLOR", "") or os.environ.get("TERM") == "dumb":
+        return "Error"
+    return "\033[1mError\033[0m"
 _SEARCH_EPILOG = """\
 commands: list, update, config path, completion zsh
 examples: brewq ripgrep | brewq -t 10 rust | brewq -u ripgrep
@@ -125,9 +154,9 @@ def _add_update_flag(parser: argparse.ArgumentParser, *, then: str) -> None:
 
 
 def _build_search_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="brewq",
-        usage="brewq [options] [query ...]\n       brewq {list,update,config,completion} ...",
+    parser = _Parser(
+        prog=_prog(),
+        usage=f"{_prog()} [options] [query ...]\n       {_prog()} {{list,update,config,completion}} ...",
         description="Fast, read-only Homebrew package search.",
         epilog=_SEARCH_EPILOG,
         formatter_class=_FORMATTER,
@@ -152,8 +181,9 @@ def _build_search_parser() -> argparse.ArgumentParser:
 
 
 def _build_command_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="brewq", formatter_class=_FORMATTER)
-    subparsers = parser.add_subparsers(dest="command")
+    parser = _Parser(prog=_prog(), formatter_class=_FORMATTER)
+    subparsers = parser.add_subparsers(dest="command", parser_class=_Parser)
+    parser._brewq_subcommands = subparsers.choices
 
     # list
     lst = subparsers.add_parser(

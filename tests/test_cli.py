@@ -346,6 +346,18 @@ def test_option_terminator_keeps_dash_terms_out_of_flags(capsys):
     assert "No results for: -t" in capsys.readouterr().err
 
 
+def test_invalid_list_flag_shows_list_help_and_a_separated_error(capsys, monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    with pytest.raises(SystemExit) as exc:
+        main(["list", "-i"])
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "usage: brewq list" in captured.err
+    assert "\n\nError: unrecognized arguments: -i" in captured.err
+    assert "\033" not in captured.err
+
+
 def test_first_token_still_selects_a_command(capsys):
     with patch("brewq.cache.refresh") as refresh, \
          patch("brewq.cache.status", return_value={"formula_count": 1, "cask_count": 0}):
