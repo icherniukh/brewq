@@ -70,10 +70,12 @@ other active matches under metric sorts; disabled/deprecated results rank last.
 | `-r`, `--refresh` | Force foreground refresh before searching |
 | `--all` | Retain deprecated/disabled matches when the cap would otherwise hide them |
 
-Search cap precedence is `-t`, then positive `output.limit`, then terminal rows
-minus six (minimum five) on a TTY, then unlimited when piped. This caps records,
-not wrapped terminal lines. When capped matches overflow, deprecated/disabled
-matches are hidden unless `--all` is given. Otherwise they remain, ranked last.
+Search cap precedence is `-t`, then positive `output.limit`, then unlimited.
+Terminal height never limits results; it only affects layout, so a small window
+cannot silently hide matches. This caps records, not wrapped terminal lines.
+When a positive cap hides matches, deprecated/disabled matches are ranked last
+and hidden unless `--all` is given, and a stderr note reports `showing N of M`.
+Machine-readable stdout stays clean.
 
 Both search and `list` accept `-t N` / `--top N` as the canonical positive cap;
 `--limit N` is an equivalent compatibility alias. `--all` includes package
@@ -147,8 +149,8 @@ brewq list -t 10
 brewq list --tsv -c name,type,version
 ```
 
-Rows sort by type, then name. Unlike search, `list` remains uncapped by default;
-use the shared positive-cap flags to limit it. Select cached
+Rows sort by type, then name. Like search, `list` is uncapped unless you pass a
+shared positive-cap flag; a cap reports `showing N of M` on stderr. Select cached
 analytics through the same `-c` column interface used by search; this never
 fetches analytics on demand. VERSION displays the installed version for installed
 rows; the catalog's available version remains separate internally.
@@ -192,7 +194,7 @@ sort = "90d"
 
 [output]
 columns = ["name", "installs_90d", "trending", "description"]
-limit = 0 # terminal-height cap on a TTY; unlimited when piped
+limit = 0 # no automatic cap; unlimited when unset
 
 [list]
 columns = ["name", "description"]

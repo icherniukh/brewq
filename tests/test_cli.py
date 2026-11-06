@@ -106,9 +106,7 @@ def test_main_search_non_tty_shows_all_results(capsys):
     assert "git-tool-44" in out
 
 
-def test_main_search_tty_caps_by_terminal_height():
-    import os
-
+def test_main_search_ignores_terminal_height():
     import brewq.options as opts_mod
 
     pkgs = [
@@ -118,20 +116,19 @@ def test_main_search_tty_caps_by_terminal_height():
     captured = []
     orig = opts_mod.build_search_options
 
-    def spy(args, cfg, *, tty_rows=None):
-        result = orig(args, cfg, tty_rows=tty_rows)
+    def spy(args, cfg):
+        result = orig(args, cfg)
         captured.append(result)
         return result
 
     with patch("brewq.cache.load", return_value=_loaded(pkgs)), \
          patch("brewq.cli.sys.stdout") as mock_out, \
-         patch("brewq.cli.shutil.get_terminal_size", return_value=os.terminal_size((120, 24))), \
          patch("brewq.options.build_search_options", side_effect=spy):
         mock_out.isatty.return_value = True
         main(["git"])
 
     assert captured, "build_search_options was not called"
-    assert captured[0].limit == 18  # max(5, 24 - 6)
+    assert captured[0].limit == 0  # terminal height never caps the result set
 
 
 def test_main_search_explicit_top_overrides_default(capsys):
@@ -347,6 +344,25 @@ def test_installed_views_honor_list_config_and_explicit_columns(command, tmp_pat
         assert main([*command, "-v"]) == 0
         output = capsys.readouterr().out
         assert "TYPE" in output and "VERSION" in output and "TREND" in output
+
+
+@pytest.mark.parametrize("argv", [["-t", "2", "tool"], ["list", "-t", "2"]])
+def test_view_cap_discloses_shown_and_eligible_counts(argv, capsys):
+    packages = [_pkg(f"git-tool-{i:02d}", installed=True) for i in range(5)]
+    with patch("brewq.cache.load", return_value=_loaded(packages)):
+        assert main(argv) == 0
+    captured = capsys.readouterr()
+    assert "brewq: showing 2 of 5; raise -t/--top or clear output.limit" in captured.err
+    assert "showing" not in captured.out
+
+
+def test_no_view_cap_prints_no_notice(capsys):
+    packages = [_pkg(f"git-tool-{i:02d}", installed=True) for i in range(5)]
+    with patch("brewq.cache.load", return_value=_loaded(packages)):
+        assert main(["-i", "-c", "name", "--tsv", "tool"]) == 0
+    captured = capsys.readouterr()
+    assert len(captured.out.splitlines()) == 5
+    assert "showing" not in captured.err
 
 
 def test_main_search_discloses_stale_cache(capsys):

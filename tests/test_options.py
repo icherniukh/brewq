@@ -291,33 +291,22 @@ def _cfg(limit=0):
     return {"search": {"sort": "installs_30d"}, "output": {"limit": limit, "columns": []}}
 
 
-def test_build_search_options_non_tty_has_no_limit():
-    opts = build_search_options(_args(query=["git"]), _cfg(), tty_rows=None)
-    assert opts.limit == 0
+def test_build_search_options_has_no_implicit_limit():
+    # Terminal height sizes layout only; it must never cap results silently.
+    assert build_search_options(_args(query=["git"]), _cfg()).limit == 0
 
 
-def test_build_search_options_tty_uses_terminal_height():
-    opts = build_search_options(_args(query=["git"]), _cfg(), tty_rows=24)
-    assert opts.limit == 18  # max(5, 24 - 6)
+def test_build_search_options_config_limit_applies():
+    assert build_search_options(_args(query=["git"]), _cfg(limit=20)).limit == 20
 
 
-def test_build_search_options_tty_clamps_small_terminals():
-    opts = build_search_options(_args(query=["git"]), _cfg(), tty_rows=8)
-    assert opts.limit == 5  # max(5, 8 - 6)
-
-
-def test_build_search_options_config_limit_overrides_tty():
-    opts = build_search_options(_args(query=["git"]), _cfg(limit=20), tty_rows=24)
-    assert opts.limit == 20
-
-
-def test_build_search_options_top_flag_overrides_all():
-    opts = build_search_options(_args(query=["git"], top=5), _cfg(limit=20), tty_rows=24)
+def test_build_search_options_top_flag_overrides_config():
+    opts = build_search_options(_args(query=["git"], top=5), _cfg(limit=20))
     assert opts.limit == 5
 
 
 def test_build_search_options_top_without_explicit_sort_uses_config_default():
     # --top used to hardcode "trending" regardless of config; it should now
     # just follow whatever sort is otherwise in effect.
-    opts = build_search_options(_args(query=["git"], top=5), _cfg(), tty_rows=None)
+    opts = build_search_options(_args(query=["git"], top=5), _cfg())
     assert opts.sort == "installs_30d"

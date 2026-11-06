@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import shutil
 import sys
 from collections.abc import Sequence
 
@@ -251,6 +250,7 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     else:
         render_mod.render_table(packages, col_defs, out=sys.stdout)
     sys.stdout.flush()
+    _report_view_cap(len(packages), opts.eligible_total, opts.limit)
     _finish_cache_command(loaded, cfg)
     return 0
 
@@ -354,9 +354,8 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         print(f"brewq: {err}", file=sys.stderr)
         return 1
 
-    tty_rows = shutil.get_terminal_size().lines if sys.stdout.isatty() else None
     try:
-        opts = options_mod.build_search_options(args, cfg, tty_rows=tty_rows)
+        opts = options_mod.build_search_options(args, cfg)
     except ValueError as exc:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1
@@ -427,8 +426,17 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
             sorted_col=opts.sort,
         )
     sys.stdout.flush()
+    _report_view_cap(len(ranked), opts.eligible_total, opts.limit)
     _finish_cache_command(loaded, cfg)
     return 0
+
+
+def _report_view_cap(shown: int, total: int, limit: int) -> None:
+    """Disclose a positive explicit/configured cap; stdout stays machine-clean."""
+    if limit <= 0 or shown >= total:
+        return
+    print(f"brewq: showing {shown} of {total}; raise -t/--top or clear output.limit",
+          file=sys.stderr)
 
 
 def _load_cache() -> cache_mod.CacheLoad | None:

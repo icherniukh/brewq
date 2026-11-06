@@ -123,6 +123,13 @@ Bound the name column, favor description context, and retain requested metadata
 through explicit columns rather than crowding the default. This is display-only:
 TSV keeps full identifiers and values, and cap/sort policies are unchanged.
 
+**Result-limit policy:** terminal height is a layout input only; it never caps
+the result set. Only explicit `-t`/`--top`, `--limit`, or a positive configured
+`output.limit` limits results, and any such cap discloses `showing N of M` on
+stderr while stdout stays machine-clean. This removes silent truncation as a
+source of “brewq missed a package” reports and makes installed-only search and
+`list` consistent.
+
 ### 4. Clean public Git history in an isolated copy
 
 Execute `brewq-history-scrub` after the sanitized seed and M1 candidate/docs are

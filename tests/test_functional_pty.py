@@ -141,10 +141,11 @@ def test_pty_default_output_caps_by_real_terminal_height(tmp_path):
     rc, output = _run_in_pty(_brewq("zzcap"), _env(tmp_path), rows=20, cols=120)
     assert rc == 0
     matched = [line for line in output.splitlines() if "zzcap-" in line]
-    # cli.py caps to max(5, rows - 6) when stdout is a real TTY; unit tests only
-    # verify this by mocking sys.stdout and shutil.get_terminal_size wholesale.
-    assert 0 < len(matched) <= 14
-    assert "zzcap-39" not in output
+    # A small terminal shrinks the layout, never the result set. Unit tests
+    # cannot see this because they mock sys.stdout and terminal size wholesale.
+    assert len(matched) == 40
+    assert "zzcap-39" in output
+    assert "showing" not in output
 
 
 @pytest.mark.parametrize("command", [[], ["list"]])

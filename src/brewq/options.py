@@ -46,6 +46,8 @@ class SearchOptions:
     installed_only: bool = False
     show_all: bool = False
     regex: re.Pattern[str] | None = None
+    # Matches before a positive view limit is applied; used for honest counts.
+    eligible_total: int = 0
 
 
 @dataclass
@@ -54,9 +56,10 @@ class ListOptions:
     columns_spec: str | list = "default"
     limit: int = 0
     tsv_output: bool = False
+    eligible_total: int = 0
 
 
-def build_search_options(args: Any, cfg: dict, *, tty_rows: int | None = None) -> SearchOptions:
+def build_search_options(args: Any, cfg: dict) -> SearchOptions:
     raw_sort = getattr(args, "sort", None)
     top = getattr(args, "top", None)
 
@@ -66,15 +69,10 @@ def build_search_options(args: Any, cfg: dict, *, tty_rows: int | None = None) -
         cfg_sort = cfg["search"].get("sort", "90d")
         sort = parse_sort(cfg_sort)
 
+    # Terminal height sizes the layout, never the result set: a small window
+    # must not silently discard matches.
     cfg_limit = cfg["output"]["limit"]
-    if top:
-        limit = top
-    elif cfg_limit > 0:
-        limit = cfg_limit
-    elif tty_rows is not None:
-        limit = max(5, tty_rows - 6)
-    else:
-        limit = 0
+    limit = top or cfg_limit
 
     columns_spec: str | list = (
         getattr(args, "columns", None)
@@ -250,7 +248,7 @@ def rank(
         degraded.sort(key=sort_key)
 
     result = normal + degraded
-
+    opts.eligible_total = len(result)
     if opts.limit > 0:
         result = result[: opts.limit]
 
@@ -259,6 +257,7 @@ def rank(
 
 def rank_installed(packages: list[Package], opts: ListOptions) -> list[Package]:
     packages.sort(key=lambda p: (p.type, p.name.lower()))
+    opts.eligible_total = len(packages)
     if opts.limit > 0:
         packages = packages[: opts.limit]
     return packages
