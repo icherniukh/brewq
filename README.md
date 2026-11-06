@@ -17,13 +17,24 @@ bq ripgrep
 
 `uv tool install` installs `brewq` only. `brewq setup` links `bq` beside it when
 that name is free in the command directory and is not a shell alias or function.
-An existing foreign `bq` is left unchanged. `brq` is not created. `brewq setup
---remove` deletes only the shortcut brewq created; `uv tool uninstall brewq`
-then removes the package. Use `uv run brewq` in a checkout to run its source
-rather than an older user-level installation. After verifying an updated build,
-`uv tool install --force <wheel>` replaces the installed copy, then run `brewq
-setup` again. Compare `brewq --version` with `uv run brewq --version` when
-diagnosing drift.
+An existing foreign `bq` is left unchanged. `brq` is not created. Remove the
+shortcut and package with:
+
+```sh
+brewq setup --remove
+uv tool uninstall brewq
+```
+
+That leaves cache and config in place. To remove those too:
+
+```sh
+rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/brewq" "${XDG_CONFIG_HOME:-$HOME/.config}/brewq"
+```
+
+Use `uv run brewq` in a checkout to run its source rather than an older
+user-level installation. After verifying an updated build, `uv tool install
+--force <wheel>` replaces the installed copy, then run `brewq setup` again.
+Compare `brewq --version` with `uv run brewq --version` when diagnosing drift.
 
 ### Zsh completion
 
