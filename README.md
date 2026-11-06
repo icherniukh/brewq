@@ -185,13 +185,14 @@ state removed during seed generation. Loads validate the user snapshot before us
 fall back to the seed after corruption, and reconcile installed state from local
 Homebrew roots. A successful empty inventory clears stale installed markers;
 missing or unreadable roots preserve the last known state. Stale, seed, and
-incomplete snapshots can schedule a detached update with a five-minute delay
-and system-load checks. That background process is on by default. Set
-`[cache] auto_refresh = false` or `BREWQ_NO_AUTO_REFRESH=1` to render the same
-rows without spawning it or writing scheduler state. The environment value wins
-over configuration; an invalid value warns and leaves the configured setting.
-Explicit `brewq update` still runs in the foreground. Cache information goes to
-stderr after rows are flushed.
+incomplete snapshots can start a detached background update after a five-minute
+delay, and only when the system is not busy. That process is on by default and
+can use the network. Set `[cache] auto_refresh = false` or
+`BREWQ_NO_AUTO_REFRESH=1` to render the same rows without starting it or writing
+scheduler state. The environment value wins over configuration; an invalid value
+warns and leaves the configured setting. `brewq update` still runs in the
+foreground when you ask for it. Cache information goes to stderr after rows are
+flushed.
 
 Snapshots record analytics completeness independently of file age. If metadata
 refresh succeeds while analytics is unavailable, brewq retains usable counts
@@ -251,34 +252,13 @@ Original brewq code is MIT, Copyright (c) 2026 Ivan Cherniukh. The bundled
 catalog is Homebrew data under the BSD-2-Clause license, and spell correction
 adapts Yuki Nishijima's DidYouMean under MIT. Both notices are in `NOTICE`.
 
-## Stability and development
+## Known limits
 
-The September 2026 stabilization milestone addressed config/cache validation,
-installed-state reconciliation, incomplete refresh recovery, and scheduling
-before output. That historical milestone and the recorded isolated 0.6.0 wheel
-verification do not establish readiness of the next public release. The current
-release gate is `brewq-m1-release` in Beads; see the
-[release boundary](docs/roadmap.md#first-public-release-boundary) and
-[execution plan](docs/roadmap.md#release-execution-plan).
+- Results are not limited by terminal height. A long list scrolls; `-t` is the
+  explicit cap, and `-R` puts the best row last when you want it in view.
+- The catalog is Homebrew core and cask data. Third-party taps are absent.
+- `bq` exists only after `brewq setup`, and only when that name is free.
+- Colors follow the terminal theme and turn off when `NO_COLOR` is set.
+- There is no install, upgrade, uninstall, or service command.
 
-```sh
-uv sync --extra dev
-uv run python scripts/verify.py
-bd ready
-bd list --status=in_progress
-```
-
-The verification script runs Ruff, pytest, subprocess CLI smoke checks, and
-external installed-entry-point parity checks. The separate public-release gate
-requires inspecting the newly built wheel and sdist and verifying the decided
-entrypoint contract and bundled seed in an isolated installation. A skipped
-installed-tool check is not proof that the release artifact works.
-
-Maintained documentation:
-
-- [AGENTS.md](AGENTS.md): contributor workflow, ownership, and verification.
-- [Design and roadmap](docs/roadmap.md): philosophy, architecture, release gates,
-  and preserved historical decisions.
-
-Source is in `src/brewq/`, tests in `tests/`, and development commands in
-`scripts/`. `legacy/bsx-prototype.zsh` is preserved provenance.
+Contributor workflow lives in [AGENTS.md](AGENTS.md).
