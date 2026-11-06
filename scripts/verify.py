@@ -143,10 +143,13 @@ def check_installed_shim() -> Result:
                 rf"(?<![\w-]){re.escape(flag)}(?=[\s,=]|$)", help_result.stdout,
             ) is not None
 
-        for expected in ("-c", "--columns", "-i", "--installed", "--top", "--limit", "--full-help", "--tsv"):
+        for expected in (
+            "-c", "--columns", "-i", "--installed", "-u", "--update", "-R", "--reverse",
+            "--top", "--limit", "--full-help", "--tsv",
+        ):
             if not advertised(expected):
                 failures.append(f"brewq help: missing {expected!r}")
-        for removed in ("-l", "-u", "--url", "-v", "--verbose", "--preset", "--colors"):
+        for removed in ("-l", "--url", "-v", "--verbose", "--preset", "--colors"):
             if advertised(removed):
                 failures.append(f"brewq help: stale option {removed!r} is still installed")
 
