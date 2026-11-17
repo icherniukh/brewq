@@ -46,7 +46,7 @@ def _error_label(*, no_color: bool = False) -> str:
         return "Error"
     return "\033[1mError\033[0m"
 _SEARCH_EPILOG = """\
-actions: +update, +setup, +config path, +completion zsh
+actions: +update, +setup, +config, +completion zsh
 examples: brewq ripgrep | brewq -i | brewq +update
 """
 
@@ -60,13 +60,13 @@ Examples:
 
 _CONFIG_EPILOG = """\
 Examples:
-  brewq +config path
+  brewq +config
 
 The config file controls default columns and cache freshness.
 """
 
 _COLUMN_HELP = (",".join(c for c in columns_mod.CANONICAL_COLUMNS if c not in columns_mod.TSV_ONLY)
-                + "; default, all, help; --tsv also takes "
+                + "; default, all; --tsv also takes "
                 + ", ".join(sorted(columns_mod.TSV_ONLY)))
 
 _FULL_HELP_DETAILS = """\
@@ -78,7 +78,7 @@ columns:
   Exact names only; duplicates keep their first occurrence.
   -c default,url appends URL to the configured view; -c url,default puts it first.
   -c all shows all fields available in the output mode; inst/status are TSV-only.
-  Use -c help for fields and examples. Signed +x/-x edits are rejected.
+  Signed +x/-x edits are rejected.
   default/all can change between releases; scripts should list fields.
 
 trending:
@@ -97,13 +97,11 @@ cache:
   `-u`/`--update` forces an update before the query. If it fails, the error goes
   to stderr and the query uses available local data, including the bundled seed.
   `-R` reverses the chosen order after `-t`, so the best row is last.
-  `-a` removes the cap and reverses on a TTY; `--no-reverse` undoes that.
+  `-a` removes the cap and puts the best row last on a TTY.
   Configured caps/reverse apply only to terminal tables; pipes/TSV need explicit flags.
-  `BREWQ_NO_REVERSE=1`
-  turns it off immediately, even when the flag or config enables it.
   If analytics fail, counts from the previous user snapshot are retained and
   retried later.
-  `brewq +config path` shows the configuration file.
+  `brewq +config` prints the configuration file path.
 """
 
 
@@ -138,8 +136,7 @@ def _add_column_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_reverse_flag(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("-R", "--reverse", action=argparse.BooleanOptionalAction,
-                        default=None,
+    parser.add_argument("-R", "--reverse", action="store_true",
                         help="reverse sort order so the best rows are last")
 
 
@@ -169,7 +166,7 @@ def _build_search_parser() -> argparse.ArgumentParser:
     parser.add_argument("-i", "--installed", action="store_true",
                         help="search installed packages only")
     parser.add_argument("-a", "--all", action="store_true",
-                        help="show all matches, best last on a TTY (--no-reverse undoes)")
+                        help="show all matches, best last on a TTY")
     _add_column_flags(parser)
     _add_update_flag(parser, then="search")
     _add_color_flag(parser)
@@ -177,7 +174,7 @@ def _build_search_parser() -> argparse.ArgumentParser:
                         help="tab-separated rows without a header")
     parser.add_argument("--full-help", action="store_true",
                         help="show columns, trending, and cache behavior")
-    parser.add_argument("--version", action=_VersionAction,
+    parser.add_argument("-V", "--version", action=_VersionAction,
                         help="show program's version number and exit")
     return parser
 
@@ -189,7 +186,7 @@ def _build_command_parser() -> argparse.ArgumentParser:
 
     update_p = subparsers.add_parser(
         "+update",
-        help="Update the local package register",
+        help="update the local package register",
         description="Update local Homebrew metadata and analytics.",
         epilog=_UPDATE_EPILOG,
         formatter_class=_FORMATTER,
@@ -202,28 +199,26 @@ def _build_command_parser() -> argparse.ArgumentParser:
 
     setup_p = subparsers.add_parser(
         "+setup",
-        help="Link bq when that command name is free",
+        help="link bq when that command name is free",
         description="Link bq to this brewq if the name is not already taken.",
         formatter_class=_FORMATTER,
     )
     setup_p.add_argument("--remove", action="store_true",
-                         help="Remove brewq's own bq shortcut")
+                         help="remove brewq's own bq shortcut")
 
     # config
-    config_p = subparsers.add_parser(
+    subparsers.add_parser(
         "+config",
-        help="Show configuration info",
-        description="Show where brewq reads configuration.",
+        help="print the config file path",
+        description="Print the path where brewq reads configuration.",
         epilog=_CONFIG_EPILOG,
         formatter_class=_FORMATTER,
     )
-    config_p.add_argument("config_sub_cmd", nargs="?", choices=["path"], default="path",
-                          help="Print the config file path")
 
     completion_p = subparsers.add_parser(
-        "+completion", help="Generate shell completion", formatter_class=_FORMATTER,
+        "+completion", help="generate shell completion", formatter_class=_FORMATTER,
     )
-    completion_p.add_argument("shell", choices=["zsh"], help="Completion shell")
+    completion_p.add_argument("shell", choices=["zsh"], help="completion shell")
 
     for subparser in subparsers.choices.values():
         _add_color_flag(subparser)
@@ -526,9 +521,6 @@ def _main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_intermixed_args(raw_argv)
     if args.full_help:
         print(_full_help_text(), end="")
-        return 0
-    if args.columns == "help":
-        print(columns_mod.selection_help(), end="")
         return 0
     cfg = config_mod.load()
     return _cmd_search(args, cfg)

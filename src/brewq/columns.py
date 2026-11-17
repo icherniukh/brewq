@@ -123,21 +123,6 @@ def reference_lines() -> tuple[str, ...]:
     )
 
 
-def selection_help() -> str:
-    """Discover fields and the exact-list grammar from the shared registry."""
-    return "\n".join([
-        "Output fields (use -c with search or -i):", "", *reference_lines(),
-        "", "  inst and status are TSV-only; tables use the name marker and desc prefix.",
-        "  -c name,ver,90d      select fields in this order",
-        "  -c default,url       append URL to the configured view",
-        "  -c url,default       put URL first, then the configured view",
-        "  -c all               every field available in the output mode",
-        "  -c default           use the configured view",
-        "", "Duplicates keep their first occurrence. Signed +x/-x tokens are not accepted.",
-        "default and all may change between releases; scripts should list fields.",
-    ]) + "\n"
-
-
 TSV_ONLY = frozenset({"inst", "status"})
 
 
@@ -185,7 +170,7 @@ def resolve(
         if col is None:
             raise ValueError(
                 f"Unknown column {key!r}.{spell.suggestion(key, CANONICAL_COLUMNS)} "
-                f"Valid: {', '.join(CANONICAL_COLUMNS)}. Use '-c help' for fields and examples."
+                f"Valid: {', '.join(CANONICAL_COLUMNS)}. Use '--full-help' for fields and examples."
             )
         if col not in resolved:
             resolved.append(col)
@@ -238,5 +223,5 @@ def select(
             if col not in selected:
                 selected.append(col)
     if not selected:
-        raise ValueError("Column selection must keep at least one field. Use '-c help' for fields.")
+        raise ValueError("Column selection must keep at least one field. Use '--full-help' for fields.")
     return selected

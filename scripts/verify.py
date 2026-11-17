@@ -72,6 +72,8 @@ def check_cli_smoke() -> Result:
     cases: list[tuple[str, Sequence[str], Sequence[str]]] = [
         ("help", _brewq("--help"), ["usage"]),
         ("full_help", _brewq("--full-help"), ["columns:", "trending:", "cache:"]),
+        ("version", _brewq("--version"), [f"brewq {__version__}"]),
+        ("short_version", _brewq("-V"), [f"brewq {__version__}"]),
         ("search_table", _brewq("-t", "5", "json"), ["NAME"]),
         ("catalog_default", _brewq("-t", "2"), ["NAME", "json-tool", "ripgrep"]),
         ("catalog_empty", _brewq("", "-t", "2"), ["NAME", "json-tool", "ripgrep"]),
@@ -100,6 +102,7 @@ def check_cli_smoke() -> Result:
         }))
         env = {"PATH": str(root / "no-brew"), "BREWQ_CACHE_DIR": directory,
                "BREWQ_CONFIG": str(root / "config.toml"), "BREWQ_NO_AUTO_REFRESH": "1"}
+        cases.append(("config_path", _brewq("+config"), [str(root / "config.toml")]))
         for name, argv, must_contain in cases:
             proc = _run(argv, timeout=20.0, env=env)
             if proc.returncode != 0:
@@ -169,12 +172,13 @@ def check_installed_shim() -> Result:
             missing = "shortcut missing; run brewq +setup" if name == "bq" else "entry point missing from PATH"
             failures.append(f"{name}: {missing}")
             continue
-        version = subprocess.run(
-            [path, "--version"], capture_output=True, text=True, timeout=20.0
-        )
-        if version.returncode != 0 or version.stdout.strip() != expected_version:
-            actual = (version.stdout + version.stderr).strip() or f"exit {version.returncode}"
-            failures.append(f"{name}: expected {expected_version!r}, got {actual!r}")
+        for flag in ("-V", "--version"):
+            version = subprocess.run(
+                [path, flag], capture_output=True, text=True, timeout=20.0
+            )
+            if version.returncode != 0 or version.stdout.strip() != expected_version:
+                actual = (version.stdout + version.stderr).strip() or f"exit {version.returncode}"
+                failures.append(f"{name} {flag}: expected {expected_version!r}, got {actual!r}")
 
     help_result = subprocess.run(
         [brewq_path, "--help"], capture_output=True, text=True, timeout=20.0
@@ -190,7 +194,7 @@ def check_installed_shim() -> Result:
 
         for expected in (
             "-c", "--columns", "-i", "--installed", "-u", "--update", "-R", "--reverse",
-            "--top", "--full-help", "--tsv", "--no-color", "-a", "--all", "--no-reverse",
+            "--top", "--full-help", "--tsv", "--no-color", "-a", "--all", "-V", "--version",
         ):
             if not advertised(expected):
                 failures.append(f"brewq help: missing {expected!r}")
@@ -238,6 +242,12 @@ def check_installed_shim() -> Result:
             path = _external_entrypoint(name)
             if path is None:
                 continue  # Already reported above.
+            config = subprocess.run(
+                [path, "+config"], cwd=directory, env=env,
+                capture_output=True, text=True, timeout=20.0,
+            )
+            if config.returncode != 0 or config.stdout.strip() != str(root / "config.toml"):
+                failures.append(f"{name}: +config must print the config file path")
             for args in cases:
                 proc = subprocess.run(
                     [path, *args], cwd=directory, env=env,

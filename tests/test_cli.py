@@ -398,15 +398,11 @@ def test_main_search_default_expansion_adds_url(capsys):
     assert "example.com" in out and "https://" not in out
 
 
-def test_reverse_puts_the_best_row_last_and_kill_switch_wins(capsys, monkeypatch):
+def test_reverse_puts_the_best_row_last(capsys):
     pkgs = [_pkg("low", installed=True), _pkg("high", installed=True)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
         assert main(["-i", "-c", "name", "--tsv", "-R"]) == 0
     assert capsys.readouterr().out.splitlines() == ["low", "high"]
-    monkeypatch.setenv("BREWQ_NO_REVERSE", "1")
-    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        assert main(["-i", "-c", "name", "--tsv", "-R"]) == 0
-    assert capsys.readouterr().out.splitlines() == ["high", "low"]
 
 
 def test_update_flag_and_command_update_before_search(capsys):
@@ -834,7 +830,7 @@ def test_update_failure_without_usable_cache_reports_query_failure(capsys):
 
 
 def test_main_config_path(capsys):
-    rc = main(["+config", "path"])
+    rc = main(["+config"])
     assert rc == 0
     out = capsys.readouterr().out.strip()
     assert out.endswith("config.toml")

@@ -69,7 +69,8 @@ brewq --tsv -c name,90d,url ripgrep
 ```
 
 `brewq --help` shows the common search path. `brewq --full-help` adds the full
-column reference plus concise trending and cache behavior.
+column reference plus concise trending and cache behavior. `-V` / `--version`
+prints the version.
 
 Search matches names, formula aliases, and descriptions. Flags may appear
 before, between, or after query terms. A `+action` is recognized only as the
@@ -89,11 +90,11 @@ within those status groups after exact matches.
 | Search option | Current behavior |
 | --- | --- |
 | `-s`, `--sort FIELD` | `90d` (built-in default), `30d`, `365d`, `trend`, or `name` |
-| `-R`, `--reverse` | Reverse the chosen order after the cap, so the best row is last; `--no-reverse` disables it |
+| `-R`, `--reverse` | Reverse the chosen order after the cap, so the best row is last |
 | `-t`, `--top N` | Positive result cap; overrides configuration |
 | `-i`, `--installed` | Show installed packages, optionally filtered by query |
 | `-u`, `--update` | Force a register refresh, then query; use local data if refresh fails |
-| `-a`, `--all` | Remove the cap and put the best row last on a TTY; `--no-reverse` restores best-first |
+| `-a`, `--all` | Remove the cap and put the best row last on a TTY |
 
 For terminal tables, cap precedence is explicit `-t N`, then `-a` (unlimited),
 then configured `top`. The default `top = "auto"` fits the terminal height:
@@ -117,7 +118,7 @@ These output options work for search, including `-i`:
 
 | Output option | Current behavior |
 | --- | --- |
-| `-c`, `--columns COLS` | Exact ordered fields; `default`, `all`, or `help` |
+| `-c`, `--columns COLS` | Exact ordered fields; `default` or `all` |
 | `--tsv` | Selected columns as raw tab-separated rows, without a header |
 | `--no-color` | Suppress ANSI styling on stdout and stderr |
 
@@ -133,11 +134,10 @@ prefix. Typos suggest exact names without automatically resolving them.
 view's configured columns, and `all` expands every field available in the output
 mode (including `inst` and `status` with `--tsv`). Duplicates keep their first
 occurrence: `url,default` puts URL first; `default,name` leaves the default
-layout unchanged. `help` prints the field reference without loading the cache.
-`default`, `all`, and `help` are reserved words, not field names.
+layout unchanged. `default` and `all` are reserved words, not field names.
 
 ```sh
-brewq -c help                        # field reference; no cache needed
+brewq --full-help                    # field reference; no cache needed
 brewq ripgrep -c default,ver,bin      # configured view, then version and binaries
 brewq rust -c name,90d,url,desc       # exact selection without trend
 brewq rust -c url,default            # URL first, then the configured view
@@ -240,7 +240,7 @@ brewq +update --force    # force recovery, including a recently corrupted cache
 brewq +update --offline  # install the bundled catalog as the local cache, offline
 brewq -u ripgrep        # update the register, then search
 brewq -a -i             # all installed matches, best row last on a TTY
-brewq +config path
+brewq +config           # print the configuration file path
 ```
 
 `+update --offline` replaces the cache with the bundled catalog without contacting
@@ -261,11 +261,12 @@ even with background updates disabled.
 ## Configuration
 
 Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless
-`BREWQ_CONFIG` overrides it. Built-in defaults:
+`BREWQ_CONFIG` overrides it. `brewq +config` prints this path without loading
+operational configuration. Built-in defaults:
 
 ```toml
 sort = "90d"
-reverse = false # terminal default; -a reverses, --no-reverse undoes; BREWQ_NO_REVERSE=1 wins
+reverse = false # terminal default; true or -a puts the best row last
 top = "auto" # terminal height; positive integer = fixed cap; 0 = unlimited; -t overrides
 columns = ["name", "90d", "trend", "desc"]
 installed-columns = ["name", "desc"]
@@ -274,8 +275,9 @@ auto-update = true # false, or BREWQ_NO_AUTO_REFRESH=1, skips background updates
 ```
 
 `BREWQ_CACHE_DIR` overrides the cache directory, otherwise
-`${XDG_CACHE_HOME:-~/.cache}/brewq` is used. `BREWQ_CACHE_MAX_AGE` overrides cache
-age in seconds. There are no preset-management commands or named column presets.
+`${XDG_CACHE_HOME:-~/.cache}/brewq` is used. Set `max-age` in configuration to
+control cache age in seconds. There are no preset-management commands or named
+column presets.
 
 The `auto` pseudo-column in search output configuration selects an available raw
 metric from the top result, preferring 90d, then 30d, then 365d. It is rejected
@@ -283,13 +285,12 @@ in `installed-columns` and explicit `-c`; prefer explicit metric columns in scri
 
 Config keys are root-level long option names (including `reverse`). Typos offer
 “did you mean” suggestions; only exact names are accepted. Column arrays contain
-concrete names, with `auto` as the search-only exception; `default`, `all`, and
-`help` are CLI selection words.
+concrete names, with `auto` as the search-only exception; `default` and `all`
+are CLI selection words.
 
 Invalid keys, types, ranges, sort names, and columns emit a concise
-stderr diagnostic and fall back field-by-field. Invalid `BREWQ_CACHE_MAX_AGE`
-keeps the validated configured value. Help, version, and `+config path` do not
-load operational configuration.
+stderr diagnostic and fall back field-by-field. Help, version, and `+config` do
+not load operational configuration.
 
 ## License
 

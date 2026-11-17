@@ -175,7 +175,7 @@ def test_pty_width_ignores_stale_columns(tmp_path):
 @pytest.mark.parametrize("flags,expected", [
     ([], ["zzorder-high", "zzorder-mid"]),
     (["-a"], ["zzorder-low", "zzorder-mid", "zzorder-high"]),
-    (["--all", "--no-reverse"], ["zzorder-high", "zzorder-mid", "zzorder-low"]),
+    (["--all"], ["zzorder-low", "zzorder-mid", "zzorder-high"]),
     (["-a", "-t", "1"], ["zzorder-high"]),
     (["-t", "3"], ["zzorder-high", "zzorder-mid", "zzorder-low"]),
 ])
@@ -337,7 +337,7 @@ def test_pty_tsv_stdout_is_plain_even_on_color_terminal(tmp_path):
     ([], '"auto"', 1),
     (["-R"], '"auto"', 1),
     (["-t", "2"], '"auto"', 2),
-    (["-a", "--no-reverse"], '"auto"', 6),
+    (["-a"], '"auto"', 6),
     ([], "2", 2),
 ])
 def test_pty_vertical_records_respect_auto_height_and_explicit_caps(tmp_path, flags, top, expected):
@@ -359,7 +359,7 @@ def test_pty_vertical_records_respect_auto_height_and_explicit_caps(tmp_path, fl
     lines = _strip_ansi(output).splitlines()
     names = [line for line in lines if line.startswith("NAME:")]
     assert len(names) == expected
-    assert "json-tool-0" in names[-1 if "-R" in flags else 0]
+    assert "json-tool-0" in names[-1 if "-R" in flags or "-a" in flags else 0]
     assert "column hidden" not in output
     if expected < 6:
         assert f"showing {expected} of 6" in output

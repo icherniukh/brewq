@@ -53,7 +53,7 @@ def script_errors(text: str, commands: argparse.ArgumentParser) -> list[str]:
         if name not in text:
             errors.append(f"missing action {name}")
     for marker in ("--_complete", "--sort", "--installed", "--top", "--offline",
-                   "--columns", "--reverse", "--no-reverse", "--all", "-a",
+                   "--columns", "--reverse", "--all", "-a", "-V", "--version",
                    "--tsv", "--no-color", "--update"):
         if marker not in text:
             errors.append(f"missing {marker}")
@@ -70,7 +70,7 @@ def zsh_script(search: argparse.ArgumentParser, commands: argparse.ArgumentParse
         action for action in commands._actions if isinstance(action, argparse._SubParsersAction)
     ).choices
     branches = []
-    positional = {"+config": "'1:action:(path)'", "+completion": "'1:shell:(zsh)'"}
+    positional = {"+completion": "'1:shell:(zsh)'"}
     for name, parser in subparsers.items():
         branches.append(
             f"      {shlex.quote(name)}) _arguments -s -S {_option_specs(parser)} {positional.get(name, '')} ;;"
@@ -90,7 +90,7 @@ _brewq_columns() {{
 _brewq_column_list() {{
   compset -P '='
   if [[ $PREFIX != [+-]* && $PREFIX != *,* ]]; then
-    local -a selections=(all default help)
+    local -a selections=(all default)
     _describe 'column selection' selections
   fi
   _sequence -s , _brewq_columns

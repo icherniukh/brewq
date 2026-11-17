@@ -8,7 +8,6 @@ from brewq import config as cfg_mod
 @pytest.fixture(autouse=True)
 def isolated_config(monkeypatch, tmp_path):
     monkeypatch.setenv("BREWQ_CONFIG", str(tmp_path / "config.toml"))
-    monkeypatch.delenv("BREWQ_CACHE_MAX_AGE", raising=False)
 
 
 def test_defaults_are_complete():
@@ -19,16 +18,11 @@ def test_defaults_are_complete():
     assert conf["cache"]["max_age_seconds"] == 86400
 
 
-def test_env_override_cache_max_age(monkeypatch):
-    monkeypatch.setenv("BREWQ_CACHE_MAX_AGE", "3600")
-    conf = cfg_mod.load()
-    assert conf["cache"]["max_age_seconds"] == 3600
-
-
-def test_env_override_does_not_leak_into_later_loads(monkeypatch):
-    monkeypatch.setenv("BREWQ_CACHE_MAX_AGE", "1")
+def test_file_value_does_not_leak_into_later_loads(tmp_path):
+    toml = tmp_path / "config.toml"
+    toml.write_text("max-age = 1\n")
     assert cfg_mod.load()["cache"]["max_age_seconds"] == 1
-    monkeypatch.delenv("BREWQ_CACHE_MAX_AGE")
+    toml.unlink()
     assert cfg_mod.load()["cache"]["max_age_seconds"] == 86400
 
 
@@ -85,14 +79,6 @@ def test_invalid_fields_retain_default(key, value, tmp_path, capsys):
     (tmp_path / "config.toml").write_text(f"{key} = {value}\n")
     assert cfg_mod.load() == cfg_mod.DEFAULTS
     assert f"{key}:" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize("age", ["invalid", "", "-1", "1.5", "true", "9" * 5000])
-def test_invalid_env_retains_valid_file_value(age, monkeypatch, tmp_path, capsys):
-    (tmp_path / "config.toml").write_text("max-age = 300\n")
-    monkeypatch.setenv("BREWQ_CACHE_MAX_AGE", age)
-    assert cfg_mod.load()["cache"]["max_age_seconds"] == 300
-    assert "BREWQ_CACHE_MAX_AGE: expected a nonnegative integer" in capsys.readouterr().err
 
 
 def test_valid_fields_survive_invalid_neighbor(tmp_path, capsys):

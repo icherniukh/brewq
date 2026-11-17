@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -40,15 +39,6 @@ class SearchOptions:
     auto_height: int | None = None
 
 
-def resolve_reverse(explicit: bool | None, cfg: dict) -> bool:
-    """Resolve reverse order. BREWQ_NO_REVERSE=1 is the immediate kill switch."""
-    if os.environ.get("BREWQ_NO_REVERSE", "").strip().lower() in {"1", "true", "yes", "on"}:
-        return False
-    if explicit is not None:
-        return explicit
-    return bool(cfg.get("search", {}).get("reverse", False))
-
-
 def build_search_options(args: Any, cfg: dict) -> SearchOptions:
     raw_sort = getattr(args, "sort", None)
     explicit_top = getattr(args, "top", None)
@@ -75,9 +65,9 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
         else:
             top = cfg_top
 
-    reverse = getattr(args, "reverse", None)
-    if reverse is None:
-        reverse = (show_all or cfg["search"].get("reverse", False)) if terminal else False
+    reverse = bool(getattr(args, "reverse", False) or (
+        terminal and (show_all or cfg["search"].get("reverse", False))
+    ))
 
     columns_spec = getattr(args, "columns", None)
     if columns_spec is None:
@@ -92,7 +82,7 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
         top=top,
         tsv_output=getattr(args, "tsv", False),
         installed_only=getattr(args, "installed", False),
-        reverse=resolve_reverse(reverse, cfg),
+        reverse=reverse,
         auto_height=auto_height,
     )
 

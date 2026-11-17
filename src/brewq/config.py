@@ -139,18 +139,6 @@ def load() -> Settings:
             continue
         sections[section][key] = value
 
-    # An invalid environment override leaves the validated file/default value intact.
-    raw_age = os.environ.get("BREWQ_CACHE_MAX_AGE")
-    if raw_age is not None:
-        try:
-            age = int(raw_age)
-            _validate_value("cache", "max_age_seconds", age)
-        except ValueError:
-            _report("brewq: config error: BREWQ_CACHE_MAX_AGE: expected a nonnegative integer"
-                    " — using configured value")
-        else:
-            cfg["cache"]["max_age_seconds"] = age
-
     return cfg
 
 

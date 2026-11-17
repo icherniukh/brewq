@@ -82,7 +82,7 @@ def _run(tmp_path: Path, *args: str, env_override: dict[str, str] | None = None)
 def test_help_version_and_config_do_not_create_a_cache(tmp_path):
     assert _run(tmp_path, "--help").returncode == 0
     assert _run(tmp_path, "--version").stdout.startswith("brewq ")
-    config = _run(tmp_path, "+config", "path")
+    config = _run(tmp_path, "+config")
     assert config.returncode == 0
     assert config.stdout.strip().endswith("config.toml")
     assert not (tmp_path / "cache" / "brew-all.json").exists()

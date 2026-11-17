@@ -309,16 +309,21 @@ def test_machine_output_ignores_configured_cap_and_reverse(monkeypatch, tty, tsv
     assert (opts.top, opts.reverse) == (1, True)
 
 
-@pytest.mark.parametrize("explicit,expected", [(None, True), (False, False), (True, True)])
-def test_all_removes_terminal_cap_and_defaults_to_reverse(monkeypatch, explicit, expected):
+@pytest.mark.parametrize("explicit", [False, True])
+def test_all_removes_terminal_cap_and_reverses(monkeypatch, explicit):
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
-    monkeypatch.delenv("BREWQ_NO_REVERSE", raising=False)
     opts = build_search_options(_args(reverse=explicit, **{"all": True}), _cfg(top=2))
-    assert (opts.top, opts.reverse) == (0, expected)
+    assert (opts.top, opts.reverse) == (0, True)
     opts = build_search_options(_args(top=1, **{"all": True}), _cfg(top=2))
     assert (opts.top, opts.reverse) == (1, True)
-    monkeypatch.setenv("BREWQ_NO_REVERSE", "1")
-    assert not build_search_options(_args(**{"all": True}), _cfg()).reverse
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_terminal_config_reverse_applies_without_an_override(monkeypatch, explicit):
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+    cfg = _cfg(top=2)
+    cfg["search"]["reverse"] = True
+    assert build_search_options(_args(reverse=explicit), cfg).reverse
 
 
 @pytest.mark.parametrize("sort", ["30d", "90d", "365d", "trend", "name"])

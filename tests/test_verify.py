@@ -10,7 +10,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts/verify.py"
 
 
 @pytest.mark.parametrize("broken", [None, "filter", "completion", "old-help", "layout",
-                                    "no-color", "list-action"])
+                                    "no-color", "list-action", "short-version", "config-path"])
 @pytest.mark.parametrize("metavars", [False, True])
 def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, metavars):
     check = runpy.run_path(str(SCRIPT))["check_installed_shim"]
@@ -22,17 +22,19 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
         args = argv[1:]
         calls.append((args, kwargs))
         code, output = 0, ""
-        if args == ["--version"]:
-            output = f"brewq {version}\n"
+        if args in (["--version"], ["-V"]):
+            output = "" if broken == "short-version" and args == ["-V"] else f"brewq {version}\n"
         elif args == ["--help"]:
             output = "-c, --columns --full-help --tsv --top -u, --update -R, --reverse"
-            output += " -a, --all --no-reverse"
+            output += " -a, --all -V, --version"
             if broken != "old-help":
                 output += " -i, --installed"
             if broken != "no-color":
                 output += " --no-color"
             if metavars:
                 output = output.replace("-c, --columns", "-c COLS, --columns COLS")
+        elif args == ["+config"]:
+            output = "" if broken == "config-path" else kwargs["env"]["BREWQ_CONFIG"] + "\n"
         elif args == ["+list"]:
             code, output = (0, "NAME  DESC\n") if broken == "list-action" else (2, "")
             return subprocess.CompletedProcess(argv, code, output, "unknown action +list" if code == 2 else "")

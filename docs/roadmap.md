@@ -110,9 +110,16 @@ input uses ordinary errors, with suggestions for close names.
 Offline preload is `+update --offline`. Configured caps and `-a`/`--all`
 follow the result-cap decision below.
 
+**Option surface (owner decision 2026-11-17, `brewq-options-cleanup`):**
+`-h`/`--help` shows search help; `--full-help` includes the field reference.
+`-V`/`--version` prints the version. `--tsv` and `--no-color` are long-only.
+Bare `+config` prints the configuration file path. Environment controls are
+`BREWQ_CONFIG`, `BREWQ_CACHE_DIR`, and `BREWQ_NO_AUTO_REFRESH`; cache age is set
+through configured `max-age`. Action and option help uses lowercase labels.
+
 **Columns and configuration (owner decision 2026-11-17,
-`brewq-dec-column-grammar`, implemented by `brewq-field-names`):** `-c` is an
-exact ordered list with reserved `default`, `all`, and `help`; signed edits fail
+`brewq-dec-column-grammar`, `brewq-options-cleanup`, implemented by `brewq-field-names`):** `-c` is an
+exact ordered list with reserved `default` and `all`; signed edits fail
 with the equivalent concrete list. `default` expands the view's configured
 columns and duplicates keep their first occurrence. This reverses the earlier
 `brewq-h7m`/`brewq-w5h` alias and additive/subtractive grammar. Fields have one
@@ -163,9 +170,9 @@ fixed terminal cap; `0` preserves explicit unlimited configuration. `-t N`
 overrides both config and `-a`. A cap that hides rows reports `showing N of M`
 on stderr, with a hint naming `-a` and `-t`; M counts every match.
 
-`-a`/`--all` now means uncapped, best-last on a TTY; `--no-reverse` restores
-best-first and `BREWQ_NO_REVERSE=1` still wins. This reverses the previous
-“include deprecated/disabled” meaning. Pipes and TSV ignore configured caps
+`-a`/`--all` means uncapped, best-last on a TTY. `-R`/`--reverse` is a plain
+flag; configured `reverse = true` applies to every terminal query (owner decision
+2026-11-17, `brewq-options-cleanup`). Pipes and TSV ignore configured caps
 and reverse, and `-a` is an ordering no-op there; explicit `-t` and `-R` still
 apply. Wrapped-cell viewport work remains M2 (`brewq-35u`).
 
@@ -319,15 +326,16 @@ owner choice. Open questions live only in Beads: `bd list --type decision`.
 | --- | --- | --- |
 | Command shape | Search is the root command. Actions are `+` tokens in first position; bare words are queries. | `c56a603` (Nov 5) |
 | Machine output | TSV is the only machine-readable format. | product boundary, AGENTS.md |
-| Columns | Exact ordered `-c` lists; reserved `default`/`all`/`help`; first occurrence wins. One short name equals its lowercased header across columns, sorts, and config; no aliases. Signed edits error with a concrete replacement list. `inst`/`status` are TSV-only. Reverses the earlier alias/edit grammar. | owner decision 2026-11-17 (`brewq-dec-column-grammar`, `brewq-field-names`); supersedes `brewq-h7m`, `brewq-w5h` |
-| Config | Root long-option keys: `top`, `sort`, `reverse`, `columns`, `installed-columns`, `auto-update`, `max-age`. Unknown keys/fields use ordinary errors; typos suggest exact names. Config-only `auto` remains; `--save` and effective-value `+config` stay post-M1. | owner decision 2026-11-17 (`brewq-field-names`, `brewq-dec-column-grammar`, `brewq-dec-config-write`) |
+| Columns | Exact ordered `-c` lists; reserved `default`/`all`; first occurrence wins. One short name equals its lowercased header across columns, sorts, and config; no aliases. Signed edits error with a concrete replacement list. `inst`/`status` are TSV-only. Reverses the earlier alias/edit grammar. | owner decision 2026-11-17 (`brewq-dec-column-grammar`, `brewq-field-names`, `brewq-options-cleanup`); supersedes `brewq-h7m`, `brewq-w5h` |
+| Config | Root long-option keys: `top`, `sort`, `reverse`, `columns`, `installed-columns`, `auto-update`, `max-age`. Unknown keys/fields use ordinary errors; typos suggest exact names. Config-only `auto` remains. Bare `+config` prints the configuration file path; `--save` and effective-value display stay post-M1. Environment controls: `BREWQ_CONFIG`, `BREWQ_CACHE_DIR`, `BREWQ_NO_AUTO_REFRESH`. | owner decision 2026-11-17 (`brewq-field-names`, `brewq-dec-column-grammar`, `brewq-dec-config-write`, `brewq-options-cleanup`) |
+| Help and version | `-h`/`--help` shows search help; `--full-help` includes the field reference; `-V`/`--version` prints the version. `--tsv` and `--no-color` are long-only. Action and option help uses lowercase labels. | owner decision 2026-11-17 (`brewq-options-cleanup`) |
 | Default sort | Raw 90-day installs. TREND stays in the default table but is not the default sort. | `brewq-253`, `brewq-h7m` |
 | Installed view | `-i [query]` is the only installed view. Keep `installed-columns` and TSV fields; `-i -s name` is alphabetical. Search sort/cap/status policies apply. | owner decision 2026-11-17 (`brewq-installed-unify`) |
 | Terminal styling | No ANSI styling per stream when non-TTY, nonempty `NO_COLOR`, `TERM=dumb`, or `--no-color`; preserve plain markers and ANSI-free TSV. | owner decision 2026-11-17 (`brewq-term-dumb`) |
 | Flag spellings | `-i`/`--installed`; `-t`/`--top` is the single cap name in flags, configuration, and internals. The published contract has no compatibility or migration spellings. | owner decision 2026-11-17 (`brewq-no-migration-layer`); supersedes the spelling guidance in `brewq-remove-hidden` |
 | Compatibility removal | The published contract has no compatibility or migration spellings. Unknown options/actions/fields/settings use ordinary errors, with did-you-mean for close names. | owner decision 2026-11-17 (`brewq-no-migration-layer`); supersedes usage errors naming replacements in `brewq-dec-compat-flags` and `brewq-remove-hidden` |
 | Result limits | Terminal default `top = "auto"` fits `max(1, rows - 8)` table rows using stdout fd dimensions; vertical records count their field lines plus a separator, with at least one record. Positive config caps apply only to terminal tables; `-a` removes them, `-t` overrides. A cap that hides rows discloses `showing N of M` on stderr, counting every match. Pipes/TSV need explicit `-t` to cap. Reverses height-never-caps policy. | owner decision 2026-11-17 (`brewq-dec-result-cap`, `brewq-height-cap`); supersedes `08f39e7`/`brewq-tty-cap` resolution |
-| Reverse / all | `-a`/`--all` is uncapped and best-last on terminal tables; `--no-reverse` undoes it. Config reverse is terminal-only; pipes/TSV require explicit `-R`. `BREWQ_NO_REVERSE=1` disables all reversal. | owner decision 2026-11-17 (`brewq-dec-result-cap`, `brewq-height-cap`); revises `8fe9190` |
+| Reverse / all | `-a`/`--all` is uncapped and best-last on terminal tables. `-R`/`--reverse` is a plain flag; configured `reverse = true` applies to every terminal query. Pipes/TSV require explicit `-R` to reverse. | owner decision 2026-11-17 (`brewq-dec-result-cap`, `brewq-height-cap`, `brewq-options-cleanup`); revises `8fe9190` |
 | Exact matches / status | Keep inactive matches and count them in cap notices. Exact name/alias matches rank first regardless of status or sort, before capping and reversal; other inactive matches rank last. | owner decision 2026-11-17 (`brewq-dec-result-cap`, `brewq-exact-match-hidden`) |
 | Install floor | No install-count floor: under install sorts the cap already trims low-volume rows. Any minimum volume for trend ranking belongs to `brewq-trending-outliers`. | owner decision 2026-11-17 (`brewq-dec-install-floor`, accepting the Fable 5.2 review) |
 | Empty query | Omitted or explicitly empty query selects the whole catalog before normal filters, sort, and caps; `-i` retains installed-only selection. | owner decision 2026-11-17 (`brewq-49n`) |
