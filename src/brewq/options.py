@@ -49,15 +49,6 @@ class SearchOptions:
     eligible_total: int = 0
 
 
-@dataclass
-class ListOptions:
-    columns_spec: str | list = "default"
-    limit: int = 0
-    tsv_output: bool = False
-    reverse: bool = False
-    eligible_total: int = 0
-
-
 def resolve_reverse(explicit: bool | None, cfg: dict) -> bool:
     """Resolve reverse order. BREWQ_NO_REVERSE=1 is the immediate kill switch."""
     if os.environ.get("BREWQ_NO_REVERSE", "").strip().lower() in {"1", "true", "yes", "on"}:
@@ -96,18 +87,6 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
         tsv_output=getattr(args, "tsv", False),
         installed_only=getattr(args, "installed", False),
         show_all=getattr(args, "all", False),
-        reverse=resolve_reverse(getattr(args, "reverse", None), cfg),
-    )
-
-
-def build_list_options(args: Any, cfg: dict) -> ListOptions:
-    columns_spec = getattr(args, "columns", None)
-    if columns_spec is None:
-        columns_spec = "default"
-    return ListOptions(
-        columns_spec=columns_spec,
-        limit=getattr(args, "limit", None) or 0,
-        tsv_output=getattr(args, "tsv", False),
         reverse=resolve_reverse(getattr(args, "reverse", None), cfg),
     )
 
@@ -259,13 +238,3 @@ def rank(
     if opts.reverse:
         result.reverse()
     return result
-
-
-def rank_installed(packages: list[Package], opts: ListOptions) -> list[Package]:
-    packages.sort(key=lambda p: (p.type, p.name.lower()))
-    opts.eligible_total = len(packages)
-    if opts.limit > 0:
-        packages = packages[: opts.limit]
-    if opts.reverse:
-        packages.reverse()
-    return packages

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -14,13 +13,14 @@ from brewq import render as render_mod
 from brewq import scheduler as scheduler_mod
 from brewq import seed as seed_mod
 
-_ACTIONS = frozenset({"list", "update", "setup", "config", "completion"})
+_ACTIONS = frozenset({"update", "setup", "config", "completion"})
 _REMOVED_OPTIONS = {
     "-v": "-c all", "--verbose": "-c all", "--url": "-c default,url",
     "-r": "-u/--update", "--refresh": "-u/--update",
     "--limit": "-t/--top", "--analytics": "-c default,90d",
 }
 _REMOVED_ACTIONS = {
+    "+list": "use -i; -i -s name for the alphabetical view",
     "+refresh": "use +update", "+update-cache": "use +update",
     "+preload": "use +update --offline",
     "+random": "the layout lab is now scripts/random-layout.py in the brewq source repository",
@@ -41,7 +41,8 @@ class _Parser(argparse.ArgumentParser):
         target = subs.get(argv[0], self) if argv else self
         target.print_help(sys.stderr)
         print(file=sys.stderr)
-        print(f"{_error_label()}: {message}", file=sys.stderr)
+        option_argv = argv[:argv.index("--")] if "--" in argv else argv
+        print(f"{_error_label(no_color='--no-color' in option_argv)}: {message}", file=sys.stderr)
         self.exit(2)
 
 
@@ -50,17 +51,13 @@ def _prog() -> str:
     return name if name in {"brewq", "bq"} else "brewq"
 
 
-def _error_label() -> str:
-    if not sys.stderr.isatty() or os.environ.get("NO_COLOR", "") or os.environ.get("TERM") == "dumb":
+def _error_label(*, no_color: bool = False) -> str:
+    if not render_mod._use_color(sys.stderr, no_color=no_color):
         return "Error"
     return "\033[1mError\033[0m"
 _SEARCH_EPILOG = """\
-actions: +list, +update, +setup, +config path, +completion zsh
+actions: +update, +setup, +config path, +completion zsh
 examples: brewq ripgrep | brewq -i | brewq +update
-"""
-
-_LIST_EPILOG = """\
-Use `brewq --full-help` for columns, trending, and cache behavior.
 """
 
 _UPDATE_EPILOG = """\
@@ -88,7 +85,7 @@ columns:
 {columns}
 
   Search default: name,90d,trend,desc
-  Installed view (-i or +list): name,desc
+  Installed view (-i): name,desc
   Exact names only; duplicates keep their first occurrence.
   -c default,url appends URL to the configured view; -c url,default puts it first.
   -c all shows all fields available in the output mode; inst/status are TSV-only.
@@ -108,6 +105,8 @@ cache:
   A bundled seed makes the first query immediate. Fresh snapshots are read
   locally. Stale data is shown immediately, then updated in the background.
   `brewq +update` updates stale data; `brewq +update --force` updates now.
+  `-u`/`--update` forces an update before the query. If it fails, the error goes
+  to stderr and the query uses available local data, including the bundled seed.
   `-R` reverses the chosen order after `-t`, so the best row is last.
   It is off unless `-R` or `reverse` asks for it. `BREWQ_NO_REVERSE=1`
   turns it off immediately, even when the flag or config enables it.
@@ -158,6 +157,11 @@ def _add_update_flag(parser: argparse.ArgumentParser, *, then: str) -> None:
                         help=f"update the package register, then {then}")
 
 
+def _add_color_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--no-color", action="store_true",
+                        help="disable ANSI styling on stdout and stderr")
+
+
 def _build_search_parser() -> argparse.ArgumentParser:
     parser = _Parser(
         prog=_prog(),
@@ -177,6 +181,7 @@ def _build_search_parser() -> argparse.ArgumentParser:
                         help="include deprecated and disabled packages")
     _add_column_flags(parser)
     _add_update_flag(parser, then="search")
+    _add_color_flag(parser)
     parser.add_argument("--tsv", action="store_true",
                         help="tab-separated rows without a header")
     parser.add_argument("--full-help", action="store_true",
@@ -190,22 +195,6 @@ def _build_command_parser() -> argparse.ArgumentParser:
     parser = _Parser(prog=_prog(), formatter_class=_FORMATTER)
     subparsers = parser.add_subparsers(dest="command", parser_class=_Parser)
     parser._brewq_subcommands = subparsers.choices
-
-    # list
-    lst = subparsers.add_parser(
-        "+list",
-        help="Show installed formulae and casks",
-        usage=f"{_prog()} +list [options]",
-        description="Show installed formulae and casks.",
-        epilog=_LIST_EPILOG,
-        formatter_class=_FORMATTER,
-    )
-    _add_reverse_flag(lst)
-    _add_column_flags(lst)
-    _add_update_flag(lst, then="list")
-    _add_limit_flag(lst, dest="limit")
-    lst.add_argument("--tsv", action="store_true",
-                     help="tab-separated output for scripting")
 
     update_p = subparsers.add_parser(
         "+update",
@@ -245,6 +234,9 @@ def _build_command_parser() -> argparse.ArgumentParser:
     )
     completion_p.add_argument("shell", choices=["zsh"], help="Completion shell")
 
+    for subparser in subparsers.choices.values():
+        _add_color_flag(subparser)
+
     return parser
 
 
@@ -253,38 +245,8 @@ def _full_help_text() -> str:
     return f"{_build_search_parser().format_help().rstrip()}\n\n{details.rstrip()}\n"
 
 
-def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
-    opts = options_mod.build_list_options(args, cfg)
-    list_cols_cfg = cfg["list"]["columns"]
-
-    try:
-        col_defs = columns_mod.select(opts.columns_spec, list_cols_cfg, tsv=opts.tsv_output)
-    except ValueError as exc:
-        print(f"brewq: {exc}", file=sys.stderr)
-        return 1
-
-    if args.update and (failed := _update_register(force=True)):
-        return failed
-
-    loaded = _load_cache()
-    if loaded is None:
-        return 1
-    packages = [p for p in loaded.packages if p.installed]
-
-    packages = options_mod.rank_installed(packages, opts)
-
-    if opts.tsv_output:
-        render_mod.render_tsv(packages, col_defs, out=sys.stdout)
-    else:
-        render_mod.render_table(packages, col_defs, out=sys.stdout)
-    sys.stdout.flush()
-    _report_view_cap(len(packages), opts.eligible_total, opts.limit)
-    _finish_cache_command(loaded, cfg)
-    return 0
-
-
 def _update_register(*, force: bool) -> int:
-    """Update the register. Return 0 to continue, or a nonzero exit code."""
+    """Refresh before a query; report failures without preventing local reads."""
     print("Updating register...", file=sys.stderr)
     try:
         result = cache_mod.refresh(force=force)
@@ -385,8 +347,8 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1
 
-    if args.update and (failed := _update_register(force=True)):
-        return failed
+    if args.update:
+        _update_register(force=True)
 
     loaded = _load_cache()
     if loaded is None:
@@ -398,7 +360,7 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
     if not ranked:
         query_str = " ".join(opts.query) if opts.query else "(installed filter)"
         print(f"No results for: {query_str}", file=sys.stderr)
-        _finish_cache_command(loaded, cfg)
+        _finish_cache_command(loaded, cfg, no_color=args.no_color)
         return 0
 
     # Config-only auto expands after ranking, including inside a mixed default list.
@@ -415,10 +377,11 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
             col_defs,
             out=sys.stdout,
             sorted_col=opts.sort,
+            no_color=args.no_color,
         )
     sys.stdout.flush()
     _report_view_cap(len(ranked), opts.eligible_total, opts.limit)
-    _finish_cache_command(loaded, cfg)
+    _finish_cache_command(loaded, cfg, no_color=args.no_color)
     return 0
 
 
@@ -442,7 +405,7 @@ def _load_cache() -> cache_mod.CacheLoad | None:
             return None
 
 
-def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict) -> None:
+def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict, *, no_color: bool = False) -> None:
     max_age = int(cfg["cache"]["max_age_seconds"])
     failure_detail = "unknown scheduler error"
     scheduler_state = "disabled"
@@ -464,7 +427,7 @@ def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict) -> None:
 
     if loaded.source == "seed":
         detail = f"; {suffix}" if suffix else ""
-        render_mod.render_cache_note(f"cache: bundled seed{detail}", sys.stderr)
+        render_mod.render_cache_note(f"cache: bundled seed{detail}", sys.stderr, no_color=no_color)
         return
 
     age_str = _format_age(loaded.age_seconds)
@@ -473,12 +436,13 @@ def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict) -> None:
         render_mod.render_cache_note(
             f"cache: metadata {age_str} old; analytics incomplete{detail}",
             sys.stderr,
+            no_color=no_color,
         )
     elif loaded.requires_refresh or loaded.age_seconds >= max_age:
         detail = f"; {suffix}" if suffix else ""
-        render_mod.render_cache_note(f"cache: {age_str} old{detail}", sys.stderr)
+        render_mod.render_cache_note(f"cache: {age_str} old{detail}", sys.stderr, no_color=no_color)
     else:
-        render_mod.render_cache_note(f"cache: {age_str} old", sys.stderr)
+        render_mod.render_cache_note(f"cache: {age_str} old", sys.stderr, no_color=no_color)
 
 
 def _format_age(age_seconds: object) -> str:
@@ -530,6 +494,7 @@ def _join_column_edits(argv: list[str]) -> list[str]:
 
 
 def _reject_removed_options(argv: list[str], parser: argparse.ArgumentParser) -> None:
+    parser._brewq_argv = argv
     tokens = iter(argv)
     for token in tokens:
         if token == "--":
@@ -554,9 +519,11 @@ def _reject_removed_options(argv: list[str], parser: argparse.ArgumentParser) ->
 
 def _main(argv: Sequence[str] | None = None) -> int:
     raw_argv = _join_column_edits(list(argv) if argv is not None else sys.argv[1:])
+    parser = _build_search_parser()
+    parser._brewq_argv = raw_argv
     if raw_argv and raw_argv[0] in _REMOVED_ACTIONS:
         action = raw_argv[0]
-        _build_search_parser().error(f"{action} was removed; {_REMOVED_ACTIONS[action]}")
+        parser.error(f"{action} was removed; {_REMOVED_ACTIONS[action]}")
     if raw_argv == ["--_complete"]:
         sys.stdout.write("".join(f"{name}\n" for name in cache_mod.completion_names()))
         return 0
@@ -578,21 +545,11 @@ def _main(argv: Sequence[str] | None = None) -> int:
 
             print(zsh_script(_build_search_parser(), _build_command_parser()), end="")
             return 0
-        if getattr(args, "columns", None) == "help":
-            print(columns_mod.selection_help(), end="")
-            return 0
-        cfg = config_mod.load()
-        if args.command == "+list":
-            return _cmd_list(args, cfg)
 
     if raw_argv and raw_argv[0].startswith("+") and raw_argv[0] != "+":
-        _build_search_parser().print_help(sys.stderr)
-        print(file=sys.stderr)
-        print(f"{_error_label()}: unknown action {raw_argv[0]}", file=sys.stderr)
-        return 2
+        parser.error(f"unknown action {raw_argv[0]}")
 
     # Flags may sit between query terms. Actions are +tokens, never bare words.
-    parser = _build_search_parser()
     _reject_removed_options(raw_argv, parser)
     args = parser.parse_intermixed_args(raw_argv)
     if args.full_help:

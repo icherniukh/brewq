@@ -6,12 +6,10 @@ import pytest
 
 from brewq.model import Package
 from brewq.options import (
-    ListOptions,
     SearchOptions,
     build_search_options,
     parse_sort,
     rank,
-    rank_installed,
 )
 
 
@@ -268,14 +266,6 @@ def test_rank_installed_only_filter():
     opts = SearchOptions(query=[], installed_only=True)
     result = rank(local, opts)
     assert [p.name for p in result] == ["installed-tool"]
-
-
-def test_rank_installed_sorts_by_type_then_name():
-    installed = [_pkg("zzz"), _pkg("aaa"), _pkg("mid-cask", type_="cask")]
-    opts = ListOptions()
-    result = rank_installed(installed, opts)
-    types = [p.type for p in result]
-    assert types == sorted(types)
 
 
 # --- build_search_options limit precedence ---

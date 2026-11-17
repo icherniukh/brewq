@@ -9,7 +9,8 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/verify.py"
 
 
-@pytest.mark.parametrize("broken", [None, "filter", "completion", "old-help", "layout"])
+@pytest.mark.parametrize("broken", [None, "filter", "completion", "old-help", "layout",
+                                    "no-color", "list-action"])
 @pytest.mark.parametrize("metavars", [False, True])
 def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, metavars):
     check = runpy.run_path(str(SCRIPT))["check_installed_shim"]
@@ -27,8 +28,13 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
             output = "-c, --columns --full-help --tsv --top -u, --update -R, --reverse"
             if broken != "old-help":
                 output += " -i, --installed"
+            if broken != "no-color":
+                output += " --no-color"
             if metavars:
                 output = output.replace("-c, --columns", "-c COLS, --columns COLS")
+        elif args == ["+list"]:
+            code, output = (0, "NAME  DESC\n") if broken == "list-action" else (2, "")
+            return subprocess.CompletedProcess(argv, code, output, "use -i" if code == 2 else "")
         elif args == ["+completion", "zsh"]:
             if broken == "completion":
                 output = "compdef _brewq brewq bq\n"
@@ -68,3 +74,11 @@ def test_relative_path_discovery_survives_working_directory_change(tmp_path, mon
     assert Path(found).is_absolute()
     monkeypatch.chdir(tmp_path)
     assert Path(found).samefile(executable)
+
+
+def test_cli_smoke_uses_isolated_data_and_checks_update_fallback(monkeypatch):
+    check = runpy.run_path(str(SCRIPT))["check_cli_smoke"]
+    monkeypatch.setenv("BREWQ_CACHE_DIR", "/unwritable/cache")
+    monkeypatch.setenv("BREWQ_CONFIG", "/unreadable/config.toml")
+    result = check()
+    assert result.ok, result.detail

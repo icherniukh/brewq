@@ -86,8 +86,8 @@ other active matches under metric sorts; disabled/deprecated results rank last.
 | `-s`, `--sort FIELD` | `90d` (built-in default), `30d`, `365d`, `trend`, or `name` |
 | `-R`, `--reverse` | Reverse the chosen order after the cap, so the best row is last. Off by default |
 | `-t`, `--top N` | Positive result cap; overrides configuration |
-| `-i`, `--installed` | Filter to packages marked installed |
-| `-u`, `--update` | Update the package register, then search |
+| `-i`, `--installed` | Show installed packages, optionally filtered by query |
+| `-u`, `--update` | Force a register refresh, then query; use local data if refresh fails |
 | `--all` | Retain deprecated/disabled matches when the cap would otherwise hide them |
 
 Search cap precedence is `-t`, then positive config `top`, then unlimited.
@@ -97,17 +97,18 @@ When a positive cap hides matches, deprecated/disabled matches are ranked last
 and hidden unless `--all` is given, and a stderr note reports `showing N of M`.
 Machine-readable stdout stays clean.
 
-Both search and `+list` accept `-t N` / `--top N` as the canonical positive cap;
+Search, including `-i`, accepts `-t N` / `--top N` as the canonical positive cap;
 `--limit` has been removed. `--all` includes package
 statuses, not unlimited results. The former `-l` installed-filter shorthand is
 retired; use `-i` or `--installed` instead.
 
-These output options work for both search and `+list`:
+These output options work for search, including `-i`:
 
 | Output option | Current behavior |
 | --- | --- |
 | `-c`, `--columns COLS` | Exact ordered fields; `default`, `all`, or `help` |
 | `--tsv` | Selected columns as raw tab-separated rows, without a header |
+| `--no-color` | Suppress ANSI styling on stdout and stderr |
 
 Fields have one exact name shared by `-c`, `-s` (for sortable fields), and
 configuration: `name`, `type`, `ver`, `30d`, `90d`, `365d`, `trend`, `bin`, `url`,
@@ -129,7 +130,7 @@ brewq -c help                        # field reference; no cache needed
 brewq ripgrep -c default,ver,bin      # configured view, then version and binaries
 brewq rust -c name,90d,url,desc       # exact selection without trend
 brewq rust -c url,default            # URL first, then the configured view
-brewq +list -c default,90d,trend     # extend the installed-package view
+brewq -i -c default,90d,trend        # extend the installed-package view
 brewq ripgrep -c all --tsv           # every field, with raw values
 brewq ripgrep -c name,ver,90d        # exact selection and order
 ```
@@ -137,13 +138,13 @@ brewq ripgrep -c name,ver,90d        # exact selection and order
 Signed `+x`/`-x` tokens are rejected with the equivalent full list: for example,
 `-c +url,-trend` says `use -c name,90d,url,desc` with the built-in search layout.
 To omit a field, write the desired list. `default` and `all` can change between
-releases; scripts should list concrete fields. The same controls work with `+list`.
+releases; scripts should list concrete fields. The same controls work with `-i`.
 
 Cask binaries come from declared artifacts; formula binaries require local
 installed data.
 
 Ordinary search defaults to `name,90d,trend,desc`. Installed-only
-search (`-i`) and `+list` use `installed-columns`, defaulting to `name,desc`;
+search (`-i`) uses `installed-columns`, defaulting to `name,desc`;
 explicit `-c` overrides that layout. Long names are constrained to leave
 room for descriptions, with package basenames retained where possible. Selected
 metadata cells are clipped when necessary; extremely narrow tables use labeled
@@ -161,20 +162,29 @@ Markers remain visible without color; TSV keeps the raw multiplier.
 
 `--tsv` is the only machine-readable format. Cells sanitize tabs and newlines;
 unknown install counts become empty cells. Table colors follow the terminal
-theme, are TTY-only, and honor a nonempty `NO_COLOR` value. Installed markers
-remain visible without color.
+theme and are enabled independently for each stream only when it is a TTY.
+A nonempty `NO_COLOR`, `TERM=dumb`, or `--no-color` suppresses all ANSI styling
+on stdout and stderr, including cache footers and usage errors. Installed and
+trend markers (`✔`, `↑↑`) remain visible without color. Pipes and TSV stay
+ANSI-free.
 
 ## Installed packages
 
 ```sh
-brewq +list
-brewq +list -c name,type,ver,90d,desc
-brewq +list -t 10
-brewq +list --tsv -c name,type,ver
+brewq -i
+brewq -i grep
+brewq -i -s name
+brewq -i -c name,type,ver,90d,desc
+brewq -i -t 10
+brewq -i --tsv -c name,type,ver
 ```
 
-Rows sort by type, then name. Like search, `+list` is uncapped unless you pass a
-shared positive-cap flag; a cap reports `showing N of M` on stderr. Select cached
+`-i [query]` is the only installed view; `+list` is removed and reports a usage
+error pointing to `-i`. The default sort is the search sort (90-day install
+volume unless configured); `-i -s name` sorts alphabetically across formulae
+and casks, with deprecated/disabled rows last. Configured `top`, explicit caps,
+`--all`, and reverse use the same policies as search; a cap reports
+`showing N of M` on stderr. Select cached
 analytics through the same `-c` column interface used by search; this never
 fetches analytics on demand. VER displays the installed version for installed
 rows; the catalog's available version remains separate internally.
@@ -215,11 +225,24 @@ brewq +config path
 `+update --offline` replaces the cache with the bundled catalog without contacting
 Homebrew. It cannot be combined with `--force`.
 
+`-u` / `--update` forces the same foreground refresh used by `+update --force`,
+then runs the query (including `-i`). If metadata refresh fails, brewq reports
+the failure on stderr, preserves the previous snapshot, and queries that data.
+The query exits successfully if local data can be loaded; refresh failure alone
+does not make it fail. Without a usable user snapshot, the bundled seed is the
+offline fallback. If neither local source is usable and bootstrap also fails,
+the query fails. An analytics-only failure retains previous usable counts in a
+new metadata snapshot, reports incomplete analytics, and still queries it.
+Normal queries need no network; use `BREWQ_NO_AUTO_REFRESH=1` to suppress
+background refresh attempts while offline. `-u` explicitly requests a refresh
+even with background updates disabled.
+
 Compatibility spellings have been removed and fail with a usage error naming
 their replacement: `-v`/`--verbose` → `-c all`, `--url` → `-c default,url`,
 `-r`/`--refresh` → `-u`/`--update`, `+refresh`/`+update-cache` → `+update`,
-`--limit` → `-t`/`--top`, `--analytics` → `-c default,90d`, and
-`+preload` → `+update --offline`. The former `+random` layout lab is now
+`--limit` → `-t`/`--top`, `--analytics` → `-c default,90d`,
+`+preload` → `+update --offline`, and `+list` → `-i` (`-i -s name` for the
+alphabetical view). The former `+random` layout lab is now
 `scripts/random-layout.py` in the brewq source repository. From a checkout, run
 `uv run python scripts/random-layout.py [--seed N]`; it uses the same layouts
 and normal search path.
@@ -245,7 +268,7 @@ age in seconds. There are no preset-management commands or named column presets.
 
 The `auto` pseudo-column in search output configuration selects an available raw
 metric from the top result, preferring 90d, then 30d, then 365d. It is rejected
-in list configuration and explicit `-c`; prefer explicit metric columns in scripts.
+in `installed-columns` and explicit `-c`; prefer explicit metric columns in scripts.
 
 Config keys are root-level long option names (including `reverse`); tables such
 as `[output]`, `[search]`, `[list]`, and `[cache]` are no longer accepted. For
@@ -273,7 +296,8 @@ adapts Yuki Nishijima's DidYouMean under MIT. Both notices are in `NOTICE`.
   explicit cap, and `-R` puts the best row last when you want it in view.
 - The catalog is Homebrew core and cask data. Third-party taps are absent.
 - `bq` exists only after `brewq +setup`, and only when that name is free.
-- Colors follow the terminal theme and turn off when `NO_COLOR` is set.
+- Colors follow the terminal theme; nonempty `NO_COLOR`, `TERM=dumb`, and
+  `--no-color` disable styling on both streams.
 - There is no install, upgrade, uninstall, or service command.
 
 Contributor workflow lives in [AGENTS.md](AGENTS.md).

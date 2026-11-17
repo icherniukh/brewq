@@ -13,7 +13,7 @@ in additional guides. Preserve historical decisions through the archive.
 ## Product boundary
 
 Brewq is a compact, read-only Homebrew query and analytics tool. Keep search at
-the root command, installed inspection in `+list`, columns as the output extension
+the root command, installed inspection through `-i`, columns as the output extension
 point, and TSV as the sole machine-readable format. No package management,
 services, Brewfiles, TUI/GUI, or multi-package-manager abstraction.
 

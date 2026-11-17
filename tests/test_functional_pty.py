@@ -44,6 +44,8 @@ def _env(tmp_path: Path) -> dict[str, str]:
     # authoritatively replace the isolated fixture.
     env["PATH"] = str(tmp_path / "unavailable-bin")
     env.pop("NO_COLOR", None)
+    env["TERM"] = "xterm-256color"
+    env["BREWQ_NO_AUTO_REFRESH"] = "1"
     return env
 
 
@@ -76,12 +78,14 @@ def _write_cache(tmp_path: Path, formulae: list[dict], age_seconds: float = 5.0)
 
 def _run_in_pty(
     argv: list[str], env: dict[str, str], *, rows: int = 30, cols: int = 120,
-    timeout: float = 10.0,
+    timeout: float = 10.0, tty_stream: str = "both",
 ) -> tuple[int, str]:
     master_fd, slave_fd = pty.openpty()
     fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
     proc = subprocess.Popen(
-        argv, stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
+        argv, stdin=slave_fd,
+        stdout=slave_fd if tty_stream in {"both", "stdout"} else subprocess.DEVNULL,
+        stderr=slave_fd if tty_stream in {"both", "stderr"} else subprocess.DEVNULL,
         cwd=ROOT, env=env, close_fds=True, start_new_session=True,
     )
     os.close(slave_fd)
@@ -148,7 +152,7 @@ def test_pty_default_output_caps_by_real_terminal_height(tmp_path):
     assert "showing" not in output
 
 
-@pytest.mark.parametrize("command", [[], ["+list"]])
+@pytest.mark.parametrize("command", [[], ["-i"]])
 @pytest.mark.parametrize("flag", ["-t", "--top"])
 def test_pty_top_spellings_cap_both_commands(tmp_path, command, flag):
     _write_cache(tmp_path, [_formula(f"zzflags-{i}", installed=True) for i in range(8)])
@@ -163,7 +167,7 @@ def test_pty_top_spellings_cap_both_commands(tmp_path, command, flag):
     assert "zzflags-2" not in output
 
 
-@pytest.mark.parametrize("command", [["-i"], ["+list"]])
+@pytest.mark.parametrize("command", [["-i"], ["--installed"]])
 @pytest.mark.parametrize("width", [40, 60, 100])
 def test_pty_installed_view_preserves_description_with_long_names(tmp_path, command, width):
     long_name = "a-very-long-vendor/tap/ghostty-ai-themes"
@@ -211,4 +215,56 @@ def test_pty_hot_trend_and_quiet_cache_footer(tmp_path):
     rc, output = _run_in_pty(_brewq("zztrend"), env, cols=60)
     assert rc == 0
     assert "↑↑" in output and "cache: " in output
+    assert "\x1b[" not in output
+
+
+@pytest.mark.parametrize("tty_stream", ["stdout", "stderr"])
+@pytest.mark.parametrize("mode", ["normal", "empty-no-color", "no-color-env", "dumb", "flag"])
+def test_pty_color_policy_for_each_stream(tmp_path, tty_stream, mode):
+    hot = _formula("zzcolor-hot", installed=True)
+    hot.update(installs_90d=240_000, installs_365d=400_000)
+    _write_cache(tmp_path, [hot])
+    env = _env(tmp_path)
+    args = ["zzcolor"]
+    if mode == "empty-no-color":
+        env["NO_COLOR"] = ""
+    elif mode == "no-color-env":
+        env["NO_COLOR"] = "1"
+    elif mode == "dumb":
+        env["TERM"] = "dumb"
+    elif mode == "flag":
+        args.append("--no-color")
+    rc, output = _run_in_pty(_brewq(*args), env, tty_stream=tty_stream)
+    assert rc == 0
+    assert ("\x1b[" in output) == (mode in {"normal", "empty-no-color"})
+    if tty_stream == "stdout":
+        assert "✔" in output and "↑↑" in output
+        assert "cache:" not in output
+    else:
+        assert "cache:" in output and "zzcolor-hot" not in output
+
+
+@pytest.mark.parametrize("mode", ["normal", "no-color-env", "dumb", "flag"])
+@pytest.mark.parametrize("args", [["--bogus"], ["+update", "--bogus"], ["+list"], ["-v"]])
+def test_pty_error_label_obeys_color_policy(tmp_path, mode, args):
+    env = _env(tmp_path)
+    if mode == "no-color-env":
+        env["NO_COLOR"] = "1"
+    elif mode == "dumb":
+        env["TERM"] = "dumb"
+    if mode == "flag":
+        args = [*args, "--no-color"]
+    rc, output = _run_in_pty(_brewq(*args), env, tty_stream="stderr")
+    assert rc == 2
+    assert "Error" in output
+    assert ("\x1b[" in output) == (mode == "normal")
+
+
+def test_pty_tsv_stdout_is_plain_even_on_color_terminal(tmp_path):
+    _write_cache(tmp_path, [_formula("zztsv-tool", installed=True)])
+    rc, output = _run_in_pty(
+        _brewq("zztsv", "--tsv", "-c", "name,inst"), _env(tmp_path), tty_stream="stdout",
+    )
+    assert rc == 0
+    assert output.splitlines() == ["zztsv-tool\ttrue"]
     assert "\x1b[" not in output

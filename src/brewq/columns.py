@@ -126,7 +126,7 @@ def reference_lines() -> tuple[str, ...]:
 def selection_help() -> str:
     """Discover fields and the exact-list grammar from the shared registry."""
     return "\n".join([
-        "Output fields (use -c with search or +list):", "", *reference_lines(),
+        "Output fields (use -c with search or -i):", "", *reference_lines(),
         "", "  inst and status are TSV-only; tables use the name marker and desc prefix.",
         "  -c name,ver,90d      select fields in this order",
         "  -c default,url       append URL to the configured view",

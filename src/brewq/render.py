@@ -38,9 +38,9 @@ def _trend_emphasis(pkg: Package) -> tuple[str, str]:
     return "·", _DIM
 
 
-def render_cache_note(message: str, out: TextIO) -> None:
+def render_cache_note(message: str, out: TextIO, *, no_color: bool = False) -> None:
     """Keep routine cache health visible but subordinate to query results."""
-    if _use_color(out):
+    if _use_color(out, no_color=no_color):
         out.write(_DIM + message + _RESET + "\n")
     else:
         out.write(message + "\n")
@@ -54,8 +54,8 @@ def _plain_status_prefix(pkg: Package) -> str:
     return ""
 
 
-def _use_color(out: TextIO) -> bool:
-    if os.environ.get("NO_COLOR"):
+def _use_color(out: TextIO, *, no_color: bool = False) -> bool:
+    if no_color or os.environ.get("NO_COLOR") or os.environ.get("TERM") == "dumb":
         return False
     return hasattr(out, "isatty") and out.isatty()
 
@@ -105,10 +105,12 @@ def render_table(
     columns: list[ColumnDef],
     out: TextIO | None = None,
     sorted_col: str | None = None,
+    *,
+    no_color: bool = False,
 ) -> None:
     if out is None:
         out = sys.stdout
-    color = _use_color(out)
+    color = _use_color(out, no_color=no_color)
     term_width = max(1, _terminal_width())
 
     # Compute raw cell values

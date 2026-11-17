@@ -16,6 +16,29 @@ class TtyStringIO(io.StringIO):
         return True
 
 
+@pytest.fixture(autouse=True)
+def color_terminal(monkeypatch):
+    monkeypatch.setenv("TERM", "xterm-256color")
+
+
+@pytest.mark.parametrize("tty", [False, True])
+@pytest.mark.parametrize("term", ["xterm-256color", "dumb"])
+@pytest.mark.parametrize("env_color", [None, "", "0", "1"])
+@pytest.mark.parametrize("no_color", [False, True])
+def test_shared_color_policy(monkeypatch, tty, term, env_color, no_color):
+    from brewq.render import _use_color
+
+    monkeypatch.setenv("TERM", term)
+    if env_color is None:
+        monkeypatch.delenv("NO_COLOR", raising=False)
+    else:
+        monkeypatch.setenv("NO_COLOR", env_color)
+    out = TtyStringIO() if tty else io.StringIO()
+    assert _use_color(out, no_color=no_color) == (
+        tty and term != "dumb" and not env_color and not no_color
+    )
+
+
 def _strip_ansi(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 

@@ -76,18 +76,18 @@ CASES: tuple[Case, ...] = (
     ),
     Case(
         "list_default",
-        "brewq +list --top 25",
-        _brewq("+list", "--top", "25"),
+        "brewq -i --top 25",
+        _brewq("-i", "--top", "25"),
     ),
     Case(
         "list_metrics",
-        "brewq +list -c name,90d --top 25",
-        _brewq("+list", "-c", "name,90d", "--top", "25"),
+        "brewq -i -c name,90d --top 25",
+        _brewq("-i", "-c", "name,90d", "--top", "25"),
     ),
     Case(
         "list_tsv",
-        "brewq +list --tsv -c name,type,ver --top 25",
-        _brewq("+list", "--tsv", "-c", "name,type,ver", "--top", "25"),
+        "brewq -i --tsv -c name,type,ver --top 25",
+        _brewq("-i", "--tsv", "-c", "name,type,ver", "--top", "25"),
     ),
 )
 

@@ -46,9 +46,11 @@ def _env() -> dict[str, str]:
     return env
 
 
-def _run(argv: Sequence[str], timeout: float = 30.0) -> subprocess.CompletedProcess:
+def _run(
+    argv: Sequence[str], timeout: float = 30.0, *, env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
     return subprocess.run(
-        argv, cwd=ROOT, env=_env(), capture_output=True, text=True, timeout=timeout
+        argv, cwd=ROOT, env=_env() | (env or {}), capture_output=True, text=True, timeout=timeout
     )
 
 
@@ -72,22 +74,51 @@ def check_cli_smoke() -> Result:
         ("full_help", _brewq("--full-help"), ["columns:", "trending:", "cache:"]),
         ("search_table", _brewq("-t", "5", "json"), ["NAME"]),
         ("search_tsv", _brewq("--tsv", "-c", "name,30d", "ripgrep"), []),
-        ("list_default", _brewq("+list", "-t", "5"), ["NAME", "DESC"]),
-        ("list_metrics", _brewq("+list", "-c", "name,90d", "--top", "5"), []),
-        ("list_tsv", _brewq("+list", "--tsv", "-c", "name,type", "--top", "5"), []),
+        ("list_default", _brewq("-i", "-t", "5"), ["NAME", "DESC"]),
+        ("list_metrics", _brewq("-i", "-c", "name,90d", "--top", "5"), []),
+        ("list_tsv", _brewq("-i", "--tsv", "-c", "name,type", "--top", "5"), []),
+        ("installed_alpha", _brewq("-i", "-s", "name", "-t", "5"), ["NAME", "DESC"]),
+        ("no_color", _brewq("--no-color", "-t", "1", "json"), ["NAME"]),
     ]
     failures = []
-    for name, argv, must_contain in cases:
-        proc = _run(argv, timeout=20.0)
-        if proc.returncode != 0:
-            failures.append(f"{name}: exit {proc.returncode}: {proc.stderr.strip()}")
-            continue
-        if "\x1b[" in proc.stdout:
-            failures.append(f"{name}: ANSI escape codes leaked into non-TTY output")
-            continue
-        for needle in must_contain:
-            if needle not in proc.stdout:
-                failures.append(f"{name}: expected {needle!r} in output")
+    with tempfile.TemporaryDirectory(prefix="brewq-smoke-check-") as directory:
+        root = Path(directory)
+        snapshot = root / "brew-all.json"
+        snapshot.write_text(json.dumps({
+            "formulae": [
+                {"name": name, "desc": "CLI smoke fixture", "installs_90d": count,
+                 "installed": [{"version": "1.0"}]}
+                for name, count in [("json-tool", 1000), ("ripgrep", 900), ("zzverify-offline", 123)]
+            ],
+            "casks": [],
+            "_brewq_cache": {
+                "schema_version": 1, "analytics_complete": True, "repair_needed": False,
+            },
+        }))
+        env = {"PATH": str(root / "no-brew"), "BREWQ_CACHE_DIR": directory,
+               "BREWQ_CONFIG": str(root / "config.toml"), "BREWQ_NO_AUTO_REFRESH": "1"}
+        for name, argv, must_contain in cases:
+            proc = _run(argv, timeout=20.0, env=env)
+            if proc.returncode != 0:
+                failures.append(f"{name}: exit {proc.returncode}: {proc.stderr.strip()}")
+                continue
+            if "\x1b[" in proc.stdout + proc.stderr:
+                failures.append(f"{name}: ANSI escape codes leaked into non-TTY output")
+                continue
+            for needle in must_contain:
+                if needle not in proc.stdout:
+                    failures.append(f"{name}: expected {needle!r} in output")
+        removed = _run(_brewq("+list", "--no-color"), env=env)
+        if removed.returncode != 2 or "use -i" not in removed.stderr:
+            failures.append("+list: expected usage error naming -i")
+        before = snapshot.read_bytes(), snapshot.stat().st_mtime_ns
+        for flag in ("-u", "--update"):
+            proc = _run(_brewq(flag, "zzverify-offline", "--tsv", "-c", "name,90d"), env=env)
+            if (proc.returncode != 0 or proc.stdout != "zzverify-offline\t123\n"
+                    or "register update failed" not in proc.stderr):
+                failures.append(f"{flag}: failed refresh must report and query old data")
+            if (snapshot.read_bytes(), snapshot.stat().st_mtime_ns) != before:
+                failures.append(f"{flag}: failed refresh changed the previous snapshot")
     ok = not failures
     return Result("cli smoke", ok, "\n".join(failures))
 
@@ -148,7 +179,7 @@ def check_installed_shim() -> Result:
 
         for expected in (
             "-c", "--columns", "-i", "--installed", "-u", "--update", "-R", "--reverse",
-            "--top", "--full-help", "--tsv",
+            "--top", "--full-help", "--tsv", "--no-color",
         ):
             if not advertised(expected):
                 failures.append(f"brewq help: missing {expected!r}")
@@ -156,6 +187,8 @@ def check_installed_shim() -> Result:
                         "--analytics", "--preset", "--colors"):
             if advertised(removed):
                 failures.append(f"brewq help: stale option {removed!r} is still installed")
+        if "+list" in help_result.stdout:
+            failures.append("brewq help: removed +list action is still installed")
 
     # Exercise the actual entrypoints, not the checkout's module on PYTHONPATH.
     with tempfile.TemporaryDirectory(prefix="brewq-installed-check-") as directory:
@@ -184,8 +217,8 @@ def check_installed_shim() -> Result:
         cases = [
             ["-i", "-t", "1", "--tsv", "-c", "name", "zzverify"],
             ["--installed", "--top", "1", "--tsv", "-c", "name", "zzverify"],
-            ["+list", "-t", "1", "--tsv", "-c", "name"],
-            ["+list", "--top", "1", "--tsv", "-c", "name"],
+            ["-i", "-s", "name", "-t", "1", "--tsv", "-c", "name"],
+            ["-i", "--no-color", "--top", "1", "--tsv", "-c", "name"],
         ]
         for name in ("brewq", "bq"):
             path = _external_entrypoint(name)
@@ -198,7 +231,7 @@ def check_installed_shim() -> Result:
                 )
                 if proc.returncode != 0 or proc.stdout.splitlines() != ["zzverify-installed-a"]:
                     failures.append(f"{name} {' '.join(args)}: installed behavior mismatch")
-            for args in (["-i", "-t", "1"], ["+list", "-t", "1"]):
+            for args in (["-i", "-t", "1"], ["--installed", "-t", "1"]):
                 proc = subprocess.run(
                     [path, *args], cwd=directory, env=env,
                     capture_output=True, text=True, timeout=20.0,
@@ -206,6 +239,12 @@ def check_installed_shim() -> Result:
                 header = next((line for line in proc.stdout.splitlines() if line.startswith("NAME")), "")
                 if proc.returncode != 0 or header.split() != ["NAME", "DESC"]:
                     failures.append(f"{name} {' '.join(args)}: installed default layout mismatch")
+            removed = subprocess.run(
+                [path, "+list"], cwd=directory, env=env,
+                capture_output=True, text=True, timeout=20.0,
+            )
+            if removed.returncode != 2 or "use -i" not in removed.stderr:
+                failures.append(f"{name}: removed +list must report use -i")
             completion = subprocess.run(
                 [path, "+completion", "zsh"], cwd=directory, env=env,
                 capture_output=True, text=True, timeout=20.0,

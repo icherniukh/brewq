@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from brewq.cache import materialize
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -97,7 +99,7 @@ def test_preloaded_search_list_cap_and_tsv(tmp_path):
     assert capped.stdout.strip() == "ripgrep"
     assert "showing 1 of 2" in capped.stderr
 
-    inventory = _run(tmp_path, "+list", "-c", "name", "--tsv")
+    inventory = _run(tmp_path, "-i", "-c", "name", "--tsv")
     assert inventory.stdout.strip() == "bat"
     query = _run(tmp_path, "-c", "name", "--tsv", "list")
     assert query.stdout.strip() == "list"
@@ -127,3 +129,25 @@ def test_update_offline_uses_the_bundled_catalog_without_homebrew(tmp_path):
     assert follow.returncode == 0, follow.stderr
     assert follow.stdout.strip() == "ripgrep"
     assert "bundled seed" not in follow.stderr
+
+
+@pytest.mark.parametrize("flag", ["-u", "--update"])
+@pytest.mark.parametrize("command", [["ripgrep"], ["-i", "bat"]])
+def test_failed_update_queries_old_snapshot_without_changing_it(tmp_path, flag, command):
+    _preload(tmp_path)
+    snapshot = tmp_path / "cache" / "brew-all.json"
+    before = snapshot.read_bytes(), snapshot.stat().st_mtime_ns
+    proc = _run(tmp_path, flag, *command, "--tsv", "-c", "name,90d")
+    assert proc.returncode == 0, proc.stderr
+    expected = ["bat\t500"] if "-i" in command else ["ripgrep\t900", "rg-tools\t10"]
+    assert proc.stdout.splitlines() == expected
+    assert "register update failed" in proc.stderr
+    assert "Updating register" not in proc.stdout
+    assert (snapshot.read_bytes(), snapshot.stat().st_mtime_ns) == before
+
+
+def test_failed_update_without_snapshot_uses_seed_offline(tmp_path):
+    proc = _run(tmp_path, "-u", "ripgrep", "--tsv", "-c", "name", "-t", "1")
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "ripgrep"
+    assert "register update failed" in proc.stderr and "bundled seed" in proc.stderr
