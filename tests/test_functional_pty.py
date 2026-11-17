@@ -228,7 +228,7 @@ def test_pty_top_spellings_cap_both_commands(tmp_path, command, flag):
 
 
 @pytest.mark.parametrize("command", [["-i"], ["--installed"]])
-@pytest.mark.parametrize("width", [40, 60, 100])
+@pytest.mark.parametrize("width", [50, 80, 120, 200])
 def test_pty_installed_view_preserves_description_with_long_names(tmp_path, command, width):
     long_name = "a-very-long-vendor/tap/ghostty-ai-themes"
     _write_cache(tmp_path, [
@@ -244,8 +244,11 @@ def test_pty_installed_view_preserves_description_with_long_names(tmp_path, comm
     rows = [line for line in lines if "Useful" in line]
     assert len(rows) == 2
     assert {line.index("Useful") for line in rows} == {header.index("DESC")}
-    assert all("✔" in line for line in rows)
-    assert any("…/" in line for line in rows)
+    assert "✔" not in output
+    if len(long_name) + 2 + 20 <= width:
+        assert any(long_name in line for line in rows)
+    else:
+        assert any("…/" in line for line in rows)
 
 
 def test_pty_non_tty_pipe_emits_no_ansi(tmp_path):
@@ -328,3 +331,40 @@ def test_pty_tsv_stdout_is_plain_even_on_color_terminal(tmp_path):
     assert rc == 0
     assert output.splitlines() == ["zztsv-tool\ttrue"]
     assert "\x1b[" not in output
+
+
+@pytest.mark.parametrize("flags,top,expected", [
+    ([], '"auto"', 1),
+    (["-R"], '"auto"', 1),
+    (["-t", "2"], '"auto"', 2),
+    (["-a", "--no-reverse"], '"auto"', 6),
+    ([], "2", 2),
+])
+def test_pty_vertical_records_respect_auto_height_and_explicit_caps(tmp_path, flags, top, expected):
+    formulae = []
+    for i in range(6):
+        entry = _formula(f"json-tool-{i}", desc="A JSON tool for testing vertical output")
+        entry["versions"]["stable"] = "2026.11.17,1234567890"
+        entry.update(installs_30d=1_000_000 - i, installs_90d=3_000_000 - i,
+                     installs_365d=12_000_000 - i, homepage="https://jsonnet.org/")
+        formulae.append(entry)
+    _write_cache(tmp_path, formulae)
+    (tmp_path / "config.toml").write_text(f"top = {top}\n")
+    args = ["-c", "all", "json", *flags]
+    command = shlex.join(["brewq", *args])
+    shell = (f"printf '%s\\n' {shlex.quote('$ ' + command)}; "
+             f"{shlex.join(_brewq(*args))}; result=$?; printf '%s' '$ '; exit $result")
+    rc, output = _run_in_pty(["/bin/sh", "-c", shell], _env(tmp_path), rows=14, cols=110)
+    assert rc == 0
+    lines = _strip_ansi(output).splitlines()
+    names = [line for line in lines if line.startswith("NAME:")]
+    assert len(names) == expected
+    assert "json-tool-0" in names[-1 if "-R" in flags else 0]
+    assert "column hidden" not in output
+    if expected < 6:
+        assert f"showing {expected} of 6" in output
+    else:
+        assert "showing" not in output
+    if top == '"auto"' and not any(flag in flags for flag in ("-t", "-a")):
+        assert len(lines) <= 14
+        assert lines[0] == "$ " + command and lines[-1] == "$ "

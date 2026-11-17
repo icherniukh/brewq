@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sys
 import textwrap
+import unicodedata
+from dataclasses import dataclass
+from functools import lru_cache
 from typing import TextIO
 
 from brewq.columns import ColumnDef
@@ -20,15 +24,17 @@ _COLOR_FORMULA = "\033[36m"  # cyan
 _COLOR_CASK = "\033[35m"     # magenta
 _COLOR_DEPRECATED = "\033[33m"  # yellow
 _COLOR_DISABLED = "\033[31m"    # red
+_NON_ASCII = re.compile(r"[^\x00-\x7f]")
 
 
-def _trend_emphasis(pkg: Package) -> tuple[str, str]:
+@lru_cache(maxsize=256)
+def _trend_emphasis(cell: str) -> tuple[str, str]:
     """Table-only momentum cues; keep the column registry and TSV numeric."""
-    trend = pkg.trending
-    if trend is None:
+    value = cell.split(maxsplit=1)[0]
+    if value == "-":
         return "", _DIM
-    # Match the displayed precision so a visible 2.0x always gets the hot cue.
-    trend = round(trend, 1)
+    # Reuse the displayed precision instead of recalculating the model's ratio.
+    trend = float(value.removesuffix("x"))
     if trend >= 2:
         return "↑↑", _BOLD + _COLOR_GREEN
     if trend >= 1.2:
@@ -73,40 +79,100 @@ def _terminal_width() -> int:
     return terminal_size().columns
 
 
+def _display_width(text: str) -> int:
+    if text.isascii():
+        return len(text)
+    return _unicode_width(text)
+
+
+@lru_cache(maxsize=4096)
+def _unicode_width(text: str) -> int:
+    return len(text) + sum(
+        -1 if unicodedata.combining(char) else
+        1 if unicodedata.east_asian_width(char) in {"W", "F"} else 0
+        for char in _NON_ASCII.findall(text)
+    )
+
+
+def _take_width(text: str, width: int) -> int:
+    """Return the character boundary that fits, including trailing combining marks."""
+    used = 0
+    for i, char in enumerate(text):
+        used += _display_width(char)
+        if used > width:
+            return i
+    return len(text)
+
+
 def _wrap(text: str, width: int) -> list[str]:
-    if not text or width <= 0:
-        return [text or ""]
-    return textwrap.wrap(text, width) or [""]
+    lines = []
+    for line in textwrap.wrap(text, width) or [""]:
+        while _display_width(line) > width:
+            end = _take_width(line, width)
+            # A double-width character cannot fit a one-column terminal.
+            lines.append(line[:end] if end else "…")
+            line = line[end or 1:]
+        if line:
+            lines.append(line)
+    return lines
 
 
 def _clip(text: str, width: int) -> str:
     if width <= 0:
         return ""
-    if len(text) <= width:
+    if text.isascii():
+        return text if len(text) <= width else text[:width - 1].rstrip() + "…"
+    if _unicode_width(text) <= width:
         return text
-    if width == 1:
-        return "…"
-    return text[:width - 1].rstrip() + "…"
+    end = _take_width(text, width - 1)
+    return text[:end].rstrip() + "…"
 
 
 def _clip_name(text: str, width: int) -> str:
-    if len(text) > width and "/" in text and width >= 3:
+    if "/" in text and width >= 3 and _display_width(text) > width:
         prefix, name = text.rsplit("/", 1)
-        if len(name) + 2 > width:
+        name_width = _display_width(name)
+        if name_width + 2 > width:
             return "…/" + _clip(name, width - 2)
-        return _clip(prefix, width - len(name) - 1) + "/" + name
+        return _clip(prefix, width - name_width - 1) + "/" + name
     return _clip(text, width)
 
 
-def _status_prefix(pkg: Package, color: bool) -> str:
-    text = _plain_status_prefix(pkg)
-    if not text or not color:
-        return text
-    if pkg.disabled:
-        return f"{_COLOR_DISABLED}{text}{_RESET}"
-    if pkg.deprecated:
-        return f"{_COLOR_DEPRECATED}{text}{_RESET}"
-    return ""
+@lru_cache(maxsize=4096)
+def _fit(text: str, width: int, align: str = "left") -> str:
+    if text.isascii():
+        if len(text) > width:
+            text = _clip(text, width)
+        return text.rjust(width) if align == "right" else text.ljust(width)
+    text = _clip(text, width)
+    padding = " " * max(0, width - _display_width(text))
+    return padding + text if align == "right" else text + padding
+
+
+@dataclass
+class TableResult:
+    hidden: list[str]
+    shown: int
+    vertical: bool = False
+
+
+def table_fits(minimums: list[int], term_width: int) -> bool:
+    """Report whether the selected cells' readable minimums fit side by side."""
+    return sum(minimums) + 2 * max(0, len(minimums) - 1) <= term_width
+
+
+def _record_lines(
+    pkg: Package, columns: list[ColumnDef], headers: list[str], row: list[str],
+    term_width: int, show_installed_marker: bool,
+) -> list[str]:
+    lines = []
+    for col, header, cell in zip(columns, headers, row, strict=True):
+        if col.key != "name" and cell.strip() in {"", "-"}:
+            continue
+        if col.key == "name" and pkg.installed and show_installed_marker:
+            cell += " ✔"
+        lines.extend(_wrap(f"{header}: {cell}", term_width))
+    return [*lines, ""]
 
 
 def render_table(
@@ -116,163 +182,150 @@ def render_table(
     sorted_col: str | None = None,
     *,
     no_color: bool = False,
-) -> None:
+    installed_only: bool = False,
+    auto_height: int | None = None,
+    reverse: bool = False,
+    named_columns: set[str] | None = None,
+) -> TableResult:
+    """Render cells and report the shown count and layout for CLI diagnostics."""
     if out is None:
         out = sys.stdout
     color = _use_color(out, no_color=no_color)
     term_width = max(1, _terminal_width())
+    show_status_in_description = not any(col.key == "status" for col in columns)
+    show_installed_marker = not installed_only and not any(col.key == "inst" for col in columns)
+    headers = [col.header + (" ↓" if col.key == sorted_col else "") for col in columns]
+    widths = [_display_width(header) for header in headers]
 
-    # Compute raw cell values
-    rows: list[list[str]] = [
-        [
-            col.getter(pkg) + f" {_trend_emphasis(pkg)[0]:<2}"
-            if col.key == "trend" else col.getter(pkg)
-            for col in columns
-        ]
-        for pkg in packages
-    ]
-    headers = [
-        (col.header + " ↓" if sorted_col and col.key == sorted_col else col.header)
-        for col in columns
-    ]
+    rows = []
+    for pkg in packages:
+        row = []
+        for i, col in enumerate(columns):
+            cell = col.getter(pkg)
+            if col.key == "trend" and cell != "-":
+                cell += f" {_trend_emphasis(cell)[0]:<2}"
+            elif col.key == "url":
+                cell = cell.removeprefix("https://")
+                address = cell.split("://", 1)[-1]
+                if (len(address) > 1 and address.endswith("/") and address.count("/") == 1
+                        and "?" not in address and "#" not in address):
+                    cell = cell[:-1]
+            elif col.key == "desc" and show_status_in_description:
+                if prefix := _plain_status_prefix(pkg):
+                    cell = (prefix + (cell if cell != "-" else "")).rstrip()
+            row.append(cell)
+            marker_width = 2 if col.key == "name" and pkg.installed and show_installed_marker else 0
+            cell_width = len(cell) if cell.isascii() else _unicode_width(cell)
+            widths[i] = max(widths[i], cell_width + marker_width)
+        rows.append(row)
 
-    # Find description column index (wrappable)
-    desc_idx = next(
-        (i for i, col in enumerate(columns) if col.key == "desc"),
-        None,
-    )
+    keep = [i for i, col in enumerate(columns)
+            if col.key == "name" or any(row[i].strip() not in {"", "-"} for row in rows)]
+    hidden = [col.key for i, col in enumerate(columns) if i not in keep]
+    if hidden:
+        columns = [columns[i] for i in keep]
+        rows = [[row[i] for i in keep] for row in rows]
+        headers = [headers[i] for i in keep]
+        widths = [widths[i] for i in keep]
+    if not columns:
+        return TableResult(hidden, len(packages))
+    desc_idx = next((i for i, col in enumerate(columns) if col.key == "desc"), None)
     name_idx = next((i for i, col in enumerate(columns) if col.key == "name"), None)
 
-    # Compute column widths from content (header or data)
-    widths = [len(h) for h in headers]
-    for pkg, row in zip(packages, rows, strict=False):
-        for i, cell in enumerate(row):
-            if i != desc_idx:
-                visible_width = len(cell)
-                if i == name_idx and pkg.installed:
-                    visible_width += 2
-                widths[i] = max(widths[i], visible_width)
+    gaps = 2 * (len(columns) - 1)
+    minimums = widths.copy()
+    for i, col in enumerate(columns):
+        if col.key in {"name", "desc", "url", "bin"}:
+            minimums[i] = max(_display_width(headers[i]), min(
+                8 if col.key == "name" else 20, widths[i],
+            ))
 
-    gaps = 2 * max(0, len(columns) - 1)
-    minimums = [len(header) for header in headers]
-    if name_idx is not None:
-        minimums[name_idx] = max(minimums[name_idx], min(8, widths[name_idx]))
-
-    # If even the labels cannot fit, keep all selected fields in a readable
-    # vertical layout rather than overflowing or silently dropping columns.
-    if sum(minimums) + gaps > term_width:
-        out.write("\n")
-        for pkg, row in zip(packages, rows, strict=False):
-            for col, header, cell in zip(columns, headers, row, strict=False):
-                if col.key == "name" and pkg.installed:
-                    cell += " ✔"
-                if col.key == "desc" and not any(c.key == "status" for c in columns):
-                    cell = _plain_status_prefix(pkg) + cell
-                out.write("\n".join(_wrap(f"{header}: {cell}", term_width)) + "\n")
+    # Preserve short metadata in full; use records when sensible minimums cannot fit.
+    if not table_fits(minimums, term_width):
+        if auto_height is None:
             out.write("\n")
-        return
+            for pkg, row in zip(packages, rows, strict=True):
+                lines = _record_lines(pkg, columns, headers, row, term_width, show_installed_marker)
+                out.write("\n".join(lines) + "\n")
+            return TableResult(hidden, len(packages), vertical=True)
+        # Vertical records include their own separator. Reserve cap/cache notes,
+        # the typed command and the next prompt, without table framing blanks.
+        named = named_columns or set()
+        budget = auto_height - 4 - len(set(hidden) & named)
+        candidates = zip(packages, rows, strict=True)
+        if reverse:
+            candidates = zip(reversed(packages), reversed(rows), strict=True)
+        selected = []
+        used = 0
+        for pkg, row in candidates:
+            lines = _record_lines(pkg, columns, headers, row, term_width, show_installed_marker)
+            if selected:
+                extra_notes = sum(
+                    col.key in named and row[i].strip() in {"", "-"}
+                    and all(previous[i].strip() in {"", "-"} for previous, _ in selected)
+                    for i, col in enumerate(columns) if col.key != "name"
+                )
+                if used + len(lines) + extra_notes > budget:
+                    break
+            selected.append((row, lines))
+            used += len(lines)
+        if reverse:
+            selected.reverse()
+        hidden.extend(col.key for i, col in enumerate(columns) if col.key != "name"
+                      and all(row[i].strip() in {"", "-"} for row, _ in selected))
+        for _, lines in selected:
+            out.write("\n".join(lines) + "\n")
+        return TableResult(hidden, len(selected), vertical=True)
 
-    # A single long tap/name must not monopolize the entire table.
-    if name_idx is not None and len(columns) > 1:
-        widths[name_idx] = min(widths[name_idx], max(minimums[name_idx], term_width // 4))
-    if desc_idx is not None:
-        max_content = max((len(row[desc_idx]) for row in rows), default=0)
-        widths[desc_idx] = max(minimums[desc_idx], min(max_content, max(20, term_width // 3)))
-
-    # Reserve description context before reducing oversized metadata cells.
-    excess = max(0, sum(widths) + gaps - term_width)
-    for i in sorted(
-        (i for i in range(len(columns)) if i != desc_idx),
+    # Spend description space first, then long metadata, and clip names last.
+    shrink_order = ([desc_idx] if desc_idx is not None else []) + sorted(
+        (i for i, col in enumerate(columns) if col.key in {"url", "bin"}),
         key=lambda i: widths[i] - minimums[i], reverse=True,
-    ):
+    ) + ([name_idx] if name_idx is not None else [])
+    excess = max(0, sum(widths) + gaps - term_width)
+    for i in shrink_order:
         reduction = min(excess, widths[i] - minimums[i])
         widths[i] -= reduction
         excess -= reduction
-    if desc_idx is not None:
-        fixed_width = sum(widths[i] for i in range(len(columns)) if i != desc_idx)
-        widths[desc_idx] = max(minimums[desc_idx], min(max_content, term_width - fixed_width - gaps))
 
-    # Header
-    header_parts = []
-    for i, (col, w) in enumerate(zip(columns, widths, strict=False)):
-        if i == desc_idx or col.align == "left":
-            header_parts.append(f"{headers[i]:<{w}}")
-        else:
-            header_parts.append(f"{headers[i]:>{w}}")
-    separator = "─" * (sum(widths) + gaps)
+    header = "  ".join(_fit(text, w, col.align)
+                       for text, w, col in zip(headers, widths, columns, strict=True))
+    out.write("\n" + (_BOLD + header + _RESET if color else header) + "\n")
+    out.write("─" * (sum(widths) + gaps) + "\n")
 
+    for pkg, row in zip(packages, rows, strict=True):
+        parts = []
+        for i, (col, w) in enumerate(zip(columns, widths, strict=True)):
+            cell = row[i]
+            if i == name_idx:
+                marker = " ✔" if pkg.installed and show_installed_marker else ""
+                cell = _clip_name(cell, w - len(marker))
+                cell_width = len(cell) if cell.isascii() else _unicode_width(cell)
+                padding = " " * max(0, w - cell_width - len(marker))
+                if color:
+                    pkg_color = _COLOR_CASK if pkg.type == "cask" else _COLOR_FORMULA
+                    cell = _BOLD + pkg_color + cell + _RESET
+                    if marker:
+                        marker = " " + _COLOR_GREEN + "✔" + _RESET
+                parts.append(cell + marker + padding)
+                continue
+
+            cell = _fit(cell, w, col.align)
+            if color and i == desc_idx and show_status_in_description:
+                prefix = _plain_status_prefix(pkg)
+                if prefix:
+                    status_color = _COLOR_DISABLED if pkg.disabled else _COLOR_DEPRECATED
+                    end = min(len(prefix), len(cell.rstrip()))
+                    cell = status_color + cell[:end] + _RESET + cell[end:]
+            elif color and col.key == "status" and pkg.status:
+                status_color = _COLOR_DISABLED if pkg.disabled else _COLOR_DEPRECATED
+                cell = status_color + cell + _RESET
+            elif color and col.key == "trend":
+                cell = _trend_emphasis(row[i])[1] + cell + _RESET
+            parts.append(cell)
+        out.write("  ".join(parts).rstrip() + "\n")
     out.write("\n")
-    if color:
-        out.write(_BOLD + "  ".join(header_parts) + _RESET + "\n")
-    else:
-        out.write("  ".join(header_parts) + "\n")
-    out.write(separator + "\n")
-
-    # Rows
-    status_idx = next((i for i, c in enumerate(columns) if c.key == "status"), None)
-    show_status_in_description = status_idx is None
-
-    for pkg, row in zip(packages, rows, strict=False):
-        pkg_type = pkg.type
-        is_installed = pkg.installed
-
-        # Include status text in the description's width budget before styling.
-        if desc_idx is not None:
-            plain_prefix = _plain_status_prefix(pkg) if show_status_in_description else ""
-            desc_text = plain_prefix + row[desc_idx]
-            desc_lines = [_clip(desc_text, widths[desc_idx])]
-            if plain_prefix and desc_lines and desc_lines[0].startswith(plain_prefix):
-                desc_lines[0] = _status_prefix(pkg, color) + desc_lines[0][len(plain_prefix):]
-        else:
-            desc_lines = None
-
-        n_lines = len(desc_lines) if desc_lines else 1
-
-        for line_no in range(n_lines):
-            parts = []
-            for i, (col, w) in enumerate(zip(columns, widths, strict=False)):
-                cell = row[i] if line_no == 0 else ""
-                if i == desc_idx and desc_lines:
-                    cell = desc_lines[line_no] if line_no < len(desc_lines) else ""
-
-                if line_no == 0 and i == name_idx:
-                    marker_width = 2 if is_installed else 0
-                    cell = _clip_name(cell, max(0, w - marker_width))
-                    if color:
-                        pkg_color = _COLOR_CASK if pkg_type == "cask" else _COLOR_FORMULA
-                        marker = (" " + _COLOR_GREEN + "✔" + _RESET) if is_installed else ""
-                        styled = _BOLD + pkg_color + cell + _RESET + marker
-                    else:
-                        marker = " ✔" if is_installed else ""
-                        styled = cell + marker
-                    pad = w - len(cell) - marker_width
-                    parts.append(styled + " " * max(0, pad))
-                    continue
-
-                if i != desc_idx:
-                    cell = _clip(cell, w)
-
-                if color and line_no == 0 and i == status_idx and cell:
-                    if pkg.disabled:
-                        parts.append(_COLOR_DISABLED + f"{cell:<{w}}" + _RESET)
-                    elif pkg.deprecated:
-                        parts.append(_COLOR_DEPRECATED + f"{cell:<{w}}" + _RESET)
-                    else:
-                        parts.append(f"{cell:<{w}}")
-                    continue
-
-                if color and line_no == 0 and col.key == "trend":
-                    parts.append(_trend_emphasis(pkg)[1] + f"{cell:>{w}}" + _RESET)
-                    continue
-
-                if col.align == "right":
-                    parts.append(f"{cell:>{w}}")
-                else:
-                    parts.append(f"{cell:<{w}}")
-
-            out.write("  ".join(parts).rstrip() + "\n")
-
-    out.write("\n")
+    return TableResult(hidden, len(packages))
 
 
 def _tsv_cell(value: object) -> str:

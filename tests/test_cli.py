@@ -13,14 +13,15 @@ from brewq.cache import CacheLoad, RefreshOutcome, RefreshResult
 from brewq.cli import _build_command_parser, _build_search_parser, main
 from brewq.columns import CANONICAL_COLUMNS
 from brewq.model import Package
+from brewq.render import TableResult
 
 
 def _pkg(name: str, type_: str = "formula", installs_30d: int = 10_000,
-         installed: bool = False) -> Package:
+         installed: bool = False, installs_90d: int = -1, installs_365d: int = -1) -> Package:
     return Package(
         name=name, type=type_, description=f"Description of {name}",
         url="https://example.com", version="1.0",
-        installs_30d=installs_30d, installs_90d=-1, installs_365d=-1,
+        installs_30d=installs_30d, installs_90d=installs_90d, installs_365d=installs_365d,
         installed=installed, deprecated=False, disabled=False,
     )
 
@@ -292,7 +293,7 @@ def test_main_limit_spellings_cap_search_and_list(command, flag, tsv, capsys):
 
 
 def test_main_search_default_columns_omit_type(capsys):
-    pkgs = [_pkg("ripgrep", installs_30d=80_000)]
+    pkgs = [_pkg("ripgrep", installs_30d=80_000, installs_90d=240_000, installs_365d=600_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
         rc = main(["ripgrep"])
     assert rc == 0
@@ -318,7 +319,7 @@ def test_config_auto_column_picks_available_window_via_top_result(capsys, tmp_pa
         rc = main(["no-recent-data"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "TREND" in out
+    assert "TREND" not in out
     assert "365d" in out
     assert "30d" not in out
     assert "90d" not in out
@@ -363,7 +364,8 @@ def test_main_search_short_field_names(capsys):
 
 
 def test_main_search_all_columns_shows_all_fields(capsys):
-    pkgs = [_pkg("ripgrep", installs_30d=80_000)]
+    pkgs = [_pkg("ripgrep", installs_30d=80_000, installs_90d=240_000, installs_365d=600_000)]
+    pkgs[0].binaries = ["rg"]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
         rc = main(["ripgrep", "-c", "all"])
     assert rc == 0
@@ -390,7 +392,7 @@ def test_main_search_default_expansion_adds_url(capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "URL" in out
-    assert "https://example.com" in out
+    assert "example.com" in out and "https://" not in out
 
 
 def test_reverse_puts_the_best_row_last_and_kill_switch_wins(capsys, monkeypatch):
@@ -543,7 +545,8 @@ def test_installed_views_honor_list_config_and_explicit_columns(command, tmp_pat
         assert "TYPE" in output and "VER" not in output
         assert main([*command, "-c", "all"]) == 0
         output = capsys.readouterr().out
-        assert "TYPE" in output and "VER" in output and "TREND" in output
+        assert "TYPE" in output and "VER" in output and "30d" in output
+        assert "TREND" not in output  # This fixture has no historical counts.
 
 
 @pytest.mark.parametrize("argv", [["-t", "2", "tool"], ["-i", "-t", "2"]])
@@ -604,12 +607,12 @@ def test_main_list_default_expansion_adds_url(capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "URL" in out
-    assert "https://example.com" in out
+    assert "example.com" in out and "https://" not in out
 
 
 def test_main_list_exact_metric_order(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
-        _pkg("ripgrep", installed=True, installs_30d=80_000),
+        _pkg("ripgrep", installed=True, installs_30d=80_000, installs_90d=240_000),
     ])):
         rc = main(["-i", "-c", "name,90d,desc"])
     assert rc == 0
@@ -619,7 +622,8 @@ def test_main_list_exact_metric_order(capsys):
 
 def test_main_list_columns_show_multiple_metrics(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
-        _pkg("ripgrep", installed=True, installs_30d=80_000),
+        _pkg("ripgrep", installed=True, installs_30d=80_000,
+             installs_90d=240_000, installs_365d=600_000),
     ])):
         rc = main(["-i", "-c", "name,365d,90d,desc"])
     assert rc == 0
@@ -837,7 +841,8 @@ def test_seed_search_renders_before_scheduling(capsys):
     events = []
     loaded = _loaded([_pkg("ripgrep")], source="seed", age=100)
     with patch("brewq.cache.load", return_value=loaded), \
-         patch("brewq.render.render_table", side_effect=lambda *args, **kwargs: events.append("render")), \
+         patch("brewq.render.render_table", side_effect=lambda *args, **kwargs:
+               events.append("render") or TableResult([], len(args[0]))), \
          patch(
              "brewq.scheduler.schedule_if_needed",
              side_effect=lambda *args, **kwargs: events.append("schedule") or "scheduled",
@@ -979,3 +984,50 @@ def test_help_has_inline_field_vocabulary(command, capsys):
     assert exc.value.code == 0
     help_text = capsys.readouterr().out
     assert ",".join(CANONICAL_COLUMNS) in help_text.replace("\n", "").replace(" ", "")
+
+
+@pytest.mark.parametrize("argv,hidden,notes", [
+    (["-c", "name,bin,desc", "json"], "bin", 1),
+    (["-c", "all", "json"], "bin", 0),
+    (["-c", "default", "font"], "desc", 0),
+    (["-c", "default,bin", "json"], "bin", 1),
+    (["-c", "default, bin", "font"], "desc", 0),
+    (["-c", "name,desc", "font"], "desc", 1),
+    (["font"], "desc", 0),
+])
+def test_table_omits_empty_columns_with_note_only_for_explicit_selection(capsys, argv, hidden, notes):
+    pkg = _pkg("font-test" if "font" in argv else "json-tool")
+    if "font" in argv:
+        pkg.description = ""
+    with patch("brewq.cache.load", return_value=_loaded([pkg])):
+        assert main(argv) == 0
+    captured = capsys.readouterr()
+    header = next(line for line in captured.out.splitlines() if line.startswith("NAME"))
+    assert hidden.upper() not in header.split()
+    note = f"brewq: no {hidden} values in these results; column hidden"
+    assert captured.err.count(note) == notes
+    if argv[1:2] == ["default, bin"]:
+        assert captured.err.count("column hidden") == 1
+        assert "no bin values" in captured.err
+    elif argv[1:2] in (["default"], ["all"]):
+        assert "column hidden" not in captured.err
+
+
+def test_installed_binary_column_remains_without_installed_marker(capsys):
+    pkg = _pkg("json-tool", installed=True)
+    pkg.binaries = ["json-tool"]
+    with patch("brewq.cache.load", return_value=_loaded([pkg])):
+        assert main(["-i", "-c", "name,bin"]) == 0
+    captured = capsys.readouterr()
+    assert "BIN" in captured.out and "json-tool  json-tool" in captured.out
+    assert "✔" not in captured.out and "column hidden" not in captured.err
+
+
+def test_tsv_keeps_empty_explicit_columns_without_notes(capsys):
+    pkg = _pkg("json-tool")
+    pkg.description = ""
+    with patch("brewq.cache.load", return_value=_loaded([pkg])):
+        assert main(["--tsv", "-c", "name,bin,desc", "json"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == "json-tool\t\t\n"
+    assert "column hidden" not in captured.err

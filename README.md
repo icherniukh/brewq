@@ -99,8 +99,11 @@ For terminal tables, cap precedence is explicit `-t N`, then `-a` (unlimited),
 then configured `top`. The default `top = "auto"` fits the terminal height:
 `max(1, rows - 8)` records. Eight lines cover the leading blank, header, rule,
 trailing blank, `showing N of M` notice, cache note, typed command, and next prompt.
-This budget assumes single-line records and notices; wrapped cells remain future
-work, and terminals below nine rows cannot fit even one record with that framing.
+When the layout falls back to vertical records, auto sizing counts each shown
+field's wrapped lines and the separator after each record, reserving four lines
+for notices, the command, and the prompt. It keeps at least one record, which can
+still overflow a very short terminal. Fixed configured counts and explicit `-t`
+are never reduced for vertical output. Wrapped notices remain future work.
 Both height and width come from stdout's terminal, ignoring stale `LINES`/`COLUMNS`;
 those variables are fallbacks only without a TTY.
 
@@ -126,8 +129,9 @@ Fields have one exact name shared by `-c`, `-s` (for sortable fields), and
 configuration: `name`, `type`, `ver`, `30d`, `90d`, `365d`, `trend`, `bin`, `url`,
 `desc`, `inst`, `status`. Each matches its table header lowercased. `inst` and
 `status` are TSV-only; selecting them in table mode fails with guidance to use
-`--tsv`. Tables show installed state as the name's ✔ marker and package status
-as a description prefix. Old names and aliases fail with their replacement;
+`--tsv`. Search tables show installed state as the name's ✔ marker; `-i` omits
+it because every result is installed. Package status appears as a description
+prefix. Old names and aliases fail with their replacement;
 typos suggest exact names without automatically resolving them.
 
 `-c` always specifies the exact ordered list. `default` expands the current
@@ -157,10 +161,21 @@ installed data.
 
 Ordinary search defaults to `name,90d,trend,desc`. Installed-only
 search (`-i`) uses `installed-columns`, defaulting to `name,desc`;
-explicit `-c` overrides that layout. Long names are constrained to leave
-room for descriptions, with package basenames retained where possible. Selected
-metadata cells are clipped when necessary; extremely narrow tables use labeled
-vertical records rather than overflow or omit fields. TSV retains full values.
+explicit `-c` overrides that layout. Names use their content width: descriptions
+shrink to about 20 display columns before names are clipped, with package
+basenames retained where possible. Widths account for wide CJK characters and
+combining marks. Long URL and binary cells can be clipped; short metadata such
+as type, version, and counts keeps its full displayed value. Layouts that cannot
+fit these minimums (including `-c all` on narrower terminals) use labeled vertical
+records, showing installed state once and skipping empty fields per record.
+
+Tables omit columns whose shown values are all blank or `-`, even with explicit
+`-c`; NAME is never omitted. Only fields named explicitly in `-c` receive a note
+on stderr when hidden, such as `brewq: no bin values in these results; column hidden`.
+`default` and `all` hide empty columns silently; `-c default,bin` notes only BIN.
+Human-readable URLs omit a leading `https://` and a root-path trailing `/`
+(`jsonnet.org/` becomes `jsonnet.org`); `http://` and nonempty paths remain visible.
+TSV always retains the selected columns and full URLs and values.
 `trend` is a smoothed recent-to-historical
 installation-rate multiplier, not absolute popularity. It is currently visible
 by default but is not the default sort.
@@ -177,7 +192,7 @@ unknown install counts become empty cells. Table colors follow the terminal
 theme and are enabled independently for each stream only when it is a TTY.
 A nonempty `NO_COLOR`, `TERM=dumb`, or `--no-color` suppresses all ANSI styling
 on stdout and stderr, including cache footers and usage errors. Installed and
-trend markers (`✔`, `↑↑`) remain visible without color. Pipes and TSV stay
+trend markers (`✔` outside `-i`, `↑↑`) remain visible without color. Pipes and TSV stay
 ANSI-free.
 
 ## Installed packages
@@ -304,8 +319,8 @@ adapts Yuki Nishijima's DidYouMean under MIT. Both notices are in `NOTICE`.
 
 ## Known limits
 
-- Results are not limited by terminal height. A long list scrolls; `-t` is the
-  explicit cap, and `-R` puts the best row last when you want it in view.
+- Explicit result counts and a single oversized vertical record can exceed the
+  terminal height. `-R` puts the best row last when you want it in view.
 - The catalog is Homebrew core and cask data. Third-party taps are absent.
 - `bq` exists only after `brewq +setup`, and only when that name is free.
 - Colors follow the terminal theme; nonempty `NO_COLOR`, `TERM=dumb`, and

@@ -48,6 +48,7 @@ class SearchOptions:
     regex: re.Pattern[str] | None = None
     # Matches before a positive view limit is applied; used for honest counts.
     eligible_total: int = 0
+    auto_height: int | None = None
 
 
 def resolve_reverse(explicit: bool | None, cfg: dict) -> bool:
@@ -72,13 +73,18 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
     terminal = sys.stdout.isatty() and not getattr(args, "tsv", False)
     show_all = getattr(args, "all", False)
     limit = 0
+    auto_height = None
     if top is not None:
         limit = top
     elif terminal and not show_all:
         cfg_limit = cfg["output"]["limit"]
         # Four table lines, cap/cache notices, typed command, next prompt.
         # shortcut: one record minimum; revisit for viewports below nine lines.
-        limit = max(1, terminal_size().lines - 8) if cfg_limit == "auto" else cfg_limit
+        if cfg_limit == "auto":
+            auto_height = terminal_size().lines
+            limit = max(1, auto_height - 8)
+        else:
+            limit = cfg_limit
 
     reverse = getattr(args, "reverse", None)
     if reverse is None:
@@ -98,6 +104,7 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
         tsv_output=getattr(args, "tsv", False),
         installed_only=getattr(args, "installed", False),
         reverse=resolve_reverse(reverse, cfg),
+        auto_height=auto_height,
     )
 
 

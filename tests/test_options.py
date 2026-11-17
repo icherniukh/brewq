@@ -343,3 +343,21 @@ def test_build_search_options_top_without_explicit_sort_uses_config_default():
     # just follow whatever sort is otherwise in effect.
     opts = build_search_options(_args(query=["git"], top=5), _cfg())
     assert opts.sort == "30d"
+
+
+@pytest.mark.parametrize("tty,tsv,top,all_matches,configured,auto", [
+    (True, False, None, False, "auto", True),
+    (False, False, None, False, "auto", False),
+    (True, True, None, False, "auto", False),
+    (True, False, 2, False, "auto", False),
+    (True, False, None, True, "auto", False),
+    (True, False, None, False, 2, False),
+    (True, False, None, False, 0, False),
+])
+def test_vertical_height_budget_only_for_automatic_terminal_cap(
+    monkeypatch, tty, tsv, top, all_matches, configured, auto,
+):
+    monkeypatch.setattr("sys.stdout.isatty", lambda: tty)
+    monkeypatch.setattr("brewq.options.terminal_size", lambda: os.terminal_size((110, 14)))
+    opts = build_search_options(_args(tsv=tsv, top=top, **{"all": all_matches}), _cfg(configured))
+    assert opts.auto_height == (14 if auto else None)

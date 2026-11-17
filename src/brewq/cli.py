@@ -368,18 +368,28 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         opts.columns_spec, default_cols, representative_metric=metric, tsv=opts.tsv_output,
     )
 
+    shown = len(ranked)
     if opts.tsv_output:
         render_mod.render_tsv(ranked, col_defs, out=sys.stdout)
     else:
-        render_mod.render_table(
+        named_columns = {key.strip() for key in args.columns.split(",")} if args.columns else set()
+        result = render_mod.render_table(
             ranked,
             col_defs,
             out=sys.stdout,
             sorted_col=opts.sort,
             no_color=args.no_color,
+            installed_only=opts.installed_only,
+            auto_height=opts.auto_height,
+            reverse=opts.reverse,
+            named_columns=named_columns,
         )
+        for key in result.hidden:
+            if key in named_columns:
+                print(f"brewq: no {key} values in these results; column hidden", file=sys.stderr)
+        shown = result.shown
     sys.stdout.flush()
-    _report_view_cap(len(ranked), opts.eligible_total, opts.limit)
+    _report_view_cap(shown, opts.eligible_total, opts.limit)
     _finish_cache_command(loaded, cfg, no_color=args.no_color)
     return 0
 

@@ -3,11 +3,12 @@ from __future__ import annotations
 import io
 import os
 import re
+import unicodedata
 from unittest.mock import PropertyMock, patch
 
 import pytest
 
-from brewq.columns import resolve
+from brewq.columns import ColumnDef, resolve, select
 from brewq.model import Package
 from brewq.render import render_table, render_tsv
 
@@ -105,7 +106,7 @@ def test_render_table_unknown_installs():
     out = io.StringIO()
     cols = resolve("30d", [])
     render_table([_pkg(installs_30d=-1)], cols, out=out)
-    assert "-" in out.getvalue()
+    assert out.getvalue() == ""
 
 
 def test_render_tsv_uses_raw_values():
@@ -256,7 +257,7 @@ def test_render_table_fits_sixty_column_terminal(monkeypatch):
     assert all(len(line) <= 60 for line in lines)
 
 
-@pytest.mark.parametrize("width", [40, 60, 80, 100, 160])
+@pytest.mark.parametrize("width", [50, 80, 120, 200])
 @pytest.mark.parametrize("spec", ["name,desc", "name,type,ver,desc"])
 @pytest.mark.parametrize("no_color", [False, True])
 def test_long_names_leave_description_space_and_fit(monkeypatch, width, spec, no_color):
@@ -274,19 +275,25 @@ def test_long_names_leave_description_space_and_fit(monkeypatch, width, spec, no
     render_table(packages, resolve(spec, []), out=out)
     lines = [_strip_ansi(line) for line in out.getvalue().splitlines() if line]
     assert all(len(line) <= width for line in lines)
-    header = lines[0]
-    rows = [line for line in lines if "Useful" in line]
-    assert len(rows) == 2
-    assert {line.index("Useful") for line in rows} == {header.index("DESC")}
-    assert "✔" in rows[0] and "✔" not in rows[1]
-    assert "…" in rows[0]
-    if spec == "name,desc":
-        assert header.index("DESC") <= max(8, width // 4) + 2
-        assert all("Useful description" in line for line in rows)
+    assert sum(line.count("✔") for line in lines) == 1
+    if "NAME:" in out.getvalue():
+        assert "DESC: Useful" in out.getvalue()
+    else:
+        header = lines[0]
+        rows = [line for line in lines if "Useful" in line]
+        assert len(rows) == 2
+        assert {line.index("Useful") for line in rows} == {header.index("DESC")}
+        name_width = len(packages[0].name) + 2
+        fixed = 0 if spec == "name,desc" else 7 + 20 + 4
+        if name_width + fixed + 2 + 20 <= width:
+            assert packages[0].name + " ✔" in rows[0]
+        elif spec == "name,desc":
+            assert "…" in rows[0]
+            assert header.index("DESC") == width - 20
 
 
 def test_long_tap_names_keep_basename_and_tsv_identity(monkeypatch):
-    monkeypatch.setattr("brewq.render._terminal_width", lambda: 100)
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 50)
     name = "a-very-long-vendor/tap/ghostty-ai-themes"
     package = _pkg(name, installed=True)
     table, tsv = io.StringIO(), io.StringIO()
@@ -344,8 +351,11 @@ def test_trend_bands_match_visible_precision_and_keep_tsv_raw(monkeypatch, trend
     with patch.object(Package, "trending", new_callable=PropertyMock, return_value=trend):
         render_table([_pkg()], cols, out=table)
         render_tsv([_pkg()], cols, out=tsv)
-    assert cue in _strip_ansi(table.getvalue())
-    assert style in table.getvalue()
+    if trend is None:
+        assert table.getvalue() == ""
+    else:
+        assert cue in _strip_ansi(table.getvalue())
+        assert style in table.getvalue()
     assert tsv.getvalue() == ("\n" if trend is None else f"{trend}\n")
 
 
@@ -379,3 +389,173 @@ def test_piped_trend_keeps_cues_without_ansi():
     render_table([pkg], resolve("trend", []), out=out)
     assert "↑↑" in out.getvalue()
     assert "\033[" not in out.getvalue()
+
+
+def _visible_width(text: str) -> int:
+    return sum(0 if unicodedata.combining(c) else
+               2 if unicodedata.east_asian_width(c) in {"W", "F"} else 1
+               for c in _strip_ansi(text))
+
+
+@pytest.mark.parametrize("width", [50, 80, 120, 200])
+def test_names_keep_content_until_description_reaches_minimum(monkeypatch, width):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: width)
+    out = io.StringIO()
+    name = "font-jetbrains-mono-nerd-font"
+    render_table([_pkg(name, desc="Useful description " * 20)], resolve("name,desc", []), out=out)
+    lines = [line for line in out.getvalue().splitlines() if line]
+    assert all(_visible_width(line) <= width for line in lines)
+    if len(name) + 2 + 20 <= width:
+        assert lines[2].startswith(name + "  ")
+    else:
+        assert lines[0].index("DESC") == width - 20
+        assert "…" in lines[2]
+
+
+@pytest.mark.parametrize("width", [50, 70, 80, 120, 200])
+@pytest.mark.parametrize("spec", ["name,desc,url", "all"])
+@pytest.mark.parametrize("color", [False, True])
+def test_display_width_bounds_cjk_and_combining_cells(monkeypatch, width, spec, color):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: width)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    pkg = _pkg("sgn-工具-e\u0301", desc="跨平台文件搜索工具 e\u0301 " * 20, installed=True)
+    pkg.url = "https://例子.com/工具"
+    out = TtyStringIO() if color else io.StringIO()
+    render_table([pkg], select(spec, []), out=out)
+    assert all(_visible_width(line) <= width for line in out.getvalue().splitlines())
+    assert "跨平台" in out.getvalue()
+
+
+@pytest.mark.parametrize("scheme", ["https://", "http://"])
+def test_only_https_scheme_is_removed_from_human_url(monkeypatch, scheme):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 200)
+    pkg = _pkg()
+    pkg.url = scheme + "example.com/path"
+    table, tsv = io.StringIO(), io.StringIO()
+    cols = resolve("name,url", [])
+    render_table([pkg], cols, out=table)
+    render_tsv([pkg], cols, out=tsv)
+    assert (scheme in table.getvalue()) == (scheme == "http://")
+    assert "example.com/path" in table.getvalue()
+    assert tsv.getvalue() == f"ripgrep\t{pkg.url}\n"
+
+
+@pytest.mark.parametrize("width", [20, 50, 80, 120, 200])
+def test_installed_view_drops_marker_in_table_and_records(monkeypatch, width):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: width)
+    out = io.StringIO()
+    render_table([_pkg(installed=True)], resolve("name,type,desc", []),
+                 out=out, installed_only=True)
+    assert "✔" not in out.getvalue()
+    assert "ripgrep" in out.getvalue()
+
+
+def test_records_skip_empty_fields_per_record_and_show_installed_once(monkeypatch):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 20)
+    out = io.StringIO()
+    packages = [_pkg("present", installed=True), _pkg("empty", desc="")]
+    render_table(packages, resolve("name,type,inst,bin,url,desc", []), out=out)
+    text = out.getvalue()
+    assert text.count("✔") == 1
+    assert "NAME: present ✔" not in text
+    assert "INST: ✔" in text
+    assert "BIN:" not in text
+    empty_record = text.split("NAME: empty", 1)[1]
+    assert "DESC:" not in empty_record and "INST:" not in empty_record
+    assert "DESC:" in text
+
+
+def test_empty_columns_reuse_getter_cells_and_tsv_retains_schema():
+    calls = []
+    cols = [ColumnDef("name", "NAME", "left", lambda p: calls.append(p.name) or ""),
+            ColumnDef("bin", "BIN", "left", lambda p: calls.append("bin") or " - ")]
+    out = io.StringIO()
+    result = render_table([_pkg()], cols, out=out)
+    assert calls == ["ripgrep", "bin"]
+    assert result.hidden == ["bin"]
+    assert "NAME" in out.getvalue() and "BIN" not in out.getvalue()
+    tsv = io.StringIO()
+    render_tsv([_pkg(desc="")], resolve("name,bin,desc", []), out=tsv)
+    assert tsv.getvalue() == "ripgrep\t\t\n"
+
+
+@pytest.mark.parametrize("width", [50, 80, 110, 120, 200])
+def test_all_columns_preserve_short_metadata_using_records_when_needed(monkeypatch, width):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: width)
+    pkg = _pkg(version="57.12.3", desc="Useful description " * 4)
+    pkg.binaries = ["a-long-executable-name"]
+    pkg.url = "http://example.com/a/long/path"
+    out = io.StringIO()
+    render_table([pkg], select("all", []), out=out)
+    text = out.getvalue()
+    assert "formula" in text and "57.12.3" in text and "240,000" in text
+    assert "for…" not in text and "57…" not in text and "ht…" not in text
+    assert all(_visible_width(line) <= width for line in text.splitlines())
+    assert ("NAME:" in text) == (width <= 120)
+
+
+@pytest.mark.parametrize("width", [50, 80, 120, 200])
+@pytest.mark.parametrize("status", ["disabled", "deprecated"])
+@pytest.mark.parametrize("color", [False, True])
+def test_full_status_description_is_budgeted_before_styling(monkeypatch, width, status, color):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: width)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    out = TtyStringIO() if color else io.StringIO()
+    packages = [_pkg("dotnet", status=status, desc=".NET Core"), _pkg("active", desc="Active")]
+    render_table(packages, resolve("name,desc,url", []), out=out)
+    text = _strip_ansi(out.getvalue())
+    assert f"({status}) .NET Core" in text
+    rows = [line for line in text.splitlines() if "example.com" in line]
+    assert len(rows) == 2
+    assert len({line.index("example.com") for line in rows}) == 1
+    assert all(_visible_width(line) <= width for line in text.splitlines())
+    assert ("\033[" in out.getvalue()) == color
+    tsv = io.StringIO()
+    render_tsv(packages, resolve("name,desc,status", []), out=tsv)
+    assert tsv.getvalue().splitlines()[0] == f"dotnet\t.NET Core\t{status}"
+
+
+@pytest.mark.parametrize("url,shown", [
+    ("https://jsonnet.org/", "jsonnet.org"),
+    ("http://jsonnet.org/", "http://jsonnet.org"),
+    ("jsonnet.org/", "jsonnet.org"),
+    ("/", "/"),
+    ("https://github.com/mikefarah/yq", "github.com/mikefarah/yq"),
+    ("https://example.com/a/", "example.com/a/"),
+    ("https://example.com//", "example.com//"),
+    ("https://example.com?next=/", "example.com?next=/"),
+    ("https://example.com/#/", "example.com/#/"),
+])
+def test_table_url_trims_only_an_empty_root_path(monkeypatch, url, shown):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 200)
+    pkg = _pkg()
+    pkg.url = url
+    table, tsv = io.StringIO(), io.StringIO()
+    cols = resolve("url", [])
+    render_table([pkg], cols, out=table)
+    render_tsv([pkg], cols, out=tsv)
+    assert table.getvalue().splitlines()[3] == shown
+    assert tsv.getvalue() == url + "\n"
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_auto_vertical_budget_counts_wrapped_lines_and_keeps_best_records(monkeypatch, reverse):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 20)
+    best = _pkg("best", desc="工具 " * 15)
+    rest = _pkg("rest", desc="Short")
+    packages = [rest, best] if reverse else [best, rest]
+    out = io.StringIO()
+    result = render_table(packages, resolve("name,type,desc", []), out=out,
+                          auto_height=14, reverse=reverse)
+    assert result.vertical and result.shown == 1
+    assert "best" in out.getvalue() and "rest" not in out.getvalue()
+    assert len(out.getvalue().splitlines()) + 4 <= 14
+
+
+def test_auto_vertical_budget_always_keeps_one_record(monkeypatch):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 10)
+    out = io.StringIO()
+    result = render_table([_pkg(), _pkg("second")], resolve("name,type,desc", []),
+                          out=out, auto_height=5)
+    assert result.vertical and result.shown == 1
+    assert "second" not in out.getvalue()
