@@ -66,8 +66,6 @@ Examples:
   brewq +update --force
   brewq +update --offline
   brewq -u ripgrep
-
---offline installs the bundled catalog without contacting Homebrew.
 """
 
 _CONFIG_EPILOG = """\
@@ -77,8 +75,9 @@ Examples:
 The config file controls default columns and cache freshness.
 """
 
-_COLUMN_HELP = (",".join(columns_mod.CANONICAL_COLUMNS)
-                + "; default/all/help (inst/status: TSV-only)")
+_COLUMN_HELP = (",".join(c for c in columns_mod.CANONICAL_COLUMNS if c not in columns_mod.TSV_ONLY)
+                + "; default, all, help; --tsv also takes "
+                + ", ".join(sorted(columns_mod.TSV_ONLY)))
 
 _FULL_HELP_DETAILS = """\
 columns:
@@ -207,9 +206,9 @@ def _build_command_parser() -> argparse.ArgumentParser:
     )
     update_mode = update_p.add_mutually_exclusive_group()
     update_mode.add_argument("--force", action="store_true",
-                             help="Update even when the register is fresh")
+                             help="update even when the register is fresh")
     update_mode.add_argument("--offline", action="store_true",
-                             help="Install the bundled catalog without contacting Homebrew")
+                             help="install the bundled catalog without contacting Homebrew")
 
     setup_p = subparsers.add_parser(
         "+setup",

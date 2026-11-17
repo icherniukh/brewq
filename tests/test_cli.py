@@ -983,7 +983,10 @@ def test_help_has_inline_field_vocabulary(command, capsys):
         main([*command, "--help"])
     assert exc.value.code == 0
     help_text = capsys.readouterr().out
-    assert ",".join(CANONICAL_COLUMNS) in help_text.replace("\n", "").replace(" ", "")
+    flat = " ".join(help_text.split())
+    table_fields = [c for c in CANONICAL_COLUMNS if c not in ("inst", "status")]
+    assert ",".join(table_fields) + ";" in flat
+    assert "--tsv also takes inst, status" in flat
 
 
 @pytest.mark.parametrize("argv,hidden,notes", [
