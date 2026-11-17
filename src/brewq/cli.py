@@ -65,7 +65,7 @@ Examples:
 
 _CONFIG_EPILOG = """\
 Examples:
-  brewq config path
+  brewq +config path
 
 The config file controls default columns and cache freshness.
 """
@@ -83,7 +83,7 @@ columns:
 
   Short forms: 30d, 90d, 365d, trend, bin, desc, home.
   Search default: name,90d,trending,description
-  Installed view (-i or list): name,description
+  Installed view (-i or +list): name,description
   Use -c help for fields and examples. -c +version,bin adds to your layout;
   -c +home,-trend adds homepage and removes trend; -c all shows every field.
 
@@ -105,7 +105,7 @@ cache:
   turns it off immediately, even when the flag or config enables it.
   If analytics fail, counts from the previous user snapshot are retained and
   retried later.
-  `brewq config path` shows the configuration file.
+  `brewq +config path` shows the configuration file.
 """
 
 

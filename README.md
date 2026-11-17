@@ -70,10 +70,10 @@ brewq --tsv -c name,90d,url ripgrep
 column reference plus concise trending and cache behavior.
 
 Search matches names, formula aliases, and descriptions. Flags may appear
-before, between, or after query terms; a command name is recognized only as the
-first token. All query terms must
-match; name normalization applies. For homebrew/core and homebrew/cask, results are
-a superset of `brew search`: its substring and spell-correction (DidYouMean) matches
+before, between, or after query terms. A `+action` is recognized only as the
+first token; bare words are always query terms. All query terms must match;
+name normalization applies. For homebrew/core and homebrew/cask, results are a
+superset of `brew search`: its substring and spell-correction (DidYouMean) matches
 are reproduced for formulae and casks, and `/regex/` queries are supported. Packages
 from third-party taps are not in the catalog, so `brew search` can list names brewq
 cannot. `brew search` exits 1 when nothing matches; brewq exits 0.
@@ -97,12 +97,12 @@ When a positive cap hides matches, deprecated/disabled matches are ranked last
 and hidden unless `--all` is given, and a stderr note reports `showing N of M`.
 Machine-readable stdout stays clean.
 
-Both search and `list` accept `-t N` / `--top N` as the canonical positive cap;
+Both search and `+list` accept `-t N` / `--top N` as the canonical positive cap;
 `--limit N` is an equivalent compatibility alias. `--all` includes package
 statuses, not unlimited results. The former `-l` installed-filter shorthand is
 retired; use `-i` or `--installed` instead.
 
-These output options work for both search and `list`:
+These output options work for both search and `+list`:
 
 | Output option | Current behavior |
 | --- | --- |
@@ -133,13 +133,13 @@ fields keep the preceding operation until another `+` or `-` switches it.
 Added fields go before description (or at the end if description is absent);
 adding an existing field or removing an absent one has no effect. Aliases resolve
 before editing, so `+90d` won't duplicate `installs_90d`. Keep at least one field.
-`-c default` selects the configured layout. The same controls work with `list`.
+`-c default` selects the configured layout. The same controls work with `+list`.
 
 Cask binaries come from declared artifacts; formula binaries require local
 installed data.
 
 Ordinary search defaults to `name,90d,trending,description`. Installed-only
-search (`-i`) and `list` use `[list].columns`, defaulting to `name,description`;
+search (`-i`) and `+list` use `[list].columns`, defaulting to `name,description`;
 explicit `-c` or `-v` overrides that layout. Long names are constrained to leave
 room for descriptions, with package basenames retained where possible. Selected
 metadata cells are clipped when necessary; extremely narrow tables use labeled
@@ -169,7 +169,7 @@ brewq +list -t 10
 brewq +list --tsv -c name,type,version
 ```
 
-Rows sort by type, then name. Like search, `list` is uncapped unless you pass a
+Rows sort by type, then name. Like search, `+list` is uncapped unless you pass a
 shared positive-cap flag; a cap reports `showing N of M` on stderr. Select cached
 analytics through the same `-c` column interface used by search; this never
 fetches analytics on demand. VERSION displays the installed version for installed
@@ -208,8 +208,8 @@ brewq -R -i             # all installed matches, best row last
 brewq +config path
 ```
 
-`refresh`, `update-cache`, and `-r` remain compatibility aliases for `update` /
-`-u`. `--url` still adds the URL column; prefer `-c +url`. `random [--seed N]`
+`+refresh`, `+update-cache`, and `-r` remain compatibility aliases for `+update` /
+`-u`. `--url` still adds the URL column; prefer `-c +url`. `+random [--seed N]`
 remains a development layout lab, not a product discovery workflow.
 
 ## Configuration
@@ -244,7 +244,7 @@ in list configuration and explicit `-c`; prefer explicit metric columns in scrip
 
 Invalid sections, fields, types, ranges, sort names, and columns emit a concise
 stderr diagnostic and fall back field-by-field. Invalid `BREWQ_CACHE_MAX_AGE`
-keeps the validated configured value. Help, version, and `config path` do not
+keeps the validated configured value. Help, version, and `+config path` do not
 load operational configuration.
 
 ## License

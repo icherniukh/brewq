@@ -51,12 +51,11 @@ verification script's checkout and installed-shim checks are useful inputs, not
 proof of a newly built public artifact; skipped checks are not release evidence.
 
 The owner has confirmed that the seed must be sanitized and public Git history
-cleaned before release. Short-command convenience should remain; collision-aware
-`bq` creation is the desired direction, while `brq` is a proposed fallback, not a
-settled contract. The license is MIT for original code, with Homebrew and
-DidYouMean notices retained. History-redaction scope and the supported shortcut
-setup mechanism still need explicit decisions. Record
-entrypoint/flag decisions in `brewq-h7m`; do not silently remove aliases or change
+cleaned before release. The seed is sanitized (`brewq-seed-paths`); the
+history-redaction scope is settled inside `brewq-history-scrub` before any
+rewrite. The shortcut, license, and other settled choices are listed under
+[Decisions](#decisions-to-preserve-or-settle). Raise new entrypoint, flag, or
+default questions as `decision` Beads; do not silently remove aliases or change
 defaults. Completing M1 means ready to recommend a first public 0.x release, not
 automatic publication or a 1.0 stability claim.
 
@@ -97,30 +96,20 @@ with one supported install/uninstall route. No GIF, extra registry, tap, or new
 query feature is required. Freeze this prepared candidate before the history
 cleanup so private text is not reintroduced afterward.
 
-**Short-command direction to validate:** always retain `brewq`; provide `bq`
-automatically when that name is unclaimed, without overwriting another tool or
-user shortcut. If `bq` belongs to something else, consider `brq` only if that
-fallback is approved and unclaimed too. Reuse our own existing shortcut on
-reinstall; if neither name is safe, retain `brewq` and give a clear diagnostic.
-Treat this as installation/setup work, not a side effect of a package query.
-
-The current `pyproject.toml` declares fixed `brewq` and `bq` console scripts, not
-shell aliases or collision-aware setup. Verify a supported mechanism for the
-chosen installation route before promising automatic selection. Account for
-PATH commands, symlinks, aliases/functions in the supported shell, repeat setup,
-and uninstall removing only our own files. Do not silently edit shell startup
-files, install both names as a substitute for collision handling, or invent a
-conditional package-install hook. If the route cannot support the desired
-behavior, report that gap for a concrete decision rather than claim it works.
+**Short command (settled in `brewq-bqname`):** `uv tool install` writes every
+declared console script unconditionally, so the package declares `brewq` only.
+`brewq +setup` links `bq` when that name is free and is not a shell alias or
+function, and `+setup --remove` removes only its own link. It never edits shell
+startup files or overwrites a foreign command. `brq` is not a fallback.
 
 **Settled flag spellings:** installed-only search uses `-i` / `--installed`;
-`-l` is retired rather than kept as an ambiguous shortcut. Both search and `list`
+`-l` is retired rather than kept as an ambiguous shortcut. Both search and `+list`
 use `-t` / `--top` for explicit positive caps and retain `--limit` as an alias;
 no `-n` shorthand is added. This unifies explicit controls without changing the
 existing automatic-cap defaults or making `--all` mean unlimited output.
 
 **Installed-view presentation:** the owner brought the narrow-output fix
-forward. Both `list` and installed-only search use the configured list columns,
+forward. Both `+list` and installed-only search use the configured list columns,
 defaulting to name/description; normal search retains its analytics layout.
 Bound the name column, favor description context, and retain requested metadata
 through explicit columns rather than crowding the default. This is display-only:
@@ -131,7 +120,7 @@ the result set. Only explicit `-t`/`--top`, `--limit`, or a positive configured
 `output.limit` limits results, and any such cap discloses `showing N of M` on
 stderr while stdout stays machine-clean. This removes silent truncation as a
 source of “brewq missed a package” reports and makes installed-only search and
-`list` consistent.
+`+list` consistent.
 
 ### 4. Clean public Git history in an isolated copy
 
@@ -264,37 +253,36 @@ overlay; its timing alone cannot establish user-visible performance.
 
 ## Decisions to preserve or settle
 
-Search remains the root command, TSV the only script format, and columns the
-extension mechanism. Raw 90-day installs remain the default sort. `-u`/`update`
-is the public register-update spelling; `refresh`, `update-cache`, and `-r` stay
-as aliases. `-R` reverses already ranked rows and is off unless requested.
-`BREWQ_NO_REVERSE=1` disables it immediately. Actions are `+` tokens
-(`+list`, `+update`, `+setup`); bare words are queries. The package installs `brewq`
-only; `brewq +setup` links `bq` when that name is free and never overwrites a
-foreign command, alias, or function. `brq` is not a fallback in this release.
-TREND currently
-remains in the default table: making it opt-in is a product decision for the CLI
-contract issue, not a claim about current behavior. Historical calibration and
-rejected popularity/clamp approaches remain in the archive.
+Settled decisions are listed here with their source; [README](../README.md)
+holds the exact behavior. Changing one needs a `decision` Bead and an explicit
+owner choice. Open questions live only in Beads: `bd list --type decision`.
 
-Table momentum cues emphasize rising TREND values with direction markers and
-terminal-theme green, using bold for values at least 2×. Neutral cache footers
-keep freshness and repair state visible without competing with query results.
-These presentation bands do not change analytics, sorting, or TSV values.
+| Area | Settled decision | Source |
+| --- | --- | --- |
+| Command shape | Search is the root command. Actions are `+` tokens in first position; bare words are queries. | `c56a603` (Nov 5) |
+| Machine output | TSV is the only machine-readable format. | product boundary, AGENTS.md |
+| Columns | `-c` is the one extension point: field reference, `all`, and `+`/`-` edits of the configured layout. One registry owns names and aliases; ambiguous popularity aliases are rejected. | `brewq-h7m`, `brewq-w5h` |
+| Default sort | Raw 90-day installs. TREND stays in the default table but is not the default sort. | `brewq-253`, `brewq-h7m` |
+| Flag spellings | `-i`/`--installed` (`-l` retired); `-t`/`--top` with `--limit` as an alias; no `-n`. | `brewq-brx`, `brewq-limit-top-parity` |
+| Result limits | Terminal height never caps results; only explicit or configured caps do, and they report `showing N of M` on stderr. | `brewq-tty-cap`, `brewq-truncation-hint` |
+| Reverse | `-R` reverses already ranked rows and is off unless requested; `BREWQ_NO_REVERSE=1` disables it. | `8fe9190` (Nov 5) |
+| Update | `-u` / `+update`; `+refresh`, `+update-cache`, and `-r` stay as aliases. | `8fe9190` (Nov 5) |
+| Shortcut | The package installs `brewq`; `+setup` links `bq` only when free; no `brq`. | `brewq-bqname` |
+| Background refresh | On by default, with config and environment opt-outs. | `brewq-scheduler-optout` |
+| License | MIT for original code; Homebrew and DidYouMean notices retained. | `brewq-lic` |
+| Presentation | TREND momentum cues use markers plus theme green; cache footers stay neutral. Neither changes analytics, sorting, or TSV. | README §Search and output |
 
-Column control stays within `-c`: an on-demand field reference, all-field
-selection, and additive/subtractive edits to the command's configured layout.
-The shared registry owns field names and aliases; defaults and compatibility
-shortcuts remain intact. Field discovery needs no cache or operational config.
+Not planned: install/upgrade/uninstall, services, Brewfiles, TUI/GUI, security
+scanning, a multi-package-manager layer, semantic/vector search, `info`,
+`--exact`, `--explain`, `--open`, `+list --leaves`, or a compiled-language
+rewrite. Private competitive research stays out of README and release copy.
+Historical calibration and rejected popularity/clamp approaches remain in the
+archive.
 
-Exact matches versus deprecated/disabled hiding, formula/cask grouping, eventual
-prototype retirement, and external dotfiles migration remain open decisions.
-Semantic/vector search, `info`, `--exact`, `--explain`, `--open`, `list --leaves`,
-and a compiled-language rewrite are outside this stabilization milestone.
-
-No install/upgrade/uninstall, services, Brewfiles, TUI/GUI, security scanner, or
-multi-package-manager layer is planned. Private competitive research stays out
-of README/release copy.
+Still open but not yet filed as `decision` Beads: exact matches versus
+deprecated/disabled hiding (current behavior differs from closed `brewq-1xx.5`),
+formula/cask grouping, retirement of the legacy prototype, and the external
+dotfiles migration.
 
 ## Historical record
 

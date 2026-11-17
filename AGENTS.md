@@ -13,14 +13,20 @@ in additional guides. Preserve historical decisions through the archive.
 ## Product boundary
 
 Brewq is a compact, read-only Homebrew query and analytics tool. Keep search at
-the root command, installed inspection in `list`, columns as the output extension
+the root command, installed inspection in `+list`, columns as the output extension
 point, and TSV as the sole machine-readable format. No package management,
 services, Brewfiles, TUI/GUI, or multi-package-manager abstraction.
 
 The baseline sorts by 90-day install volume and displays TREND in the default
-table. Changing that display default, removing compatibility aliases, or moving
-the random layout lab requires an explicit decision in `brewq-h7m`, not an
-incidental documentation edit. Do not restore presets or temporary palette flags.
+table. Changing a default, removing compatibility aliases, or moving the random
+layout lab requires an explicit owner decision, not an incidental documentation
+edit. Do not restore presets or temporary palette flags.
+
+Decisions: open ones are Beads of type `decision` (`bd list --type decision`);
+create one with `bd create -t decision` when a choice is raised in chat or notes.
+When one closes, record the outcome in the settled-decision table in
+[docs/roadmap.md](docs/roadmap.md) and the behavior in README in the same commit.
+Agent tooling decisions belong in the dotfiles `DECISIONS.md`, not here.
 
 Keep competitive analysis in historical/internal design material, not public
 README or release copy. Preserve `legacy/bsx-prototype.zsh` until replacement
