@@ -81,6 +81,7 @@ columns:
 
   Search default: name,90d,trend,desc
   Installed view (-i): name,desc
+  Use one -c with a comma-separated list.
   Exact names only; duplicates keep their first occurrence.
   -c default,url appends URL to the configured view; -c url,default puts it first.
   -c all shows all fields available in the output mode; inst/status are TSV-only.
@@ -137,8 +138,15 @@ def _add_top_flag(parser: argparse.ArgumentParser) -> None:
                         help="show at most N packages")
 
 
+class _ColumnsAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if getattr(namespace, self.dest) is not None:
+            raise argparse.ArgumentError(self, "specify columns once as a comma-separated list")
+        setattr(namespace, self.dest, values)
+
+
 def _add_column_flags(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("-c", "--columns", metavar="COLS", help=_COLUMN_HELP)
+    parser.add_argument("-c", "--columns", action=_ColumnsAction, metavar="COLS", help=_COLUMN_HELP)
 
 
 def _add_reverse_flag(parser: argparse.ArgumentParser) -> None:
@@ -502,6 +510,8 @@ def _format_age(age_seconds: object) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         return _main(argv)
+    except KeyboardInterrupt:
+        return 130
     except BrokenPipeError:
         # Reader closed early (`brewq ... | head`): exit like SIGPIPE, without a traceback
         # or a second error when the interpreter flushes stdout at shutdown.

@@ -130,11 +130,12 @@ configuration: `name`, `type`, `ver`, `30d`, `90d`, `365d`, `trend`, `bin`, `url
 it because every result is installed. Package status appears as a description
 prefix. Typos suggest exact names without automatically resolving them.
 
-`-c` always specifies the exact ordered list. `default` expands the current
-view's configured columns, and `all` expands every field available in the output
-mode (including `inst` and `status` with `--tsv`). Duplicates keep their first
-occurrence: `url,default` puts URL first; `default,name` leaves the default
-layout unchanged. `default` and `all` are reserved words, not field names.
+Use one `-c` with a comma-separated list of fields in the desired order.
+`default` expands the current view's configured columns, and `all` expands every
+field available in the output mode (including `inst` and `status` with `--tsv`).
+Duplicates keep their first occurrence: `url,default` puts URL first;
+`default,name` leaves the default layout unchanged. `default` and `all` are
+reserved words for column selections.
 
 ```sh
 brewq --full-help                    # field reference; no cache needed

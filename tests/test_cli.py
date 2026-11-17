@@ -177,6 +177,18 @@ def test_attached_column_value_is_not_checked_as_short_flags(capsys):
     assert capsys.readouterr().out == "1.0\n"
 
 
+@pytest.mark.parametrize("second", [["-c", "desc"], ["--columns=desc"]],
+                         ids=["short", "long"])
+def test_repeated_columns_fail_before_io(second, capsys):
+    with patch("brewq.config.load", side_effect=AssertionError("loaded config")), \
+         pytest.raises(SystemExit) as exc:
+        main(["-c", "name", "ripgrep", *second])
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "specify columns once as a comma-separated list" in captured.err
+
+
 def test_update_offline_bypasses_refresh_and_operational_config(capsys):
     with patch("brewq.cache.preload_bundled", return_value=(Path("/cache"), 2, 3)) as preload, \
          patch("brewq.cache.refresh", side_effect=AssertionError("updated cache")), \
@@ -184,6 +196,19 @@ def test_update_offline_bypasses_refresh_and_operational_config(capsys):
         assert main(["+update", "--offline"]) == 0
     preload.assert_called_once_with()
     assert capsys.readouterr() == ("cache: preloaded 2 formulae, 3 casks at /cache\n", "")
+
+
+def test_interrupted_update_exits_without_traceback(capsys):
+    with patch("brewq.cache.refresh", side_effect=KeyboardInterrupt) as refresh:
+        try:
+            code = main(["+update", "--force"])
+        except KeyboardInterrupt:
+            pytest.fail("the CLI let KeyboardInterrupt escape")
+    assert code == 130
+    refresh.assert_called_once_with(force=True)
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "Updating register...\n"
 
 
 def test_update_offline_rejects_force_before_io():
