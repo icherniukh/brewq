@@ -24,7 +24,7 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
         if args == ["--version"]:
             output = f"brewq {version}\n"
         elif args == ["--help"]:
-            output = "-c, --columns --full-help --tsv --top --limit -u, --update -R, --reverse"
+            output = "-c, --columns --full-help --tsv --top -u, --update -R, --reverse"
             if broken != "old-help":
                 output += " -i, --installed"
             if metavars:

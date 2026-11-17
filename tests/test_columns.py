@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from brewq.columns import FULL_COLUMNS, pick_representative_metric, resolve, select, with_url
+from brewq.columns import FULL_COLUMNS, pick_representative_metric, resolve, select
 from brewq.model import Package
 
 
@@ -27,21 +27,18 @@ def test_full_columns_resolve():
     ]
 
 
-def test_with_url_inserts_before_description():
-    cols = resolve("name,installs_90d,description", [])
-    keys = [c.key for c in with_url(cols)]
+def test_url_edit_inserts_before_description():
+    keys = [c.key for c in select("+url", ["name", "installs_90d", "description"])]
     assert keys == ["name", "installs_90d", "url", "description"]
 
 
-def test_with_url_appends_without_description():
-    cols = resolve("name,installs_90d", [])
-    keys = [c.key for c in with_url(cols)]
+def test_url_edit_appends_without_description():
+    keys = [c.key for c in select("+url", ["name", "installs_90d"])]
     assert keys == ["name", "installs_90d", "url"]
 
 
-def test_with_url_is_idempotent():
-    cols = resolve("name,url,description", [])
-    keys = [c.key for c in with_url(cols)]
+def test_url_edit_is_idempotent():
+    keys = [c.key for c in select("+url", ["name", "url", "description"])]
     assert keys == ["name", "url", "description"]
 
 

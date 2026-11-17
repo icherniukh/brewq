@@ -104,9 +104,13 @@ startup files or overwrites a foreign command. `brq` is not a fallback.
 
 **Settled flag spellings:** installed-only search uses `-i` / `--installed`;
 `-l` is retired rather than kept as an ambiguous shortcut. Both search and `+list`
-use `-t` / `--top` for explicit positive caps and retain `--limit` as an alias;
-no `-n` shorthand is added. This unifies explicit controls without changing the
-existing automatic-cap defaults or making `--all` mean unlimited output.
+use `-t` / `--top` for explicit positive caps; `--limit` is removed, reversing
+the earlier alias decision per owner decision 2026-11-17. No `-n` shorthand is
+added. Hidden compatibility flags/actions are removed with usage errors naming
+their replacements (`brewq-remove-hidden`, `brewq-dec-compat-flags`). Offline
+preload is `+update --offline`; the random layout lab lives in
+`scripts/random-layout.py` and runs through normal search with the same layouts.
+Configured caps and the meaning of `--all` are unchanged.
 
 **Installed-view presentation:** the owner brought the narrow-output fix
 forward. Both `+list` and installed-only search use the configured list columns,
@@ -116,7 +120,7 @@ through explicit columns rather than crowding the default. This is display-only:
 TSV keeps full identifiers and values, and cap/sort policies are unchanged.
 
 **Result-limit policy:** terminal height is a layout input only; it never caps
-the result set. Only explicit `-t`/`--top`, `--limit`, or a positive configured
+the result set. Only explicit `-t`/`--top` or a positive configured
 `output.limit` limits results, and any such cap discloses `showing N of M` on
 stderr while stdout stays machine-clean. This removes silent truncation as a
 source of “brewq missed a package” reports and makes installed-only search and
@@ -263,10 +267,11 @@ owner choice. Open questions live only in Beads: `bd list --type decision`.
 | Machine output | TSV is the only machine-readable format. | product boundary, AGENTS.md |
 | Columns | `-c` is the one extension point: field reference, `all`, and `+`/`-` edits of the configured layout. One registry owns names and aliases; ambiguous popularity aliases are rejected. | `brewq-h7m`, `brewq-w5h` |
 | Default sort | Raw 90-day installs. TREND stays in the default table but is not the default sort. | `brewq-253`, `brewq-h7m` |
-| Flag spellings | `-i`/`--installed` (`-l` retired); `-t`/`--top` with `--limit` as an alias; no `-n`. | `brewq-brx`, `brewq-limit-top-parity` |
+| Flag spellings | `-i`/`--installed` (`-l` retired); `-t`/`--top` only (`--limit` removed); no `-n`. | `brewq-brx`, owner decision 2026-11-17 (`brewq-remove-hidden`) |
+| Compatibility removal | Remove `-v`/`--verbose`, `--url`, `-r`/`--refresh`, `+refresh`, `+update-cache`, `--limit`, and `--analytics`, with usage errors naming replacements. Replace `+preload` with `+update --offline`; move `+random` to `scripts/random-layout.py`. | owner decision 2026-11-17 (`brewq-dec-compat-flags`, `brewq-remove-hidden`) |
 | Result limits | Terminal height never caps results; only explicit or configured caps do, and they report `showing N of M` on stderr. | `brewq-tty-cap`, `brewq-truncation-hint` |
 | Reverse | `-R` reverses already ranked rows and is off unless requested; `BREWQ_NO_REVERSE=1` disables it. | `8fe9190` (Nov 5) |
-| Update | `-u` / `+update`; `+refresh`, `+update-cache`, and `-r` stay as aliases. | `8fe9190` (Nov 5) |
+| Update | `-u`/`--update` updates before a query; `+update` updates directly; `+update --offline` installs the bundled catalog. Compatibility aliases are removed. | owner decision 2026-11-17 (`brewq-remove-hidden`) |
 | Shortcut | The package installs `brewq`; `+setup` links `bq` only when free; no `brq`. | `brewq-bqname` |
 | Background refresh | On by default, with config and environment opt-outs. | `brewq-scheduler-optout` |
 | License | MIT for original code; Homebrew and DidYouMean notices retained. | `brewq-lic` |

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import argparse
 import io
+import runpy
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from brewq.cache import CacheLoad, RefreshOutcome, RefreshResult
-from brewq.cli import main
+from brewq.cli import _build_command_parser, _build_search_parser, main
 from brewq.columns import CANONICAL_COLUMNS
 from brewq.model import Package
 
@@ -68,7 +70,119 @@ def test_full_help_documents_columns_trending_and_cache(capsys):
     assert "smoothed toward 1.0x" in out
     assert "bundled seed" in out
     assert "--all" in out
-    assert "-r, --refresh" in out
+    assert "--refresh" not in out
+
+
+@pytest.mark.parametrize("command", [[], ["+list"]])
+@pytest.mark.parametrize(("argv", "removed", "replacement"), [
+    (["-v"], "-v", "-c all"), (["--verbose"], "--verbose", "-c all"),
+    (["--url"], "--url", "-c +url"),
+    (["-r"], "-r", "-u/--update"), (["--refresh"], "--refresh", "-u/--update"),
+    (["--limit"], "--limit", "-t/--top"), (["--limit=2"], "--limit", "-t/--top"),
+    (["--analytics"], "--analytics", "-c +90d"), (["-Rr"], "-r", "-u/--update"),
+    (["-vt3"], "-v", "-c all"), (["-t3", "-v"], "-v", "-c all"),
+    (["json", "-r"], "-r", "-u/--update"),
+])
+def test_removed_options_name_replacements_before_io(command, argv, removed, replacement, capsys):
+    with patch("brewq.config.load", side_effect=AssertionError("loaded config")), \
+         patch("brewq.cache.load", side_effect=AssertionError("loaded cache")), \
+         patch("brewq.cache.refresh", side_effect=AssertionError("updated cache")), \
+         pytest.raises(SystemExit) as exc:
+        main([*command, *argv])
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "usage:" in captured.err
+    assert f"{removed} was removed; use {replacement}" in captured.err
+
+
+@pytest.mark.parametrize(("action", "guidance"), [
+    ("+refresh", "use +update"), ("+update-cache", "use +update"),
+    ("+preload", "use +update --offline"),
+    ("+random", "the layout lab is now scripts/random-layout.py in the brewq source repository"),
+])
+def test_removed_actions_name_replacements_before_io(action, guidance, capsys):
+    with patch("brewq.config.load", side_effect=AssertionError("loaded config")), \
+         patch("brewq.cache.refresh", side_effect=AssertionError("updated cache")), \
+         pytest.raises(SystemExit) as exc:
+        main([action])
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert f"{action} was removed; {guidance}" in captured.err
+
+
+def test_parsers_have_no_hidden_flags_or_actions():
+    parsers = [_build_search_parser(), _build_command_parser()]
+    while parsers:
+        for action in parsers.pop()._actions:
+            if action.option_strings:
+                assert action.help != argparse.SUPPRESS
+            if isinstance(action, argparse._SubParsersAction):
+                assert set(action.choices) == {"+list", "+update", "+setup", "+config", "+completion"}
+                assert all(choice.help != argparse.SUPPRESS for choice in action._choices_actions)
+                parsers.extend(action.choices.values())
+
+
+@pytest.mark.parametrize("term", ["--url", "-v"])
+def test_removed_option_after_terminator_remains_a_query(capsys, term):
+    with patch("brewq.cache.load", return_value=_loaded([_pkg(term)])):
+        assert main(["--tsv", "-c", "name", "--", term]) == 0
+    assert capsys.readouterr().out == f"{term}\n"
+
+
+@pytest.mark.parametrize("command", [[], ["+list"]])
+@pytest.mark.parametrize(("columns", "expected"), [
+    (["-c", "-url"], "json\t1.0\tDescription of json\n"),
+    (["-c", "-version"], "json\thttps://example.com\tDescription of json\n"),
+    (["-c", "-desc"], "json\thttps://example.com\t1.0\n"),
+    (["--columns", "-desc"], "json\thttps://example.com\t1.0\n"),
+    (["-c=-url"], "json\t1.0\tDescription of json\n"),
+    (["-c", "-version,+bin"], "json\thttps://example.com\t\tDescription of json\n"),
+])
+def test_leading_minus_column_edits(command, columns, expected, tmp_path, capsys):
+    (tmp_path / "config.toml").write_text(
+        '[output]\ncolumns = ["name", "url", "version", "description"]\n'
+        '[list]\ncolumns = ["name", "url", "version", "description"]\n'
+    )
+    argv = [*command, *columns, "--tsv"]
+    if not command:
+        argv.append("json")
+    with patch("brewq.cache.load", return_value=_loaded([_pkg("json", installed=True)])):
+        assert main(argv) == 0
+    assert capsys.readouterr().out == expected
+
+
+@pytest.mark.parametrize("option", ["-s", "--sort", "-t", "--top"])
+def test_missing_option_value_does_not_trigger_removed_flag_error(option, capsys):
+    with pytest.raises(SystemExit) as exc:
+        main([option, "-v", "json"])
+    assert exc.value.code == 2
+    error = capsys.readouterr().err
+    assert "expected one argument" in error
+    assert "was removed" not in error
+
+
+def test_attached_column_value_is_not_checked_as_short_flags(capsys):
+    with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])):
+        assert main(["--tsv", "-cversion", "ripgrep"]) == 0
+    assert capsys.readouterr().out == "1.0\n"
+
+
+def test_update_offline_bypasses_refresh_and_operational_config(capsys):
+    with patch("brewq.cache.preload_bundled", return_value=(Path("/cache"), 2, 3)) as preload, \
+         patch("brewq.cache.refresh", side_effect=AssertionError("updated cache")), \
+         patch("brewq.config.load", side_effect=AssertionError("loaded config")):
+        assert main(["+update", "--offline"]) == 0
+    preload.assert_called_once_with()
+    assert capsys.readouterr() == ("cache: preloaded 2 formulae, 3 casks at /cache\n", "")
+
+
+def test_update_offline_rejects_force_before_io():
+    with patch("brewq.cache.preload_bundled", side_effect=AssertionError("wrote cache")), \
+         pytest.raises(SystemExit) as exc:
+        main(["+update", "--offline", "--force"])
+    assert exc.value.code == 2
 
 
 def test_main_search_bootstraps_when_seed_is_unavailable(capsys):
@@ -147,7 +261,7 @@ def test_main_search_explicit_top_overrides_default(capsys):
 
 
 @pytest.mark.parametrize("command", [[], ["+list"]])
-@pytest.mark.parametrize("flag", ["-t", "--top", "--limit"])
+@pytest.mark.parametrize("flag", ["-t", "--top"])
 @pytest.mark.parametrize("value", ["0", "-1", "nope", "1.5"])
 def test_main_rejects_invalid_row_limits(command, flag, value):
     with pytest.raises(SystemExit) as exc:
@@ -156,7 +270,7 @@ def test_main_rejects_invalid_row_limits(command, flag, value):
 
 
 @pytest.mark.parametrize("command", [[], ["+list"]])
-@pytest.mark.parametrize("flag", ["-t", "--top", "--limit"])
+@pytest.mark.parametrize("flag", ["-t", "--top"])
 @pytest.mark.parametrize("tsv", [False, True])
 def test_main_limit_spellings_cap_search_and_list(command, flag, tsv, capsys):
     packages = [_pkg(f"tool-{i}", installed=True) for i in range(5)]
@@ -237,14 +351,6 @@ def test_invalid_selection_fails_before_loading_cache(capsys, spec):
     assert "brewq:" in capsys.readouterr().err
 
 
-def test_all_fields_matches_legacy_verbose(capsys):
-    with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])):
-        assert main(["ripgrep", "-c", "all", "--tsv"]) == 0
-        all_fields = capsys.readouterr().out
-        assert main(["ripgrep", "-v", "--tsv"]) == 0
-        assert capsys.readouterr().out == all_fields
-
-
 def test_main_search_columns_short_alias(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
@@ -255,10 +361,10 @@ def test_main_search_columns_short_alias(capsys):
     assert "DESCRIPTION" not in out
 
 
-def test_main_search_verbose_shows_all_fields(capsys):
+def test_main_search_all_columns_shows_all_fields(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "-v"])
+        rc = main(["ripgrep", "-c", "all"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "ripgrep" in out
@@ -276,22 +382,14 @@ def test_main_search_rejects_explicit_auto_column(capsys):
     assert "only available in search configuration" in capsys.readouterr().err
 
 
-def test_main_search_url_flag_adds_url_column(capsys):
+def test_main_search_url_edit_adds_url_column(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "--url"])
+        rc = main(["ripgrep", "-c", "+url"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "URL" in out
     assert "https://example.com" in out
-
-
-def test_main_search_rejects_columns_with_verbose(capsys):
-    pkgs = [_pkg("ripgrep")]
-    with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "-c", "name", "-v"])
-    assert rc == 1
-    assert "cannot use both" in capsys.readouterr().err
 
 
 def test_reverse_puts_the_best_row_last_and_kill_switch_wins(capsys, monkeypatch):
@@ -305,7 +403,7 @@ def test_reverse_puts_the_best_row_last_and_kill_switch_wins(capsys, monkeypatch
     assert capsys.readouterr().out.splitlines() == ["high", "low"]
 
 
-def test_update_flag_and_command_alias_update_before_search(capsys):
+def test_update_flag_and_command_update_before_search(capsys):
     pkgs = [_pkg("ripgrep")]
     with patch("brewq.cache.refresh", return_value=RefreshResult(
              RefreshOutcome.COMPLETE, Path("/cache/brew-all.json")
@@ -427,7 +525,7 @@ def test_installed_views_honor_list_config_and_explicit_columns(command, tmp_pat
         assert main([*command, "-c", "name,type"]) == 0
         output = capsys.readouterr().out
         assert "TYPE" in output and "VERSION" not in output
-        assert main([*command, "-v"]) == 0
+        assert main([*command, "-c", "all"]) == 0
         output = capsys.readouterr().out
         assert "TYPE" in output and "VERSION" in output and "TREND" in output
 
@@ -471,32 +569,32 @@ def test_main_list_columns_short_alias(capsys):
     assert "DESCRIPTION" not in out
 
 
-def test_main_list_url_flag_adds_url_column(capsys):
+def test_main_list_url_edit_adds_url_column(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True),
     ])):
-        rc = main(["+list", "--url"])
+        rc = main(["+list", "-c", "+url"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "URL" in out
     assert "https://example.com" in out
 
 
-def test_main_list_analytics_inserts_installs_before_description(capsys):
+def test_main_list_metric_edit_inserts_installs_before_description(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True, installs_30d=80_000),
     ])):
-        rc = main(["+list", "--analytics"])
+        rc = main(["+list", "-c", "+90d"])
     assert rc == 0
     header = next(line for line in capsys.readouterr().out.splitlines() if "NAME" in line)
     assert header.index("90d") < header.index("DESCRIPTION")
 
 
-def test_main_list_analytics_adds_90d_alongside_other_metric(capsys):
+def test_main_list_columns_show_multiple_metrics(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True, installs_30d=80_000),
     ])):
-        rc = main(["+list", "--analytics", "-c", "name,installs_365d,description"])
+        rc = main(["+list", "-c", "name,installs_365d,90d,description"])
     assert rc == 0
     header = next(line for line in capsys.readouterr().out.splitlines() if "NAME" in line)
     assert "365d" in header
@@ -576,9 +674,9 @@ def test_main_search_tsv(capsys):
     assert capsys.readouterr().out == "ripgrep\t80000\tfalse\n"
 
 
-def test_main_tsv_url_flag_adds_url_field(capsys):
+def test_main_tsv_url_edit_adds_url_field(capsys):
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])):
-        rc = main(["--url", "--tsv", "-c", "name", "ripgrep"])
+        rc = main(["--tsv", "-c", "name,url", "ripgrep"])
     assert rc == 0
     assert capsys.readouterr().out == "ripgrep\thttps://example.com\n"
 
@@ -615,9 +713,11 @@ def test_cache_footer_is_neutral_and_subdued(monkeypatch, source, age, complete,
     assert stderr.getvalue() == f"\033[2m{message}\033[0m\n"
 
 
-def test_random_runs_generated_search(capsys):
+def test_random_script_runs_generated_search(capsys):
+    script = Path(__file__).resolve().parents[1] / "scripts/random-layout.py"
+    random_main = runpy.run_path(str(script))["main"]
     with patch("brewq.cli._cmd_search", return_value=0) as search:
-        rc = main(["+random", "--seed", "7"])
+        rc = random_main(["--seed", "7"])
     assert rc == 0
     generated = capsys.readouterr().err.strip()
     assert generated.startswith("brewq -t ")
@@ -645,14 +745,14 @@ def test_main_refresh_command(capsys):
     mock_refresh.assert_called_once()
 
 
-def test_main_search_refresh_flag_refreshes_before_query(capsys):
+def test_main_search_long_update_flag_updates_before_query(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.refresh", return_value=RefreshResult(
              RefreshOutcome.COMPLETE, Path("/cache/brew-all.json")
          )) as refresh, \
          patch("brewq.cache.load", return_value=_loaded(pkgs)), \
          patch("brewq.cache.status", return_value={"formula_count": 1, "cask_count": 0}):
-        rc = main(["-r", "ripgrep"])
+        rc = main(["--update", "ripgrep"])
     assert rc == 0
     refresh.assert_called_once_with(force=True)
     assert "ripgrep" in capsys.readouterr().out

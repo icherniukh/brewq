@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import pty
+import re
 import select
 import shlex
 import shutil
@@ -64,6 +65,8 @@ def test_printed_completion_is_the_current_zsh_script(tmp_path):
     from brewq.completion import script_errors
 
     assert script_errors(proc.stdout, cli._build_command_parser()) == []
+    for removed in (*cli._REMOVED_OPTIONS, *cli._REMOVED_ACTIONS):
+        assert re.search(rf"(?<![\w-]){re.escape(removed)}(?![\w-])", proc.stdout) is None
     path = tmp_path / "completion.zsh"
     path.write_text(proc.stdout)
     syntax = subprocess.run([zsh, "-n", str(path)], capture_output=True, text=True)
@@ -171,16 +174,20 @@ def _complete_in_zsh(tmp_path: Path, line: str) -> str:
     ("bq -c def", "bq -c default"),
     ("bq -c name,def", "bq -c name,def"),
     ("bq -c +version,hel", "bq -c +version,hel"),
-    ("bq +list --li", "bq +list --limit"),
-    ("bq --li", "bq --limit"),
+    ("bq +list --li", "bq +list --li"),
+    ("bq --li", "bq --li"),
     ("bq +list --to", "bq +list --top"),
     ("bq --inst", "bq --installed"),
     ("bq -i zzcomplete-f", "bq -i zzcomplete-formula"),
-    ("bq +refresh --fo", "bq +refresh --force"),
-    ("bq +update-cache --fo", "bq +update-cache --force"),
+    ("bq +update --fo", "bq +update --force"),
+    ("bq +update --of", "bq +update --offline"),
     ("bq +config pa", "bq +config path"),
     ("bq +completion zs", "bq +completion zsh"),
-    ("bq +ran", "bq +random"),
+    ("bq +ran", "bq +ran"),
+    ("bq +pre", "bq +pre"),
+    ("bq +ref", "bq +ref"),
+    ("bq --ur", "bq --ur"),
+    ("bq +list --ana", "bq +list --ana"),
     ("bq zzcomplete-f", "bq zzcomplete-formula"),
     ("brewq zzcomplete-c", "brewq zzcomplete-cask"),
     ("bq -- zzcomplete-f", "bq -- zzcomplete-formula"),
@@ -192,5 +199,5 @@ def test_actual_zsh_tab_completion(completion_cache, line, expected):
 
 def test_zsh_commands_still_complete_without_cache(tmp_path):
     _require_zsh()
-    assert _complete_in_zsh(tmp_path, "bq +ran").rstrip() == "bq +random"
+    assert _complete_in_zsh(tmp_path, "bq +upd").rstrip() == "bq +update"
     assert not (tmp_path / "brew-all.json").exists()

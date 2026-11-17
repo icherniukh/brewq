@@ -98,7 +98,7 @@ and hidden unless `--all` is given, and a stderr note reports `showing N of M`.
 Machine-readable stdout stays clean.
 
 Both search and `+list` accept `-t N` / `--top N` as the canonical positive cap;
-`--limit N` is an equivalent compatibility alias. `--all` includes package
+`--limit` has been removed. `--all` includes package
 statuses, not unlimited results. The former `-l` installed-filter shorthand is
 retired; use `-i` or `--installed` instead.
 
@@ -122,7 +122,7 @@ Discover fields or adjust a layout without retyping it:
 brewq -c help                       # field reference and short names; no cache needed
 brewq ripgrep -c +version,bin        # keep your layout, add version and binaries
 brewq rust -c +home,-trend           # add homepage, remove trend
-brewq rust -c=-desc                  # remove description; = protects the leading minus
+brewq rust -c -desc                  # remove description; -c=-desc also works
 brewq +list -c +90d,trend             # extend the installed-package layout
 brewq ripgrep -c all --tsv           # every field, with raw values
 brewq ripgrep -c name,version,90d    # exact selection and order
@@ -140,7 +140,7 @@ installed data.
 
 Ordinary search defaults to `name,90d,trending,description`. Installed-only
 search (`-i`) and `+list` use `[list].columns`, defaulting to `name,description`;
-explicit `-c` or `-v` overrides that layout. Long names are constrained to leave
+explicit `-c` overrides that layout. Long names are constrained to leave
 room for descriptions, with package basenames retained where possible. Selected
 metadata cells are clipped when necessary; extremely narrow tables use labeled
 vertical records rather than overflow or omit fields. TSV retains full values.
@@ -202,15 +202,23 @@ the scheduler cooldown. JSON, pickle, and scheduler state use atomic replacement
 ```sh
 brewq +update            # update the register if stale
 brewq +update --force    # force recovery, including a recently corrupted cache
-brewq +preload           # install the bundled catalog as the local cache, offline
+brewq +update --offline  # install the bundled catalog as the local cache, offline
 brewq -u ripgrep        # update the register, then search
 brewq -R -i             # all installed matches, best row last
 brewq +config path
 ```
 
-`+refresh`, `+update-cache`, and `-r` remain compatibility aliases for `+update` /
-`-u`. `--url` still adds the URL column; prefer `-c +url`. `+random [--seed N]`
-remains a development layout lab, not a product discovery workflow.
+`+update --offline` replaces the cache with the bundled catalog without contacting
+Homebrew. It cannot be combined with `--force`.
+
+Compatibility spellings have been removed and fail with a usage error naming
+their replacement: `-v`/`--verbose` → `-c all`, `--url` → `-c +url`,
+`-r`/`--refresh` → `-u`/`--update`, `+refresh`/`+update-cache` → `+update`,
+`--limit` → `-t`/`--top`, `--analytics` → `-c +90d`, and
+`+preload` → `+update --offline`. The former `+random` layout lab is now
+`scripts/random-layout.py` in the brewq source repository. From a checkout, run
+`uv run python scripts/random-layout.py [--seed N]`; it uses the same layouts
+and normal search path.
 
 ## Configuration
 

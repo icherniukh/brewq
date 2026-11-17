@@ -72,9 +72,9 @@ def check_cli_smoke() -> Result:
         ("full_help", _brewq("--full-help"), ["columns:", "trending:", "cache:"]),
         ("search_table", _brewq("-t", "5", "json"), ["NAME"]),
         ("search_tsv", _brewq("--tsv", "-c", "name,30d", "ripgrep"), []),
-        ("list_default", _brewq("list", "-t", "5"), ["NAME", "DESCRIPTION"]),
-        ("list_metrics", _brewq("list", "-c", "name,90d", "--top", "5"), []),
-        ("list_tsv", _brewq("list", "--tsv", "-c", "name,type", "--limit", "5"), []),
+        ("list_default", _brewq("+list", "-t", "5"), ["NAME", "DESCRIPTION"]),
+        ("list_metrics", _brewq("+list", "-c", "name,90d", "--top", "5"), []),
+        ("list_tsv", _brewq("+list", "--tsv", "-c", "name,type", "--top", "5"), []),
     ]
     failures = []
     for name, argv, must_contain in cases:
@@ -124,7 +124,7 @@ def check_installed_shim() -> Result:
     for name in ("brewq", "bq"):
         path = _external_entrypoint(name)
         if path is None:
-            missing = "shortcut missing; run brewq setup" if name == "bq" else "entry point missing from PATH"
+            missing = "shortcut missing; run brewq +setup" if name == "bq" else "entry point missing from PATH"
             failures.append(f"{name}: {missing}")
             continue
         version = subprocess.run(
@@ -148,11 +148,12 @@ def check_installed_shim() -> Result:
 
         for expected in (
             "-c", "--columns", "-i", "--installed", "-u", "--update", "-R", "--reverse",
-            "--top", "--limit", "--full-help", "--tsv",
+            "--top", "--full-help", "--tsv",
         ):
             if not advertised(expected):
                 failures.append(f"brewq help: missing {expected!r}")
-        for removed in ("-l", "--url", "-v", "--verbose", "--preset", "--colors"):
+        for removed in ("-l", "--url", "-v", "--verbose", "-r", "--refresh", "--limit",
+                        "--analytics", "--preset", "--colors"):
             if advertised(removed):
                 failures.append(f"brewq help: stale option {removed!r} is still installed")
 
@@ -182,9 +183,9 @@ def check_installed_shim() -> Result:
         }
         cases = [
             ["-i", "-t", "1", "--tsv", "-c", "name", "zzverify"],
-            ["--installed", "--limit", "1", "--tsv", "-c", "name", "zzverify"],
+            ["--installed", "--top", "1", "--tsv", "-c", "name", "zzverify"],
+            ["+list", "-t", "1", "--tsv", "-c", "name"],
             ["+list", "--top", "1", "--tsv", "-c", "name"],
-            ["+list", "--limit", "1", "--tsv", "-c", "name"],
         ]
         for name in ("brewq", "bq"):
             path = _external_entrypoint(name)

@@ -188,23 +188,12 @@ _ALIASES: dict[str, str] = {
     "homepage": "url",
 }
 
-# Column keys shown by -v/--verbose: every useful package field.
+# Column keys shown by -c all: every useful package field.
 FULL_COLUMNS: list[str] = [
     "name", "type", "version", "installed", "status",
     "installs_30d", "installs_90d", "installs_365d", "trending",
     "binaries", "url", "description",
 ]
-
-
-def with_url(col_defs: list[ColumnDef]) -> list[ColumnDef]:
-    """Return col_defs with the url column added (before description), unless present."""
-    if any(c.key == "url" for c in col_defs):
-        return col_defs
-    url_col = _COLUMN_REGISTRY["url"]
-    desc_idx = next((i for i, c in enumerate(col_defs) if c.key == "description"), None)
-    if desc_idx is None:
-        return [*col_defs, url_col]
-    return [*col_defs[:desc_idx], url_col, *col_defs[desc_idx:]]
 
 
 _RAW_METRIC_KEYS = ("installs_90d", "installs_30d", "installs_365d")

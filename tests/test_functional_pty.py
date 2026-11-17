@@ -149,8 +149,8 @@ def test_pty_default_output_caps_by_real_terminal_height(tmp_path):
 
 
 @pytest.mark.parametrize("command", [[], ["+list"]])
-@pytest.mark.parametrize("flag", ["-t", "--top", "--limit"])
-def test_pty_limit_aliases_cap_both_commands(tmp_path, command, flag):
+@pytest.mark.parametrize("flag", ["-t", "--top"])
+def test_pty_top_spellings_cap_both_commands(tmp_path, command, flag):
     _write_cache(tmp_path, [_formula(f"zzflags-{i}", installed=True) for i in range(8)])
     args = [*command, flag, "2"]
     if not command:

@@ -14,8 +14,17 @@ from brewq import render as render_mod
 from brewq import scheduler as scheduler_mod
 from brewq import seed as seed_mod
 
-_ACTIONS = frozenset({"list", "update", "setup", "config", "random", "completion", "preload"})
-_ACTION_ALIASES = {"+refresh": "+update", "+update-cache": "+update"}
+_ACTIONS = frozenset({"list", "update", "setup", "config", "completion"})
+_REMOVED_OPTIONS = {
+    "-v": "-c all", "--verbose": "-c all", "--url": "-c +url",
+    "-r": "-u/--update", "--refresh": "-u/--update",
+    "--limit": "-t/--top", "--analytics": "-c +90d",
+}
+_REMOVED_ACTIONS = {
+    "+refresh": "use +update", "+update-cache": "use +update",
+    "+preload": "use +update --offline",
+    "+random": "the layout lab is now scripts/random-layout.py in the brewq source repository",
+}
 _FORMATTER = argparse.RawDescriptionHelpFormatter
 
 
@@ -46,7 +55,7 @@ def _error_label() -> str:
         return "Error"
     return "\033[1mError\033[0m"
 _SEARCH_EPILOG = """\
-actions: +list, +update, +preload, +setup, +config path, +completion zsh
+actions: +list, +update, +setup, +config path, +completion zsh
 examples: brewq ripgrep | brewq -i | brewq +update
 """
 
@@ -58,9 +67,10 @@ _UPDATE_EPILOG = """\
 Examples:
   brewq +update
   brewq +update --force
+  brewq +update --offline
   brewq -u ripgrep
 
-+refresh is an alias. BREWQ_NO_REVERSE=1 disables reverse sort.
+--offline installs the bundled catalog without contacting Homebrew.
 """
 
 _CONFIG_EPILOG = """\
@@ -73,11 +83,6 @@ The config file controls default columns and cache freshness.
 _COLUMN_HELP = "fields, +add, -remove, all; -c help lists fields"
 
 _FULL_HELP_DETAILS = """\
-advanced search:
-  --all               include deprecated and disabled packages
-  -r, --refresh       alias for -u/--update
-  --url               add the URL column; prefer -c +url
-
 columns:
 {columns}
 
@@ -130,16 +135,13 @@ def _positive_int(raw: str) -> int:
 
 
 def _add_limit_flag(parser: argparse.ArgumentParser, *, dest: str) -> None:
-    parser.add_argument("-t", "--top", "--limit", dest=dest,
+    parser.add_argument("-t", "--top", dest=dest,
                         type=_positive_int, metavar="N",
                         help="show at most N packages")
 
 
 def _add_column_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-c", "--columns", metavar="COLS", help=_COLUMN_HELP)
-    parser.add_argument("--url", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("-v", "--verbose", action="store_true",
-                        help=argparse.SUPPRESS)
 
 
 def _add_reverse_flag(parser: argparse.ArgumentParser) -> None:
@@ -151,7 +153,6 @@ def _add_reverse_flag(parser: argparse.ArgumentParser) -> None:
 def _add_update_flag(parser: argparse.ArgumentParser, *, then: str) -> None:
     parser.add_argument("-u", "--update", action="store_true",
                         help=f"update the package register, then {then}")
-    parser.add_argument("-r", "--refresh", action="store_true", help=argparse.SUPPRESS)
 
 
 def _build_search_parser() -> argparse.ArgumentParser:
@@ -169,7 +170,8 @@ def _build_search_parser() -> argparse.ArgumentParser:
     _add_limit_flag(parser, dest="top")
     parser.add_argument("-i", "--installed", action="store_true",
                         help="search installed packages only")
-    parser.add_argument("--all", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--all", action="store_true",
+                        help="include deprecated and disabled packages")
     _add_column_flags(parser)
     _add_update_flag(parser, then="search")
     parser.add_argument("--tsv", action="store_true",
@@ -195,8 +197,6 @@ def _build_command_parser() -> argparse.ArgumentParser:
         epilog=_LIST_EPILOG,
         formatter_class=_FORMATTER,
     )
-    lst.add_argument("--analytics", action="store_true",
-                     help=argparse.SUPPRESS)
     _add_reverse_flag(lst)
     _add_column_flags(lst)
     _add_update_flag(lst, then="list")
@@ -211,8 +211,11 @@ def _build_command_parser() -> argparse.ArgumentParser:
         epilog=_UPDATE_EPILOG,
         formatter_class=_FORMATTER,
     )
-    update_p.add_argument("--force", action="store_true",
-                          help="Update even when the register is fresh")
+    update_mode = update_p.add_mutually_exclusive_group()
+    update_mode.add_argument("--force", action="store_true",
+                             help="Update even when the register is fresh")
+    update_mode.add_argument("--offline", action="store_true",
+                             help="Install the bundled catalog without contacting Homebrew")
 
     setup_p = subparsers.add_parser(
         "+setup",
@@ -239,23 +242,6 @@ def _build_command_parser() -> argparse.ArgumentParser:
     )
     completion_p.add_argument("shell", choices=["zsh"], help="Completion shell")
 
-    # random
-    rand_p = subparsers.add_parser(
-        "+random",
-        help="Run a random layout lab search",
-        description="Pick a random query and output layout, then run the normal search path.",
-        formatter_class=_FORMATTER,
-    )
-    rand_p.add_argument("--seed", type=int, metavar="N",
-                        help="Fix the random seed for a reproducible lab run")
-
-    subparsers.add_parser(
-        "+preload",
-        help="Install the bundled catalog as the local cache",
-        description="Write the bundled catalog into the cache directory without contacting Homebrew.",
-        formatter_class=_FORMATTER,
-    )
-
     return parser
 
 
@@ -264,35 +250,7 @@ def _full_help_text() -> str:
     return f"{_build_search_parser().format_help().rstrip()}\n\n{details.rstrip()}\n"
 
 
-def _normalize_argv(argv: list[str]) -> list[str]:
-    if argv and argv[0] in _ACTION_ALIASES:
-        return [_ACTION_ALIASES[argv[0]], *argv[1:]]
-    return argv
-
-
-def _explicit_update(args: argparse.Namespace) -> bool:
-    return bool(getattr(args, "update", False) or getattr(args, "refresh", False))
-
-
-def _validate_column_flags(args: argparse.Namespace) -> str | None:
-    """Return an error string if -c and -v are both set, else None."""
-    if getattr(args, "columns", None) and getattr(args, "verbose", False):
-        return "cannot use both -c/--columns and -v/--verbose"
-    return None
-
-
-def _apply_column_shortcuts(args: argparse.Namespace, col_defs: list) -> list:
-    if getattr(args, "url", False):
-        col_defs = columns_mod.with_url(col_defs)
-    return col_defs
-
-
 def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
-    err = _validate_column_flags(args)
-    if err:
-        print(f"brewq: {err}", file=sys.stderr)
-        return 1
-
     opts = options_mod.build_list_options(args, cfg)
     list_cols_cfg = cfg["list"]["columns"]
 
@@ -302,13 +260,8 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1
 
-    col_defs = _apply_column_shortcuts(args, col_defs)
-
-    if _explicit_update(args) and (failed := _update_register(force=True)):
+    if args.update and (failed := _update_register(force=True)):
         return failed
-
-    if opts.with_analytics:
-        col_defs = _ensure_list_analytics_column(col_defs)
 
     loaded = _load_cache()
     if loaded is None:
@@ -325,17 +278,6 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     _report_view_cap(len(packages), opts.eligible_total, opts.limit)
     _finish_cache_command(loaded, cfg)
     return 0
-
-
-def _ensure_list_analytics_column(col_defs: list) -> list:
-    keys = {c.key for c in col_defs}
-    if "installs_90d" in keys:
-        return col_defs
-    installs_col = columns_mod.resolve("installs_90d", [])[0]
-    desc_idx = next((i for i, col in enumerate(col_defs) if col.key == "description"), None)
-    if desc_idx is None:
-        return [*col_defs, installs_col]
-    return [*col_defs[:desc_idx], installs_col, *col_defs[desc_idx:]]
 
 
 def _update_register(*, force: bool) -> int:
@@ -357,6 +299,10 @@ def _update_register(*, force: bool) -> int:
 
 
 def _cmd_update(args: argparse.Namespace) -> int:
+    if args.offline:
+        path, formulae, casks = cache_mod.preload_bundled()
+        print(f"cache: preloaded {formulae} formulae, {casks} casks at {path}")
+        return 0
     print("Updating register...", file=sys.stderr)
     try:
         result = cache_mod.refresh(force=getattr(args, "force", False))
@@ -413,70 +359,12 @@ def shutil_which(name: str) -> str | None:
     return shutil.which(name)
 
 
-def _cmd_preload() -> int:
-    path, formulae, casks = cache_mod.preload_bundled()
-    print(f"cache: preloaded {formulae} formulae, {casks} casks at {path}")
-    return 0
-
-
 def _cmd_config(args: argparse.Namespace) -> int:
     print(config_mod.config_path())
     return 0
 
 
-_RANDOM_TERMS = (
-    "json", "http", "markdown", "terminal", "pdf", "video",
-    "image", "database", "git", "compress", "encrypt", "monitor",
-    "search", "diff", "sync", "backup", "proxy", "log", "parser",
-    "fuzzy", "render", "stream", "lint", "format", "test",
-)
-_RANDOM_SORTS = ("trending", "trending", "30d", "365d", "90d", "name")
-_RANDOM_LAYOUTS = (
-    None,  # default columns
-    "name,30d,90d,365d,description",
-    "name,type,version,bin,description",
-    "name,30d,url",
-)
-
-
-def _cmd_random(args: argparse.Namespace, cfg: dict) -> int:
-    import random as random_mod
-
-    rng = random_mod.Random(getattr(args, "seed", None))
-    query = rng.choice(_RANDOM_TERMS)
-    sort = rng.choice(_RANDOM_SORTS)
-    top = rng.randint(4, 10)
-    columns = rng.choice(_RANDOM_LAYOUTS)
-
-    command = ["brewq", "-t", str(top), "-s", sort]
-    if columns:
-        command.extend(["-c", columns])
-    command.append(query)
-    print(" ".join(command), file=sys.stderr)
-
-    search_args = argparse.Namespace(
-        query=[query],
-        sort=sort,
-        installed=False,
-        columns=columns,
-        url=False,
-        verbose=False,
-        top=top,
-        update=False,
-        refresh=False,
-        reverse=None,
-        tsv=False,
-        all=False,
-    )
-    return _cmd_search(search_args, cfg)
-
-
 def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
-    err = _validate_column_flags(args)
-    if err:
-        print(f"brewq: {err}", file=sys.stderr)
-        return 1
-
     try:
         opts = options_mod.build_search_options(args, cfg)
     except ValueError as exc:
@@ -501,7 +389,7 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
             print(f"brewq: {exc}", file=sys.stderr)
             return 1
 
-    if _explicit_update(args) and (failed := _update_register(force=True)):
+    if args.update and (failed := _update_register(force=True)):
         return failed
 
     loaded = _load_cache()
@@ -524,8 +412,6 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         except ValueError as exc:
             print(f"brewq: {exc}", file=sys.stderr)
             return 1
-
-    col_defs = _apply_column_shortcuts(args, col_defs)
 
     if opts.tsv_output:
         render_mod.render_tsv(ranked, col_defs, out=sys.stdout)
@@ -629,9 +515,54 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 141
 
 
+def _join_column_edits(argv: list[str]) -> list[str]:
+    normalized = []
+    tokens = iter(argv)
+    for token in tokens:
+        if token == "--":
+            normalized.extend([token, *tokens])
+            break
+        if token in {"-c", "--columns"} and (value := next(tokens, None)) is not None:
+            if value.startswith("-") and value != "--":
+                normalized.append(f"--columns={value}")
+            else:
+                normalized.extend([token, value])
+            if value == "--":
+                normalized.extend(tokens)
+                break
+        else:
+            normalized.append(token)
+    return normalized
+
+
+def _reject_removed_options(argv: list[str], parser: argparse.ArgumentParser) -> None:
+    tokens = iter(argv)
+    for token in tokens:
+        if token == "--":
+            break
+        if not token.startswith("-"):
+            continue
+        flags = ([token.partition("=")[0]] if token.startswith("--")
+                 else [f"-{char}" for char in token[1:]])
+        for position, flag in enumerate(flags):
+            if flag in _REMOVED_OPTIONS:
+                parser.error(f"{flag} was removed; use {_REMOVED_OPTIONS[flag]}")
+            action = parser._option_string_actions.get(flag)
+            if action is None:
+                break
+            if action.nargs != 0:
+                # Attached values stay in this token; separate values are not flags.
+                if token == flag or (not token.startswith("--") and position == len(flags) - 1):
+                    if next(tokens, None) == "--":
+                        return
+                break
+
+
 def _main(argv: Sequence[str] | None = None) -> int:
-    raw_argv = list(argv) if argv is not None else sys.argv[1:]
-    raw_argv = _normalize_argv(raw_argv)
+    raw_argv = _join_column_edits(list(argv) if argv is not None else sys.argv[1:])
+    if raw_argv and raw_argv[0] in _REMOVED_ACTIONS:
+        action = raw_argv[0]
+        _build_search_parser().error(f"{action} was removed; {_REMOVED_ACTIONS[action]}")
     if raw_argv == ["--_complete"]:
         sys.stdout.write("".join(f"{name}\n" for name in cache_mod.completion_names()))
         return 0
@@ -639,7 +570,9 @@ def _main(argv: Sequence[str] | None = None) -> int:
     # Route subcommands only when they are the first token. Search remains the
     # default command even when query terms are named like subcommands.
     if raw_argv and raw_argv[0].startswith("+") and raw_argv[0][1:] in _ACTIONS:
-        args = _build_command_parser().parse_args(raw_argv)
+        parser = _build_command_parser()
+        _reject_removed_options(raw_argv, parser._brewq_subcommands[raw_argv[0]])
+        args = parser.parse_args(raw_argv)
         if args.command == "+update":
             return _cmd_update(args)
         if args.command == "+setup":
@@ -657,10 +590,6 @@ def _main(argv: Sequence[str] | None = None) -> int:
         cfg = config_mod.load()
         if args.command == "+list":
             return _cmd_list(args, cfg)
-        if args.command == "+random":
-            return _cmd_random(args, cfg)
-        if args.command == "+preload":
-            return _cmd_preload()
 
     if raw_argv and raw_argv[0].startswith("+") and raw_argv[0] != "+":
         _build_search_parser().print_help(sys.stderr)
@@ -669,7 +598,9 @@ def _main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     # Flags may sit between query terms. Actions are +tokens, never bare words.
-    args = _build_search_parser().parse_intermixed_args(raw_argv)
+    parser = _build_search_parser()
+    _reject_removed_options(raw_argv, parser)
+    args = parser.parse_intermixed_args(raw_argv)
     if args.full_help:
         print(_full_help_text(), end="")
         return 0

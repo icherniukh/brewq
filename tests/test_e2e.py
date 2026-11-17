@@ -117,8 +117,8 @@ def test_flags_between_terms_and_unknown_action(tmp_path):
     assert "usage:" in bad.stderr
 
 
-def test_preload_action_uses_the_bundled_catalog_without_homebrew(tmp_path):
-    proc = _run(tmp_path, "+preload")
+def test_update_offline_uses_the_bundled_catalog_without_homebrew(tmp_path):
+    proc = _run(tmp_path, "+update", "--offline")
     assert proc.returncode == 0, proc.stderr
     assert "formulae" in proc.stdout
     cache = tmp_path / "cache" / "brew-all.json"

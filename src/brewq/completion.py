@@ -34,7 +34,7 @@ def action_names(commands: argparse.ArgumentParser) -> tuple[str, ...]:
     subparsers = next(
         action for action in commands._actions if isinstance(action, argparse._SubParsersAction)
     ).choices
-    return (*subparsers, "+refresh", "+update-cache")
+    return tuple(subparsers)
 
 
 def script_errors(text: str, commands: argparse.ArgumentParser) -> list[str]:
@@ -54,7 +54,7 @@ def script_errors(text: str, commands: argparse.ArgumentParser) -> list[str]:
     for name in action_names(commands):
         if name not in text:
             errors.append(f"missing action {name}")
-    for marker in ("--_complete", "--sort", "--installed", "--top", "--limit",
+    for marker in ("--_complete", "--sort", "--installed", "--top", "--offline",
                    "--columns", "--reverse", "--tsv"):
         if marker not in text:
             errors.append(f"missing {marker}")
@@ -104,7 +104,6 @@ _brewq() {{
   local CURRENT=$CURRENT
   if (( CURRENT > 2 )) && [[ $words[2] == ({command_pattern}) ]]; then
     local subcommand=$words[2]
-    [[ $subcommand == '+update-cache' || $subcommand == '+refresh' ]] && subcommand=+update
     words=("$words[1] $subcommand" "${{words[@]:2}}")
     (( CURRENT-- ))
     case $subcommand in

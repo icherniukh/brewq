@@ -32,20 +32,22 @@ def test_help_ignores_invalid_operational_config(tmp_path):
     assert proc.stderr == ""
 
 
-def test_compact_help_hides_legacy_and_advanced_shortcuts(tmp_path):
+def test_help_advertises_public_flags_only(tmp_path):
     proc = _run(tmp_path, "--help")
     assert proc.returncode == 0
     assert "-c, --columns" in proc.stdout
     assert "--full-help" in proc.stdout
     assert "-u, --update" in proc.stdout
     assert "-R, --reverse" in proc.stdout
-    for hidden in ("-u, --url", "-v, --verbose", "--all", "-r, --refresh"):
+    for hidden in ("--url", "--verbose", "--limit", "--refresh"):
         assert hidden not in proc.stdout
+
+    assert "--all" in proc.stdout
 
     list_proc = _run(tmp_path, "+list", "--help")
     assert list_proc.returncode == 0
     assert "-u, --update" in list_proc.stdout
-    for hidden in ("--analytics", "-u, --url", "-v, --verbose"):
+    for hidden in ("--analytics", "--url", "--verbose", "--limit", "--refresh"):
         assert hidden not in list_proc.stdout
 
 
@@ -97,7 +99,7 @@ def test_search_and_list_help_share_limit_spellings(tmp_path):
     for command in [(), ("+list",)]:
         proc = _run(tmp_path, *command, "--help")
         assert proc.returncode == 0
-        assert "--top" in proc.stdout and "--limit" in proc.stdout
+        assert "--top" in proc.stdout and "--limit" not in proc.stdout
         assert "-t" in proc.stdout
         if not command:
             assert "-i, --installed" in proc.stdout

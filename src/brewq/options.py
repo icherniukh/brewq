@@ -5,7 +5,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from brewq import columns as columns_mod
 from brewq import spell
 from brewq.model import Package
 
@@ -54,7 +53,6 @@ class SearchOptions:
 
 @dataclass
 class ListOptions:
-    with_analytics: bool = False
     columns_spec: str | list = "default"
     limit: int = 0
     tsv_output: bool = False
@@ -86,11 +84,7 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
     cfg_limit = cfg["output"]["limit"]
     limit = top or cfg_limit
 
-    columns_spec: str | list = (
-        getattr(args, "columns", None)
-        or (list(columns_mod.FULL_COLUMNS) if getattr(args, "verbose", False) else None)
-        or "default"
-    )
+    columns_spec = getattr(args, "columns", None) or "default"
 
     query = list(args.query) if args.query else []
     return SearchOptions(
@@ -107,13 +101,8 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
 
 
 def build_list_options(args: Any, cfg: dict) -> ListOptions:
-    columns_spec: str | list = (
-        getattr(args, "columns", None)
-        or (list(columns_mod.FULL_COLUMNS) if getattr(args, "verbose", False) else None)
-        or "default"
-    )
+    columns_spec = getattr(args, "columns", None) or "default"
     return ListOptions(
-        with_analytics=getattr(args, "analytics", False),
         columns_spec=columns_spec,
         limit=getattr(args, "limit", None) or 0,
         tsv_output=getattr(args, "tsv", False),
