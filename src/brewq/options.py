@@ -8,38 +8,36 @@ from typing import Any
 from brewq import spell
 from brewq.model import Package
 
-# Public names, internal fields, and compatibility aliases share one registry.
-_SORT_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
-    "90d": ("installs_90d", ("installs_90d", "90", "i90", "default")),
-    "30d": ("installs_30d", ("installs_30d", "installs", "install", "30", "i30")),
-    "365d": ("installs_365d", ("installs_365d", "365", "i365", "year", "y", "annual")),
-    "trending": ("trending", ("trend", "hot")),
-    "name": ("name", ("n", "nm", "alpha", "alphabetical", "az", "a-z")),
-}
-SORT_CHOICES: tuple[str, ...] = tuple(_SORT_SPECS)
-_SORT_ALIASES = {
-    alias: internal
-    for public, (internal, aliases) in _SORT_SPECS.items()
-    for alias in (public, *aliases)
+SORT_CHOICES = ("90d", "30d", "365d", "trend", "name")
+# Migration diagnostics only; public sort input is exact.
+_REMOVED_SORTS = {
+    "installs_90d": "90d", "90": "90d", "i90": "90d", "default": "90d",
+    "installs_30d": "30d", "installs": "30d", "install": "30d", "30": "30d", "i30": "30d",
+    "installs_365d": "365d", "365": "365d", "i365": "365d", "year": "365d",
+    "y": "365d", "annual": "365d", "trending": "trend", "hot": "trend",
+    "n": "name", "nm": "name", "alpha": "name", "alphabetical": "name", "az": "name", "a-z": "name",
 }
 
 
 def sort_choices_text() -> str:
     return ", ".join(SORT_CHOICES)
 
+
 def parse_sort(raw: str) -> str:
-    """Resolve a sort alias to a canonical sort field."""
-    normalized = raw.strip().lower()
-    result = _SORT_ALIASES.get(normalized)
-    if result is None:
-        raise ValueError(f"Unknown sort field {raw!r}. Valid: {sort_choices_text()}")
-    return result
+    """Validate the exact public sort field."""
+    replacement = _REMOVED_SORTS.get(raw.strip().lower())
+    if replacement:
+        raise ValueError(f"Sort field {raw!r} was removed; use {replacement!r}")
+    if raw not in SORT_CHOICES:
+        raise ValueError(f"Unknown sort field {raw!r}.{spell.suggestion(raw, SORT_CHOICES)} "
+                         f"Valid: {sort_choices_text()}")
+    return raw
 
 
 @dataclass
 class SearchOptions:
     query: list[str] = field(default_factory=list)
-    sort: str = "installs_90d"
+    sort: str = "90d"
     columns_spec: str | list = "default"
     limit: int = 0
     tsv_output: bool = False
@@ -73,7 +71,7 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
     raw_sort = getattr(args, "sort", None)
     top = getattr(args, "top", None)
 
-    if raw_sort:
+    if raw_sort is not None:
         sort = parse_sort(raw_sort)  # raises ValueError on unknown input
     else:
         cfg_sort = cfg["search"].get("sort", "90d")
@@ -84,7 +82,9 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
     cfg_limit = cfg["output"]["limit"]
     limit = top or cfg_limit
 
-    columns_spec = getattr(args, "columns", None) or "default"
+    columns_spec = getattr(args, "columns", None)
+    if columns_spec is None:
+        columns_spec = "default"
 
     query = list(args.query) if args.query else []
     return SearchOptions(
@@ -101,7 +101,9 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
 
 
 def build_list_options(args: Any, cfg: dict) -> ListOptions:
-    columns_spec = getattr(args, "columns", None) or "default"
+    columns_spec = getattr(args, "columns", None)
+    if columns_spec is None:
+        columns_spec = "default"
     return ListOptions(
         columns_spec=columns_spec,
         limit=getattr(args, "limit", None) or 0,
@@ -231,11 +233,11 @@ def rank(
         degraded.sort(key=lambda p: p.name.lower())
     else:
         def metric_key(p: Package) -> float:
-            if opts.sort == "trending":
+            if opts.sort == "trend":
                 return p.trending if p.trending is not None else float("-inf")
-            if opts.sort == "installs_365d":
+            if opts.sort == "365d":
                 return max(p.installs_365d, -1)
-            if opts.sort == "installs_90d":
+            if opts.sort == "90d":
                 return max(p.installs_90d, -1)
             return max(p.installs_30d, -1)
 

@@ -16,9 +16,9 @@ from brewq import seed as seed_mod
 
 _ACTIONS = frozenset({"list", "update", "setup", "config", "completion"})
 _REMOVED_OPTIONS = {
-    "-v": "-c all", "--verbose": "-c all", "--url": "-c +url",
+    "-v": "-c all", "--verbose": "-c all", "--url": "-c default,url",
     "-r": "-u/--update", "--refresh": "-u/--update",
-    "--limit": "-t/--top", "--analytics": "-c +90d",
+    "--limit": "-t/--top", "--analytics": "-c default,90d",
 }
 _REMOVED_ACTIONS = {
     "+refresh": "use +update", "+update-cache": "use +update",
@@ -80,17 +80,20 @@ Examples:
 The config file controls default columns and cache freshness.
 """
 
-_COLUMN_HELP = "fields, +add, -remove, all; -c help lists fields"
+_COLUMN_HELP = (",".join(columns_mod.CANONICAL_COLUMNS)
+                + "; default/all/help (inst/status: TSV-only)")
 
 _FULL_HELP_DETAILS = """\
 columns:
 {columns}
 
-  Short forms: 30d, 90d, 365d, trend, bin, desc, home.
-  Search default: name,90d,trending,description
-  Installed view (-i or +list): name,description
-  Use -c help for fields and examples. -c +version,bin adds to your layout;
-  -c +home,-trend adds homepage and removes trend; -c all shows every field.
+  Search default: name,90d,trend,desc
+  Installed view (-i or +list): name,desc
+  Exact names only; duplicates keep their first occurrence.
+  -c default,url appends URL to the configured view; -c url,default puts it first.
+  -c all shows all fields available in the output mode; inst/status are TSV-only.
+  Use -c help for fields and examples. Signed +x/-x edits are rejected.
+  default/all can change between releases; scripts should list fields.
 
 trending:
   TREND compares a package's recent monthly install rate with its own earlier
@@ -106,7 +109,7 @@ cache:
   locally. Stale data is shown immediately, then updated in the background.
   `brewq +update` updates stale data; `brewq +update --force` updates now.
   `-R` reverses the chosen order after `-t`, so the best row is last.
-  It is off unless `-R` or `[search] reverse` asks for it. `BREWQ_NO_REVERSE=1`
+  It is off unless `-R` or `reverse` asks for it. `BREWQ_NO_REVERSE=1`
   turns it off immediately, even when the flag or config enables it.
   If analytics fail, counts from the previous user snapshot are retained and
   retried later.
@@ -255,7 +258,7 @@ def _cmd_list(args: argparse.Namespace, cfg: dict) -> int:
     list_cols_cfg = cfg["list"]["columns"]
 
     try:
-        col_defs = columns_mod.select(opts.columns_spec, list_cols_cfg)
+        col_defs = columns_mod.select(opts.columns_spec, list_cols_cfg, tsv=opts.tsv_output)
     except ValueError as exc:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1
@@ -376,18 +379,11 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         return 2
 
     default_cols = cfg["list"]["columns"] if opts.installed_only else cfg["output"]["columns"]
-    col_defs = None
-    if opts.columns_spec != "default":
-        # "default" is resolved after ranking: it may contain "auto", which needs
-        # the top result to pick a representative raw metric column.
-        try:
-            if isinstance(opts.columns_spec, str) and opts.columns_spec.strip().startswith(("+", "-")):
-                columns_mod.parse_edits(opts.columns_spec)
-            else:
-                col_defs = columns_mod.select(opts.columns_spec, default_cols)
-        except ValueError as exc:
-            print(f"brewq: {exc}", file=sys.stderr)
-            return 1
+    try:
+        col_defs = columns_mod.select(opts.columns_spec, default_cols, tsv=opts.tsv_output)
+    except ValueError as exc:
+        print(f"brewq: {exc}", file=sys.stderr)
+        return 1
 
     if args.update and (failed := _update_register(force=True)):
         return failed
@@ -405,13 +401,11 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         _finish_cache_command(loaded, cfg)
         return 0
 
-    if col_defs is None:
-        metric = columns_mod.pick_representative_metric(ranked[0])
-        try:
-            col_defs = columns_mod.select(opts.columns_spec, default_cols, representative_metric=metric)
-        except ValueError as exc:
-            print(f"brewq: {exc}", file=sys.stderr)
-            return 1
+    # Config-only auto expands after ranking, including inside a mixed default list.
+    metric = columns_mod.pick_representative_metric(ranked[0])
+    col_defs = columns_mod.select(
+        opts.columns_spec, default_cols, representative_metric=metric, tsv=opts.tsv_output,
+    )
 
     if opts.tsv_output:
         render_mod.render_tsv(ranked, col_defs, out=sys.stdout)
@@ -432,7 +426,7 @@ def _report_view_cap(shown: int, total: int, limit: int) -> None:
     """Disclose a positive explicit/configured cap; stdout stays machine-clean."""
     if limit <= 0 or shown >= total:
         return
-    print(f"brewq: showing {shown} of {total}; raise -t/--top or clear output.limit",
+    print(f"brewq: showing {shown} of {total}; raise -t/--top or clear config top",
           file=sys.stderr)
 
 

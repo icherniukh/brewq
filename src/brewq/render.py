@@ -115,7 +115,7 @@ def render_table(
     rows: list[list[str]] = [
         [
             col.getter(pkg) + f" {_trend_emphasis(pkg)[0]:<2}"
-            if col.key == "trending" else col.getter(pkg)
+            if col.key == "trend" else col.getter(pkg)
             for col in columns
         ]
         for pkg in packages
@@ -127,7 +127,7 @@ def render_table(
 
     # Find description column index (wrappable)
     desc_idx = next(
-        (i for i, col in enumerate(columns) if col.key == "description"),
+        (i for i, col in enumerate(columns) if col.key == "desc"),
         None,
     )
     name_idx = next((i for i, col in enumerate(columns) if col.key == "name"), None)
@@ -155,7 +155,7 @@ def render_table(
             for col, header, cell in zip(columns, headers, row, strict=False):
                 if col.key == "name" and pkg.installed:
                     cell += " ✔"
-                if col.key == "description" and not any(c.key == "status" for c in columns):
+                if col.key == "desc" and not any(c.key == "status" for c in columns):
                     cell = _plain_status_prefix(pkg) + cell
                 out.write("\n".join(_wrap(f"{header}: {cell}", term_width)) + "\n")
             out.write("\n")
@@ -250,7 +250,7 @@ def render_table(
                         parts.append(f"{cell:<{w}}")
                     continue
 
-                if color and line_no == 0 and col.key == "trending":
+                if color and line_no == 0 and col.key == "trend":
                     parts.append(_trend_emphasis(pkg)[1] + f"{cell:>{w}}" + _RESET)
                     continue
 

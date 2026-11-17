@@ -35,7 +35,7 @@ def _pkg(name: str = "ripgrep", type_: str = "formula", installs_30d: int = 80_0
 
 def test_render_table_contains_header():
     out = io.StringIO()
-    cols = resolve("name,type,installs", [])
+    cols = resolve("name,type,30d", [])
     render_table([_pkg()], cols, out=out)
     text = out.getvalue()
     assert "NAME" in text
@@ -44,7 +44,7 @@ def test_render_table_contains_header():
 
 def test_render_table_metric_columns_use_lowercase_d_headers():
     out = io.StringIO()
-    cols = resolve("installs_30d,installs_90d,installs_365d", [])
+    cols = resolve("30d,90d,365d", [])
     render_table([_pkg()], cols, out=out)
     text = out.getvalue()
     assert "30d" in text
@@ -54,42 +54,42 @@ def test_render_table_metric_columns_use_lowercase_d_headers():
 
 def test_render_table_formats_installs_with_comma():
     out = io.StringIO()
-    cols = resolve("installs", [])
+    cols = resolve("30d", [])
     render_table([_pkg(installs_30d=528_018)], cols, out=out)
     assert "528,018" in out.getvalue()
 
 
 def test_render_table_unknown_installs():
     out = io.StringIO()
-    cols = resolve("installs", [])
+    cols = resolve("30d", [])
     render_table([_pkg(installs_30d=-1)], cols, out=out)
     assert "-" in out.getvalue()
 
 
 def test_render_tsv_uses_raw_values():
     out = io.StringIO()
-    cols = resolve("name,type,installs", [])
+    cols = resolve("name,type,30d", [])
     render_tsv([_pkg()], cols, out=out)
     assert out.getvalue() == "ripgrep\tformula\t80000\n"
 
 
 def test_render_tsv_unknown_installs_are_blank():
     out = io.StringIO()
-    cols = resolve("installs", [])
+    cols = resolve("30d", [])
     render_tsv([_pkg(installs_30d=-1)], cols, out=out)
     assert out.getvalue() == "\n"
 
 
 def test_render_tsv_installed_is_text_boolean():
     out = io.StringIO()
-    cols = resolve("installed", [])
+    cols = resolve("inst", [])
     render_tsv([_pkg(installed=True)], cols, out=out)
     assert out.getvalue() == "true\n"
 
 
 def test_render_tsv_sanitizes_tabs_and_newlines():
     out = io.StringIO()
-    cols = resolve("description", [])
+    cols = resolve("desc", [])
     render_tsv([_pkg(desc="line one\tline two\nline three")], cols, out=out)
     assert out.getvalue() == "line one line two line three\n"
 
@@ -98,7 +98,7 @@ def test_render_table_no_color_when_no_color_env(monkeypatch):
     monkeypatch.setenv("NO_COLOR", "1")
     out = io.StringIO()
     out.isatty = lambda: True  # simulate tty
-    cols = resolve("name,installs", [])
+    cols = resolve("name,30d", [])
     render_table([_pkg(installed=True)], cols, out=out)
     text = out.getvalue()
     assert "ripgrep ✔" in text
@@ -108,7 +108,7 @@ def test_render_table_no_color_when_no_color_env(monkeypatch):
 def test_render_table_non_tty_keeps_plain_installed_marker(monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     out = io.StringIO()
-    cols = resolve("name,installs", [])
+    cols = resolve("name,30d", [])
     render_table([_pkg(installed=True)], cols, out=out)
     assert "ripgrep ✔" in out.getvalue()
     assert "\033[" not in out.getvalue()
@@ -145,14 +145,14 @@ def test_render_table_theme_colors_stay_plain_when_not_a_tty(monkeypatch):
 
 def test_render_table_marks_deprecated_in_default_description():
     out = io.StringIO()
-    cols = resolve("name,version,installs,description", [])
+    cols = resolve("name,ver,30d,desc", [])
     render_table([_pkg(status="deprecated")], cols, out=out)
     assert "(deprecated) Search tool" in out.getvalue()
 
 
 def test_render_table_omits_description_status_prefix_when_status_column_selected():
     out = io.StringIO()
-    cols = resolve("name,status,description", [])
+    cols = resolve("name,status,desc", [])
     render_table([_pkg(status="deprecated")], cols, out=out)
     text = out.getvalue()
     assert "deprecated" in text
@@ -163,7 +163,7 @@ def test_render_table_omits_description_status_prefix_when_status_column_selecte
 def test_render_table_status_prefix_stays_inside_description_column(monkeypatch):
     monkeypatch.setattr("brewq.render._terminal_width", lambda: 80)
     out = io.StringIO()
-    cols = resolve("name,version,installs,description", [])
+    cols = resolve("name,ver,30d,desc", [])
     pkg = _pkg(
         name="zenmap",
         desc="Multi-platform graphical interface for official Nmap Security Scanner",
@@ -178,7 +178,7 @@ def test_render_table_status_prefix_stays_inside_description_column(monkeypatch)
 def test_render_table_status_prefix_clips_instead_of_wrapping(monkeypatch):
     monkeypatch.setattr("brewq.render._terminal_width", lambda: 72)
     out = io.StringIO()
-    cols = resolve("name,version,installs,description", [])
+    cols = resolve("name,ver,30d,desc", [])
     pkg = _pkg(
         name="libgit2@1.7",
         desc="C library of Git core methods that is re-entrant and linkable",
@@ -194,7 +194,7 @@ def test_render_table_status_prefix_clips_instead_of_wrapping(monkeypatch):
 def test_render_table_separator_stays_within_terminal_width(monkeypatch):
     monkeypatch.setattr("brewq.render._terminal_width", lambda: 80)
     out = io.StringIO()
-    cols = resolve("name,version,installs,description", [])
+    cols = resolve("name,ver,30d,desc", [])
     render_table([_pkg()], cols, out=out)
     separator = next(line for line in out.getvalue().splitlines() if line.startswith("─"))
     assert len(separator) <= 80
@@ -203,7 +203,7 @@ def test_render_table_separator_stays_within_terminal_width(monkeypatch):
 def test_render_table_fits_sixty_column_terminal(monkeypatch):
     monkeypatch.setattr("brewq.render._terminal_width", lambda: 60)
     out = io.StringIO()
-    cols = resolve("name,version,installs,description", [])
+    cols = resolve("name,ver,30d,desc", [])
     pkg = _pkg(
         name="wezterm",
         version="20240203-110809,5046fc22",
@@ -215,7 +215,7 @@ def test_render_table_fits_sixty_column_terminal(monkeypatch):
 
 
 @pytest.mark.parametrize("width", [40, 60, 80, 100, 160])
-@pytest.mark.parametrize("spec", ["name,description", "name,type,version,description"])
+@pytest.mark.parametrize("spec", ["name,desc", "name,type,ver,desc"])
 @pytest.mark.parametrize("no_color", [False, True])
 def test_long_names_leave_description_space_and_fit(monkeypatch, width, spec, no_color):
     monkeypatch.setattr("brewq.render._terminal_width", lambda: width)
@@ -235,11 +235,11 @@ def test_long_names_leave_description_space_and_fit(monkeypatch, width, spec, no
     header = lines[0]
     rows = [line for line in lines if "Useful" in line]
     assert len(rows) == 2
-    assert {line.index("Useful") for line in rows} == {header.index("DESCRIPTION")}
+    assert {line.index("Useful") for line in rows} == {header.index("DESC")}
     assert "✔" in rows[0] and "✔" not in rows[1]
     assert "…" in rows[0]
-    if spec == "name,description":
-        assert header.index("DESCRIPTION") <= max(8, width // 4) + 2
+    if spec == "name,desc":
+        assert header.index("DESC") <= max(8, width // 4) + 2
         assert all("Useful description" in line for line in rows)
 
 
@@ -248,7 +248,7 @@ def test_long_tap_names_keep_basename_and_tsv_identity(monkeypatch):
     name = "a-very-long-vendor/tap/ghostty-ai-themes"
     package = _pkg(name, installed=True)
     table, tsv = io.StringIO(), io.StringIO()
-    columns = resolve("name,description", [])
+    columns = resolve("name,desc", [])
     render_table([package], columns, out=table)
     render_tsv([package], columns, out=tsv)
     assert "…/ghostty-ai-themes ✔" in table.getvalue()
@@ -259,17 +259,17 @@ def test_too_narrow_tables_keep_selected_fields_in_vertical_records(monkeypatch)
     monkeypatch.setattr("brewq.render._terminal_width", lambda: 20)
     out = io.StringIO()
     render_table([_pkg("vendor/tap/very-long-name", installed=True, status="disabled")],
-                 resolve("name,type,version,description", []), out=out)
+                 resolve("name,type,ver,desc", []), out=out)
     text = out.getvalue()
     assert all(len(line) <= 20 for line in text.splitlines())
-    assert "NAME:" in text and "TYPE:" in text and "VERSION:" in text
-    assert "DESCRIPTION:" in text and "(disabled)" in text and "✔" in text
+    assert "NAME:" in text and "TYPE:" in text and "VER:" in text
+    assert "DESC:" in text and "(disabled)" in text and "✔" in text
 
 
 def test_render_table_installed_marker_keeps_columns_aligned(monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     out = TtyStringIO()
-    cols = resolve("name,installs,description", [])
+    cols = resolve("name,30d,desc", [])
     render_table(
         [
             _pkg("awscli", installs_30d=202_215),
@@ -297,7 +297,7 @@ def test_render_table_installed_marker_keeps_columns_aligned(monkeypatch):
 )
 def test_trend_bands_match_visible_precision_and_keep_tsv_raw(monkeypatch, trend, cue, style):
     monkeypatch.delenv("NO_COLOR", raising=False)
-    cols = resolve("trending", [])
+    cols = resolve("trend", [])
     table, tsv = TtyStringIO(), io.StringIO()
     with patch.object(Package, "trending", new_callable=PropertyMock, return_value=trend):
         render_table([_pkg()], cols, out=table)
@@ -319,7 +319,7 @@ def test_trend_cues_keep_columns_aligned_and_fit_narrow_terminal(monkeypatch, no
     # Real model data exercises the whole presentation path, without mocked getters.
     for pkg, annual in zip(packages, [240_000, 400_000, 960_000, 2_000_000], strict=True):
         pkg.installs_365d = annual
-    render_table(packages, resolve("name,trend,description", []), out=out)
+    render_table(packages, resolve("name,trend,desc", []), out=out)
     lines = [_strip_ansi(line) for line in out.getvalue().splitlines() if line]
     assert all(len(line) <= 60 for line in lines)
     rows = [line for line in lines if "Search tool" in line]

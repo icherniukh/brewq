@@ -82,8 +82,8 @@ def test_field_help_ignores_config_and_does_not_initialize_cache(tmp_path):
         proc = _run(tmp_path, *args, env_override={"BREWQ_CACHE_MAX_AGE": "invalid"})
         assert proc.returncode == 0
         assert "Output fields" in proc.stdout
-        assert "installs_90d" in proc.stdout and "homepage" in proc.stdout
-        assert "+version,bin" in proc.stdout and "-c all" in proc.stdout
+        assert "90d" in proc.stdout and "url" in proc.stdout
+        assert "default,url" in proc.stdout and "-c all" in proc.stdout
         assert proc.stderr == ""
     assert not (tmp_path / "cache").exists()
 

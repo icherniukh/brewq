@@ -112,6 +112,21 @@ preload is `+update --offline`; the random layout lab lives in
 `scripts/random-layout.py` and runs through normal search with the same layouts.
 Configured caps and the meaning of `--all` are unchanged.
 
+**Columns and configuration (owner decision 2026-11-17,
+`brewq-dec-column-grammar`, implemented by `brewq-field-names`):** `-c` is an
+exact ordered list with reserved `default`, `all`, and `help`; signed edits fail
+with the equivalent concrete list. `default` expands the view's configured
+columns and duplicates keep their first occurrence. This reverses the earlier
+`brewq-h7m`/`brewq-w5h` alias and additive/subtractive grammar. Fields have one
+short spelling matching their header lowercased, shared by columns, sortable
+fields, and config; old names warn or fail with replacements, and typos suggest
+exact names. `inst`/`status` are TSV-only, since tables already show their marker
+and description prefix. Config keys are root-level long option names: `top`,
+`sort`, `reverse`, `columns`, `installed-columns`, `auto-update`, `max-age`.
+Old sectioned keys warn with their new spelling. `--save` and effective-value
+`+config` remain post-M1 (`brewq-dec-config-write`); display-only discovery work
+remains M2. `default`/`all` can evolve; scripts should list concrete fields.
+
 **Installed-view presentation:** the owner brought the narrow-output fix
 forward. Both `+list` and installed-only search use the configured list columns,
 defaulting to name/description; normal search retains its analytics layout.
@@ -121,7 +136,7 @@ TSV keeps full identifiers and values, and cap/sort policies are unchanged.
 
 **Result-limit policy:** terminal height is a layout input only; it never caps
 the result set. Only explicit `-t`/`--top` or a positive configured
-`output.limit` limits results, and any such cap discloses `showing N of M` on
+`top` limits results, and any such cap discloses `showing N of M` on
 stderr while stdout stays machine-clean. This removes silent truncation as a
 source of “brewq missed a package” reports and makes installed-only search and
 `+list` consistent.
@@ -265,7 +280,8 @@ owner choice. Open questions live only in Beads: `bd list --type decision`.
 | --- | --- | --- |
 | Command shape | Search is the root command. Actions are `+` tokens in first position; bare words are queries. | `c56a603` (Nov 5) |
 | Machine output | TSV is the only machine-readable format. | product boundary, AGENTS.md |
-| Columns | `-c` is the one extension point: field reference, `all`, and `+`/`-` edits of the configured layout. One registry owns names and aliases; ambiguous popularity aliases are rejected. | `brewq-h7m`, `brewq-w5h` |
+| Columns | Exact ordered `-c` lists; reserved `default`/`all`/`help`; first occurrence wins. One short name equals its lowercased header across columns, sorts, and config; no aliases. Signed edits error with a concrete replacement list. `inst`/`status` are TSV-only. Reverses the earlier alias/edit grammar. | owner decision 2026-11-17 (`brewq-dec-column-grammar`, `brewq-field-names`); supersedes `brewq-h7m`, `brewq-w5h` |
+| Config | Root long-option keys: `top`, `sort`, `reverse`, `columns`, `installed-columns`, `auto-update`, `max-age`. Old keys/fields warn with replacements; typos suggest exact names. Config-only `auto` remains; `--save` and effective-value `+config` stay post-M1. | owner decision 2026-11-17 (`brewq-field-names`, `brewq-dec-column-grammar`, `brewq-dec-config-write`) |
 | Default sort | Raw 90-day installs. TREND stays in the default table but is not the default sort. | `brewq-253`, `brewq-h7m` |
 | Flag spellings | `-i`/`--installed` (`-l` retired); `-t`/`--top` only (`--limit` removed); no `-n`. | `brewq-brx`, owner decision 2026-11-17 (`brewq-remove-hidden`) |
 | Compatibility removal | Remove `-v`/`--verbose`, `--url`, `-r`/`--refresh`, `+refresh`, `+update-cache`, `--limit`, and `--analytics`, with usage errors naming replacements. Replace `+preload` with `+update --offline`; move `+random` to `scripts/random-layout.py`. | owner decision 2026-11-17 (`brewq-dec-compat-flags`, `brewq-remove-hidden`) |

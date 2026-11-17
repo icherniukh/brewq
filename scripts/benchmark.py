@@ -55,7 +55,7 @@ CASES: tuple[Case, ...] = (
             "-c",
             "from brewq import cache, options; "
             "pkgs=cache.load_packages(); "
-            "opts=options.SearchOptions(query=['json'], sort='installs_30d', limit=10); "
+            "opts=options.SearchOptions(query=['json'], sort='30d', limit=10); "
             "print(len(options.rank(pkgs, opts)))",
         ),
     ),
@@ -71,8 +71,8 @@ CASES: tuple[Case, ...] = (
     ),
     Case(
         "search_wide",
-        "brewq -t 10 -c name,type,version,30d,90d,365d,status,description rust",
-        _brewq("-t", "10", "-c", "name,type,version,30d,90d,365d,status,description", "rust"),
+        "brewq -t 10 -c name,type,ver,30d,90d,365d,desc rust",
+        _brewq("-t", "10", "-c", "name,type,ver,30d,90d,365d,desc", "rust"),
     ),
     Case(
         "list_default",
@@ -86,8 +86,8 @@ CASES: tuple[Case, ...] = (
     ),
     Case(
         "list_tsv",
-        "brewq +list --tsv -c name,type,version --top 25",
-        _brewq("+list", "--tsv", "-c", "name,type,version", "--top", "25"),
+        "brewq +list --tsv -c name,type,ver --top 25",
+        _brewq("+list", "--tsv", "-c", "name,type,ver", "--top", "25"),
     ),
 )
 

@@ -124,7 +124,7 @@ def test_pty_table_is_colored_and_installed_marker_keeps_columns_aligned(tmp_pat
         _formula("zzfunc-short", installs_30d=202_215),
         _formula("zzfunc-longer-name", installed=True, installs_30d=84_739),
     ])
-    rc, output = _run_in_pty(_brewq("-t", "5", "-c", "name,installs", "zzfunc"), _env(tmp_path))
+    rc, output = _run_in_pty(_brewq("-t", "5", "-c", "name,30d", "zzfunc"), _env(tmp_path))
     assert rc == 0
     assert "\x1b[" in output, "real TTY output should carry color codes"
 
@@ -176,10 +176,10 @@ def test_pty_installed_view_preserves_description_with_long_names(tmp_path, comm
     lines = _strip_ansi(output).splitlines()
     assert all(len(line) <= width for line in lines)
     header = next(line for line in lines if line.startswith("NAME"))
-    assert "TYPE" not in header and "VERSION" not in header and "TREND" not in header
+    assert "TYPE" not in header and "VER" not in header and "TREND" not in header
     rows = [line for line in lines if "Useful" in line]
     assert len(rows) == 2
-    assert {line.index("Useful") for line in rows} == {header.index("DESCRIPTION")}
+    assert {line.index("Useful") for line in rows} == {header.index("DESC")}
     assert all("✔" in line for line in rows)
     assert any("…/" in line for line in rows)
 

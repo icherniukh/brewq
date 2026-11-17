@@ -39,49 +39,41 @@ pkgs = [
 
 # --- parse_sort ---
 
-def test_parse_sort_canonical():
-    assert parse_sort("installs_30d") == "installs_30d"
-    assert parse_sort("installs_365d") == "installs_365d"
-    assert parse_sort("name") == "name"
+@pytest.mark.parametrize("name", ["30d", "90d", "365d", "trend", "name"])
+def test_parse_sort_exact(name):
+    assert parse_sort(name) == name
 
 
-def test_parse_sort_30d_aliases():
-    for alias in ("30", "30d", "i30", "installs"):
-        assert parse_sort(alias) == "installs_30d", f"alias {alias!r} failed"
+@pytest.mark.parametrize("old,new", [
+    ("installs_30d", "30d"), ("installs_90d", "90d"), ("installs_365d", "365d"),
+    ("30", "30d"), ("i30", "30d"), ("installs", "30d"), ("install", "30d"),
+    ("90", "90d"), ("i90", "90d"), ("default", "90d"),
+    ("365", "365d"), ("i365", "365d"), ("year", "365d"), ("y", "365d"), ("annual", "365d"),
+    ("trending", "trend"), ("hot", "trend"), ("n", "name"), ("nm", "name"),
+    ("alpha", "name"), ("alphabetical", "name"), ("az", "name"), ("a-z", "name"),
+    (" YEAR ", "365d"),
+])
+def test_removed_sort_names_require_new_spelling(old, new):
+    with pytest.raises(ValueError, match=f"use {new!r}"):
+        parse_sort(old)
 
 
-def test_parse_sort_90d_aliases():
-    for alias in ("90", "90d", "i90"):
-        assert parse_sort(alias) == "installs_90d", f"alias {alias!r} failed"
-
-
-def test_parse_sort_365d_aliases():
-    for alias in ("365", "365d", "i365", "y", "year"):
-        assert parse_sort(alias) == "installs_365d", f"alias {alias!r} failed"
-
-
-def test_parse_sort_name_aliases():
-    for alias in ("n", "nm", "alpha", "name"):
-        assert parse_sort(alias) == "name", f"alias {alias!r} failed"
-
-
-def test_parse_sort_case_insensitive():
-    assert parse_sort("30D") == "installs_30d"
-    assert parse_sort("NAME") == "name"
-    assert parse_sort("Y") == "installs_365d"
+@pytest.mark.parametrize("typo,expected", [("trned", "trend"), ("NAME", "name"), ("30D", "30d")])
+def test_sort_typos_suggest_without_resolving(typo, expected):
+    with pytest.raises(ValueError, match=f"Did you mean {expected!r}"):
+        parse_sort(typo)
 
 
 def test_parse_sort_unknown_raises():
     with pytest.raises(ValueError, match="Unknown sort field") as error:
         parse_sort("bogus")
-    assert str(error.value).endswith("Valid: 90d, 30d, 365d, trending, name")
-    assert "i90" not in str(error.value)
+    assert str(error.value).endswith("Valid: 90d, 30d, 365d, trend, name")
 
 
 # --- rank ---
 
 def test_rank_by_installs_30d():
-    opts = SearchOptions(query=["ripgrep"], sort="installs_30d")
+    opts = SearchOptions(query=["ripgrep"], sort="30d")
     result = rank(list(pkgs), opts)
     assert result[0].name == "ripgrep"
 
@@ -91,7 +83,7 @@ def test_rank_by_trending_prefers_higher_trend_score():
         _pkg("declining-tool", installs_30d=50, installs_90d=600, installs_365d=3_000),
         _pkg("growing-tool", installs_30d=5_000, installs_90d=6_000, installs_365d=6_500),
     ]
-    opts = SearchOptions(query=[], sort="trending")
+    opts = SearchOptions(query=[], sort="trend")
     result = rank(local, opts)
     assert result[0].name == "growing-tool"
 
@@ -101,13 +93,13 @@ def test_rank_by_trending_sorts_unknown_trend_last():
         _pkg("no-history", installs_30d=100, installs_90d=-1, installs_365d=-1),
         _pkg("has-history", installs_30d=100, installs_90d=50, installs_365d=200),
     ]
-    opts = SearchOptions(query=[], sort="trending")
+    opts = SearchOptions(query=[], sort="trend")
     result = rank(local, opts)
     assert result[-1].name == "no-history"
 
 
 def test_default_search_options_sort_is_installs_90d():
-    assert SearchOptions().sort == "installs_90d"
+    assert SearchOptions().sort == "90d"
 
 
 def test_rank_by_90d():
@@ -116,7 +108,7 @@ def test_rank_by_90d():
         _pkg("popular-parser", installs_90d=900_000),
         _pkg("medium-json",    installs_90d=50_000),
     ]
-    opts = SearchOptions(query=[], sort="installs_90d")
+    opts = SearchOptions(query=[], sort="90d")
     result = rank(local, opts)
     assert result[0].name == "popular-parser"
 
@@ -128,7 +120,7 @@ def test_rank_keeps_exact_match_first_then_uses_installs():
         _pkg("popular-parser", installs_30d=900_000, desc="json parser"),
         _pkg("medium-json", installs_30d=50_000, desc="json name match"),
     ]
-    opts = SearchOptions(query=["json"], sort="installs_30d")
+    opts = SearchOptions(query=["json"], sort="30d")
     result = rank(local, opts)
     assert [p.name for p in result] == [
         "json",
@@ -143,14 +135,14 @@ def test_rank_popular_description_match_can_beat_weaker_name_match():
         _pkg("git-small", installs_30d=100, desc="git helper"),
         _pkg("gh", installs_30d=282_000, desc="GitHub command-line tool"),
     ]
-    opts = SearchOptions(query=["git"], sort="installs_30d")
+    opts = SearchOptions(query=["git"], sort="30d")
     result = rank(local, opts)
     assert [p.name for p in result] == ["gh", "git-small"]
 
 
 def test_rank_reverse_flips_after_the_cap():
     local = [_pkg("low", installs_90d=1), _pkg("high", installs_90d=9), _pkg("mid", installs_90d=5)]
-    opts = SearchOptions(query=[], sort="installs_90d", limit=2, reverse=True)
+    opts = SearchOptions(query=[], sort="90d", limit=2, reverse=True)
     assert [pkg.name for pkg in rank(local, opts)] == ["mid", "high"]
 
 
@@ -231,7 +223,7 @@ def test_rank_regex_query_matches_names_and_descriptions():
 def test_rank_deprecated_included_with_no_limit():
     deprecated = _pkg("old-tool", installs_30d=999_999, deprecated=True)
     local = list(pkgs) + [deprecated]
-    opts = SearchOptions(query=[], sort="installs_30d", limit=0)
+    opts = SearchOptions(query=[], sort="30d", limit=0)
     result = rank(local, opts)
     assert any(p.name == "old-tool" for p in result)
 
@@ -239,7 +231,7 @@ def test_rank_deprecated_included_with_no_limit():
 def test_rank_deprecated_excluded_when_results_overflow_view():
     deprecated = _pkg("old-tool", installs_30d=999_999, deprecated=True)
     local = list(pkgs) + [deprecated]  # 6 total
-    opts = SearchOptions(query=[], sort="installs_30d", limit=5)  # limit < total
+    opts = SearchOptions(query=[], sort="30d", limit=5)  # limit < total
     result = rank(local, opts)
     assert all(p.name != "old-tool" for p in result)
 
@@ -247,7 +239,7 @@ def test_rank_deprecated_excluded_when_results_overflow_view():
 def test_rank_deprecated_included_when_results_fit_in_view():
     deprecated = _pkg("old-tool", installs_30d=999_999, deprecated=True)
     local = list(pkgs) + [deprecated]  # 6 total
-    opts = SearchOptions(query=[], sort="installs_30d", limit=10)  # limit > total
+    opts = SearchOptions(query=[], sort="30d", limit=10)  # limit > total
     result = rank(local, opts)
     assert any(p.name == "old-tool" for p in result)
 
@@ -255,7 +247,7 @@ def test_rank_deprecated_included_when_results_fit_in_view():
 def test_rank_deprecated_last_with_show_all():
     deprecated = _pkg("old-tool", installs_30d=999_999, deprecated=True)
     local = list(pkgs) + [deprecated]
-    opts = SearchOptions(query=[], sort="installs_30d", show_all=True, limit=0)
+    opts = SearchOptions(query=[], sort="30d", show_all=True, limit=0)
     result = rank(local, opts)
     assert result[-1].name == "old-tool"
 
@@ -263,7 +255,7 @@ def test_rank_deprecated_last_with_show_all():
 def test_rank_disabled_included_with_no_limit():
     disabled = _pkg("dead-tool", installs_30d=999_999, disabled=True)
     local = list(pkgs) + [disabled]
-    opts = SearchOptions(query=[], sort="installs_30d", limit=0)
+    opts = SearchOptions(query=[], sort="30d", limit=0)
     result = rank(local, opts)
     assert any(p.name == "dead-tool" for p in result)
 
@@ -294,7 +286,7 @@ def _args(**kwargs):
 
 
 def _cfg(limit=0):
-    return {"search": {"sort": "installs_30d"}, "output": {"limit": limit, "columns": []}}
+    return {"search": {"sort": "30d"}, "output": {"limit": limit, "columns": []}}
 
 
 def test_build_search_options_has_no_implicit_limit():
@@ -312,7 +304,7 @@ def test_build_search_options_top_flag_overrides_config():
 
 
 def test_build_search_options_top_without_explicit_sort_uses_config_default():
-    # --top used to hardcode "trending" regardless of config; it should now
+    # --top used to hardcode "trend" regardless of config; it should now
     # just follow whatever sort is otherwise in effect.
     opts = build_search_options(_args(query=["git"], top=5), _cfg())
-    assert opts.sort == "installs_30d"
+    assert opts.sort == "30d"

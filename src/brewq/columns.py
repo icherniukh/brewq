@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from brewq import spell
 from brewq.model import Package
 
 
@@ -54,48 +55,52 @@ _COLUMN_REGISTRY: dict[str, ColumnDef] = {
         "type", "TYPE", "left", lambda p: p.type, lambda p: p.type,
         description="formula or cask",
     ),
-    "version": ColumnDef(
-        "version", "VERSION", "left", _short_version, _version,
+    "ver": ColumnDef(
+        "ver", "VER", "left", _short_version, _version,
         description="installed version when present; otherwise catalog version",
     ),
-    "installs_30d": ColumnDef(
-        "installs_30d", "30d", "right",
+    "30d": ColumnDef(
+        "30d", "30d", "right",
         lambda p: _fmt(p.installs_30d),
         lambda p: "" if p.installs_30d < 0 else p.installs_30d,
         description="installs in the last 30 days",
     ),
-    "installs_90d": ColumnDef(
-        "installs_90d", "90d", "right",
+    "90d": ColumnDef(
+        "90d", "90d", "right",
         lambda p: _fmt(p.installs_90d),
         lambda p: "" if p.installs_90d < 0 else p.installs_90d,
         description="installs in the last 90 days",
     ),
-    "installs_365d": ColumnDef(
-        "installs_365d", "365d", "right",
+    "365d": ColumnDef(
+        "365d", "365d", "right",
         lambda p: _fmt(p.installs_365d),
         lambda p: "" if p.installs_365d < 0 else p.installs_365d,
         description="installs in the last 365 days",
     ),
-    "trending": ColumnDef(
-        "trending", "TREND", "right",
+    "trend": ColumnDef(
+        "trend", "TREND", "right",
         _fmt_trending,
         lambda p: "" if p.trending is None else p.trending,
         description="recent rate relative to the package's earlier rate",
     ),
-    "binaries": ColumnDef(
-        "binaries", "BINARIES", "left",
+    "bin": ColumnDef(
+        "bin", "BIN", "left",
         _fmt_binaries,
         lambda p: "  ".join(p.binaries),
         description="installed executable names, when known",
     ),
-    "description": ColumnDef(
-        "description", "DESCRIPTION", "left",
+    "url": ColumnDef(
+        "url", "URL", "left", lambda p: p.url or "-", lambda p: p.url or "",
+        description="homepage URL",
+    ),
+    "desc": ColumnDef(
+        "desc", "DESC", "left",
         lambda p: p.description or "-",
         lambda p: p.description or "",
         description="package description",
     ),
-    "installed": ColumnDef(
-        "installed", "INST", "left",
+    "inst": ColumnDef(
+        "inst", "INST", "left",
         lambda p: "✔" if p.installed else "",
         lambda p: "true" if p.installed else "false",
         description="whether the package is installed",
@@ -103,10 +108,6 @@ _COLUMN_REGISTRY: dict[str, ColumnDef] = {
     "status": ColumnDef(
         "status", "STATUS", "left", lambda p: p.status, lambda p: p.status,
         description="deprecated or disabled state",
-    ),
-    "url": ColumnDef(
-        "url", "URL", "left", lambda p: p.url or "-", lambda p: p.url or "",
-        description="homepage URL",
     ),
 }
 
@@ -123,80 +124,42 @@ def reference_lines() -> tuple[str, ...]:
 
 
 def selection_help() -> str:
-    """Discover fields and common short names from the shared registry."""
-    short_names = {
-        key: [alias for alias, target in _ALIASES.items() if target == key and len(alias) > 1]
-        for key in CANONICAL_COLUMNS
-    }
-    lines = ["Output fields (use -c with search or list):", ""]
-    width = max(len(key) for key in CANONICAL_COLUMNS) + 2
-    for key, col in _COLUMN_REGISTRY.items():
-        aliases = ", ".join(short_names[key])
-        label = f" [{aliases}]" if aliases else ""
-        lines.append(f"  {key:<{width}}{col.description}{label}")
-    lines.extend([
-        "", "  -c name,version,90d   select fields in this order",
-        "  -c +version,bin      add fields to the configured layout",
-        "  -c +home,-trend      add homepage, remove trend",
-        "  -c=-desc             remove description (use = for a leading minus)",
-        "  -c all               show every field",
-        "  -c default           use the configured layout",
-        "", "Added fields go before description; aliases do not add duplicate fields.",
-        "Fields keep the preceding + or - operation until it changes.",
-    ])
-    return "\n".join(lines) + "\n"
+    """Discover fields and the exact-list grammar from the shared registry."""
+    return "\n".join([
+        "Output fields (use -c with search or +list):", "", *reference_lines(),
+        "", "  inst and status are TSV-only; tables use the name marker and desc prefix.",
+        "  -c name,ver,90d      select fields in this order",
+        "  -c default,url       append URL to the configured view",
+        "  -c url,default       put URL first, then the configured view",
+        "  -c all               every field available in the output mode",
+        "  -c default           use the configured view",
+        "", "Duplicates keep their first occurrence. +x/-x edits are no longer supported.",
+        "default and all may change between releases; scripts should list fields.",
+    ]) + "\n"
 
-# All aliases resolve to canonical registry keys.
-_ALIASES: dict[str, str] = {
-    # name
-    "n": "name",
-    # type
-    "t": "type",
-    # version
-    "v": "version",
-    "ver": "version",
-    # installs_30d
-    "30": "installs_30d",
-    "30d": "installs_30d",
-    "i30": "installs_30d",
-    "installs": "installs_30d",
-    # installs_90d
-    "90": "installs_90d",
-    "90d": "installs_90d",
-    "i90": "installs_90d",
-    # installs_365d
-    "365": "installs_365d",
-    "365d": "installs_365d",
-    "i365": "installs_365d",
-    "y": "installs_365d",
-    "year": "installs_365d",
-    # trending (recent rate vs own historical baseline)
-    "trend": "trending",
-    "hot": "trending",
-    # binaries
-    "bin": "binaries",
-    "bins": "binaries",
-    # description
-    "d": "description",
-    "desc": "description",
-    # installed
-    "i": "installed",
-    "inst": "installed",
-    # url
-    "h": "url",
-    "home": "url",
-    "homepage": "url",
+
+# Migration diagnostics only: these spellings are never accepted or resolved.
+REMOVED_NAMES: dict[str, str] = {
+    "n": "name", "t": "type", "v": "ver", "version": "ver",
+    "30": "30d", "i30": "30d", "installs": "30d", "installs_30d": "30d",
+    "90": "90d", "i90": "90d", "installs_90d": "90d",
+    "365": "365d", "i365": "365d", "y": "365d", "year": "365d",
+    "installs_365d": "365d", "trending": "trend", "hot": "trend",
+    "binaries": "bin", "bins": "bin", "description": "desc", "d": "desc",
+    "installed": "inst", "i": "inst", "h": "url", "home": "url", "homepage": "url",
 }
+TSV_ONLY = frozenset({"inst", "status"})
+
 
 # Column keys shown by -c all: every useful package field.
 FULL_COLUMNS: list[str] = [
-    "name", "type", "version", "installed", "status",
-    "installs_30d", "installs_90d", "installs_365d", "trending",
-    "binaries", "url", "description",
+    "name", "type", "ver", "inst", "status",
+    "30d", "90d", "365d", "trend",
+    "bin", "url", "desc",
 ]
 
 
-_RAW_METRIC_KEYS = ("installs_90d", "installs_30d", "installs_365d")
+_RAW_METRIC_KEYS = ("90d", "30d", "365d")
 
 
 def pick_representative_metric(pkg: Package | None) -> str:
@@ -206,9 +169,9 @@ def pick_representative_metric(pkg: Package | None) -> str:
     window isn't a -1 (unknown)."""
     if pkg is not None:
         for key in _RAW_METRIC_KEYS:
-            if getattr(pkg, key) >= 0:
+            if getattr(pkg, f"installs_{key}") >= 0:
                 return key
-    return "installs_90d"
+    return "90d"
 
 
 def resolve(
@@ -218,67 +181,74 @@ def resolve(
     *,
     allow_auto: bool = True,
 ) -> list[ColumnDef]:
-    """Expand a column spec (comma-joined key list or "default") into ColumnDef list."""
-    if spec == "default":
-        keys = default_columns
-    elif isinstance(spec, list):
-        keys = spec
-    else:
-        keys = [s.strip() for s in spec.split(",")]
-
+    """Resolve exact field names; auto remains a configuration-only pseudo-column."""
+    keys = default_columns if spec == "default" else (
+        spec if isinstance(spec, list) else [s.strip() for s in spec.split(",")]
+    )
     resolved = []
     for key in keys:
         if key == "auto":
             if not allow_auto:
                 raise ValueError("Column 'auto' is only available in search configuration")
-            canonical = representative_metric or "installs_90d"
-        else:
-            canonical = _ALIASES.get(key, key)
-        col = _COLUMN_REGISTRY.get(canonical)
+            key = representative_metric or "90d"
+        col = _COLUMN_REGISTRY.get(key)
         if col is None:
+            if key in REMOVED_NAMES:
+                raise ValueError(f"Column {key!r} was removed; use {REMOVED_NAMES[key]!r}")
             raise ValueError(
-                f"Unknown column {key!r}. Valid: {', '.join(CANONICAL_COLUMNS)}. "
-                "Use '-c help' for fields and examples."
+                f"Unknown column {key!r}.{spell.suggestion(key, CANONICAL_COLUMNS)} "
+                f"Valid: {', '.join(CANONICAL_COLUMNS)}. Use '-c help' for fields and examples."
             )
-        resolved.append(col)
+        if col not in resolved:
+            resolved.append(col)
     return resolved
-
-
-def parse_edits(spec: str) -> list[tuple[str, ColumnDef]]:
-    """Validate edits without resolving a layout's deferred auto metric."""
-    edits = []
-    operation = "+"
-    for token in spec.split(","):
-        token = token.strip()
-        if token.startswith(("+", "-")):
-            operation, token = token[0], token[1:].strip()
-        edits.append((operation, resolve(token, [], allow_auto=False)[0]))
-    return edits
 
 
 def select(
     spec: str | list[str],
     default_columns: list[str],
     representative_metric: str | None = None,
+    *,
+    tsv: bool = False,
 ) -> list[ColumnDef]:
-    """Resolve CLI selection while retaining config-only auto in the base layout."""
-    if spec == "default":
-        return resolve(default_columns, default_columns, representative_metric)
-    if spec == "all":
-        return resolve(FULL_COLUMNS, [])
-    if not isinstance(spec, str) or not spec.strip().startswith(("+", "-")):
-        return resolve(spec, default_columns, allow_auto=False)
+    """Expand ordered lists and reserved words, keeping the first occurrence."""
+    tokens = spec if isinstance(spec, list) else [token.strip() for token in spec.split(",")]
+    if any(token.startswith(("+", "-")) for token in tokens):
+        # Reproduce the retired edits only to print a concrete migration command.
+        selected = resolve(default_columns, [], representative_metric)
+        operation = "+"
+        for token in tokens:
+            if token.startswith(("+", "-")):
+                operation, token = token[0], token[1:].strip()
+            col = resolve(REMOVED_NAMES.get(token, token), [], allow_auto=False)[0]
+            if operation == "-":
+                selected = [existing for existing in selected if existing.key != col.key]
+            elif col not in selected:
+                desc_idx = next((i for i, item in enumerate(selected) if item.key == "desc"),
+                                len(selected))
+                selected.insert(desc_idx, col)
+        equivalent = ",".join(col.key for col in selected)
+        guidance = f"use -c {equivalent}" if equivalent else "select at least one field with -c"
+        raise ValueError(f"Column +x/-x edits were removed; {guidance}")
 
-    selected = resolve(default_columns, default_columns, representative_metric)
-    for operation, col in parse_edits(spec):
-        if operation == "-":
-            selected = [existing for existing in selected if existing.key != col.key]
-        elif not any(existing.key == col.key for existing in selected):
-            desc_idx = next(
-                (i for i, existing in enumerate(selected) if existing.key == "description"),
-                len(selected),
-            )
-            selected.insert(desc_idx, col)
+    selected = []
+    for token in tokens:
+        if token == "default":
+            expanded = resolve(default_columns, [], representative_metric)
+        elif token == "all":
+            expanded = resolve([key for key in FULL_COLUMNS if tsv or key not in TSV_ONLY], [])
+        elif not token:
+            raise ValueError("Empty column name in -c; separate fields with single commas.")
+        else:
+            expanded = resolve(token, [], allow_auto=False)
+        for col in expanded:
+            if not tsv and col.key in TSV_ONLY:
+                shown = ("as the ✔ after the name" if col.key == "inst"
+                         else "as the desc prefix")
+                raise ValueError(f"Column {col.key!r} is TSV-only; use --tsv -c {col.key}. "
+                                 f"Tables show it {shown}.")
+            if col not in selected:
+                selected.append(col)
     if not selected:
         raise ValueError("Column selection must keep at least one field. Use '-c help' for fields.")
     return selected

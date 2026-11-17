@@ -118,3 +118,9 @@ def correct(query: str, dictionary: Iterable[str]) -> list[str]:
         if _levenshtein(norm_word, normalized) < length:
             return [word]
     return []
+
+
+def suggestion(raw: str, choices: Iterable[str]) -> str:
+    """Suggest exact spellings without accepting a correction implicitly."""
+    matches = correct(raw, choices)
+    return f" Did you mean {', '.join(repr(word) for word in matches)}?" if matches else ""

@@ -15,11 +15,11 @@ _RANDOM_TERMS = (
     "search", "diff", "sync", "backup", "proxy", "log", "parser",
     "fuzzy", "render", "stream", "lint", "format", "test",
 )
-_RANDOM_SORTS = ("trending", "trending", "30d", "365d", "90d", "name")
+_RANDOM_SORTS = ("trend", "trend", "30d", "365d", "90d", "name")
 _RANDOM_LAYOUTS = (
     None,  # default columns
-    "name,30d,90d,365d,description",
-    "name,type,version,bin,description",
+    "name,30d,90d,365d,desc",
+    "name,type,ver,bin,desc",
     "name,30d,url",
 )
 

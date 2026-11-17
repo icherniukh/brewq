@@ -83,14 +83,14 @@ other active matches under metric sorts; disabled/deprecated results rank last.
 
 | Search option | Current behavior |
 | --- | --- |
-| `-s`, `--sort FIELD` | `90d` (built-in default), `30d`, `365d`, `trending`, or `name` |
+| `-s`, `--sort FIELD` | `90d` (built-in default), `30d`, `365d`, `trend`, or `name` |
 | `-R`, `--reverse` | Reverse the chosen order after the cap, so the best row is last. Off by default |
 | `-t`, `--top N` | Positive result cap; overrides configuration |
 | `-i`, `--installed` | Filter to packages marked installed |
 | `-u`, `--update` | Update the package register, then search |
 | `--all` | Retain deprecated/disabled matches when the cap would otherwise hide them |
 
-Search cap precedence is `-t`, then positive `output.limit`, then unlimited.
+Search cap precedence is `-t`, then positive config `top`, then unlimited.
 Terminal height never limits results; it only affects layout, so a small window
 cannot silently hide matches. This caps records, not wrapped terminal lines.
 When a positive cap hides matches, deprecated/disabled matches are ranked last
@@ -106,45 +106,49 @@ These output options work for both search and `+list`:
 
 | Output option | Current behavior |
 | --- | --- |
-| `-c`, `--columns COLS` | Select fields, edit the layout with `+`/`-`, or use `all` / `help` |
+| `-c`, `--columns COLS` | Exact ordered fields; `default`, `all`, or `help` |
 | `--tsv` | Selected columns as raw tab-separated rows, without a header |
 
-Canonical columns are `name`, `type`, `version`, `installs_30d`, `installs_90d`,
-`installs_365d`, `trending`, `binaries`, `description`, `installed`, `status`, and
-`url`. Use `30d`, `90d`, and `365d` as short metric names. `bin`/`bins`, `desc`,
-and `home`/`homepage` are also accepted. `trend` and `hot` mean `trending`.
-Prefer canonical names in scripts; ambiguous popularity/score/rank aliases are
-rejected.
+Fields have one exact name shared by `-c`, `-s` (for sortable fields), and
+configuration: `name`, `type`, `ver`, `30d`, `90d`, `365d`, `trend`, `bin`, `url`,
+`desc`, `inst`, `status`. Each matches its table header lowercased. `inst` and
+`status` are TSV-only; selecting them in table mode fails with guidance to use
+`--tsv`. Tables show installed state as the name's ✔ marker and package status
+as a description prefix. Old names and aliases fail with their replacement;
+typos suggest exact names without automatically resolving them.
 
-Discover fields or adjust a layout without retyping it:
+`-c` always specifies the exact ordered list. `default` expands the current
+view's configured columns, and `all` expands every field available in the output
+mode (including `inst` and `status` with `--tsv`). Duplicates keep their first
+occurrence: `url,default` puts URL first; `default,name` leaves the default
+layout unchanged. `help` prints the field reference without loading the cache.
+`default`, `all`, and `help` are reserved words, not field names.
 
 ```sh
-brewq -c help                       # field reference and short names; no cache needed
-brewq ripgrep -c +version,bin        # keep your layout, add version and binaries
-brewq rust -c +home,-trend           # add homepage, remove trend
-brewq rust -c -desc                  # remove description; -c=-desc also works
-brewq +list -c +90d,trend             # extend the installed-package layout
+brewq -c help                        # field reference; no cache needed
+brewq ripgrep -c default,ver,bin      # configured view, then version and binaries
+brewq rust -c name,90d,url,desc       # exact selection without trend
+brewq rust -c url,default            # URL first, then the configured view
+brewq +list -c default,90d,trend     # extend the installed-package view
 brewq ripgrep -c all --tsv           # every field, with raw values
-brewq ripgrep -c name,version,90d    # exact selection and order
+brewq ripgrep -c name,ver,90d        # exact selection and order
 ```
 
-An initial `+` or `-` edits the command's configured layout. Comma-separated
-fields keep the preceding operation until another `+` or `-` switches it.
-Added fields go before description (or at the end if description is absent);
-adding an existing field or removing an absent one has no effect. Aliases resolve
-before editing, so `+90d` won't duplicate `installs_90d`. Keep at least one field.
-`-c default` selects the configured layout. The same controls work with `+list`.
+Signed `+x`/`-x` tokens are rejected with the equivalent full list: for example,
+`-c +url,-trend` says `use -c name,90d,url,desc` with the built-in search layout.
+To omit a field, write the desired list. `default` and `all` can change between
+releases; scripts should list concrete fields. The same controls work with `+list`.
 
 Cask binaries come from declared artifacts; formula binaries require local
 installed data.
 
-Ordinary search defaults to `name,90d,trending,description`. Installed-only
-search (`-i`) and `+list` use `[list].columns`, defaulting to `name,description`;
+Ordinary search defaults to `name,90d,trend,desc`. Installed-only
+search (`-i`) and `+list` use `installed-columns`, defaulting to `name,desc`;
 explicit `-c` overrides that layout. Long names are constrained to leave
 room for descriptions, with package basenames retained where possible. Selected
 metadata cells are clipped when necessary; extremely narrow tables use labeled
 vertical records rather than overflow or omit fields. TSV retains full values.
-`trending` is a smoothed recent-to-historical
+`trend` is a smoothed recent-to-historical
 installation-rate multiplier, not absolute popularity. It is currently visible
 by default but is not the default sort.
 
@@ -164,15 +168,15 @@ remain visible without color.
 
 ```sh
 brewq +list
-brewq +list -c name,type,version,90d,description
+brewq +list -c name,type,ver,90d,desc
 brewq +list -t 10
-brewq +list --tsv -c name,type,version
+brewq +list --tsv -c name,type,ver
 ```
 
 Rows sort by type, then name. Like search, `+list` is uncapped unless you pass a
 shared positive-cap flag; a cap reports `showing N of M` on stderr. Select cached
 analytics through the same `-c` column interface used by search; this never
-fetches analytics on demand. VERSION displays the installed version for installed
+fetches analytics on demand. VER displays the installed version for installed
 rows; the catalog's available version remains separate internally.
 
 ## Cache and recovery
@@ -187,7 +191,7 @@ Homebrew roots. A successful empty inventory clears stale installed markers;
 missing or unreadable roots preserve the last known state. Stale, seed, and
 incomplete snapshots can start a detached background update after a five-minute
 delay, and only when the system is not busy. That process is on by default and
-can use the network. Set `[cache] auto_refresh = false` or
+can use the network. Set `auto-update = false` or
 `BREWQ_NO_AUTO_REFRESH=1` to render the same rows without starting it or writing
 scheduler state. The environment value wins over configuration; an invalid value
 warns and leaves the configured setting. `brewq +update` still runs in the
@@ -212,9 +216,9 @@ brewq +config path
 Homebrew. It cannot be combined with `--force`.
 
 Compatibility spellings have been removed and fail with a usage error naming
-their replacement: `-v`/`--verbose` → `-c all`, `--url` → `-c +url`,
+their replacement: `-v`/`--verbose` → `-c all`, `--url` → `-c default,url`,
 `-r`/`--refresh` → `-u`/`--update`, `+refresh`/`+update-cache` → `+update`,
-`--limit` → `-t`/`--top`, `--analytics` → `-c +90d`, and
+`--limit` → `-t`/`--top`, `--analytics` → `-c default,90d`, and
 `+preload` → `+update --offline`. The former `+random` layout lab is now
 `scripts/random-layout.py` in the brewq source repository. From a checkout, run
 `uv run python scripts/random-layout.py [--seed N]`; it uses the same layouts
@@ -226,20 +230,13 @@ Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless
 `BREWQ_CONFIG` overrides it. Built-in defaults:
 
 ```toml
-[search]
 sort = "90d"
 reverse = false # -R or true reverses after the cap; BREWQ_NO_REVERSE=1 wins
-
-[output]
-columns = ["name", "installs_90d", "trending", "description"]
-limit = 0 # no automatic cap; unlimited when unset
-
-[list]
-columns = ["name", "description"]
-
-[cache]
-max_age_seconds = 86400
-auto_refresh = true # false, or BREWQ_NO_AUTO_REFRESH=1, skips background updates
+top = 0 # unlimited when unset; search default, overridden by -t
+columns = ["name", "90d", "trend", "desc"]
+installed-columns = ["name", "desc"]
+max-age = 86400 # seconds
+auto-update = true # false, or BREWQ_NO_AUTO_REFRESH=1, skips background updates
 ```
 
 `BREWQ_CACHE_DIR` overrides the cache directory, otherwise
@@ -250,7 +247,16 @@ The `auto` pseudo-column in search output configuration selects an available raw
 metric from the top result, preferring 90d, then 30d, then 365d. It is rejected
 in list configuration and explicit `-c`; prefer explicit metric columns in scripts.
 
-Invalid sections, fields, types, ranges, sort names, and columns emit a concise
+Config keys are root-level long option names (including `reverse`); tables such
+as `[output]`, `[search]`, `[list]`, and `[cache]` are no longer accepted. For
+example, `output.limit` warns to use `top`, `[list].columns` warns to use
+`installed-columns`, and `cache.auto_refresh` warns to use `auto-update`.
+Old field names also warn with replacements (for example, `version` → `ver`,
+`trending` → `trend`). Typos offer “did you mean” suggestions; only exact names
+are accepted. Column arrays contain concrete names, with `auto` as the existing
+search-only exception; `default`, `all`, and `help` are CLI selection words.
+
+Invalid keys, types, ranges, sort names, and columns emit a concise
 stderr diagnostic and fall back field-by-field. Invalid `BREWQ_CACHE_MAX_AGE`
 keeps the validated configured value. Help, version, and `+config path` do not
 load operational configuration.

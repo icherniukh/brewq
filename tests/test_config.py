@@ -14,8 +14,8 @@ def isolated_config(monkeypatch, tmp_path):
 def test_defaults_are_complete():
     conf = cfg_mod.load()
     assert conf["search"]["sort"] == "90d"
-    assert conf["output"]["columns"] == ["name", "installs_90d", "trending", "description"]
-    assert conf["list"]["columns"] == ["name", "description"]
+    assert conf["output"]["columns"] == ["name", "90d", "trend", "desc"]
+    assert conf["list"]["columns"] == ["name", "desc"]
     assert conf["cache"]["max_age_seconds"] == 86400
 
 
@@ -36,13 +36,13 @@ def test_loaded_config_can_be_mutated_without_changing_defaults():
     conf = cfg_mod.load()
     conf["output"]["columns"].append("url")
     assert cfg_mod.load()["output"]["columns"] == [
-        "name", "installs_90d", "trending", "description",
+        "name", "90d", "trend", "desc",
     ]
 
 
 def test_env_override_config_path(monkeypatch, tmp_path):
     toml = tmp_path / "brewq.toml"
-    toml.write_text('[output]\ncolumns = ["name"]\n')
+    toml.write_text('columns = ["name"]\n')
     monkeypatch.setenv("BREWQ_CONFIG", str(toml))
     conf = cfg_mod.load()
     assert conf["output"]["columns"] == ["name"]
@@ -73,86 +73,101 @@ def test_corrupt_config_warns_and_uses_defaults(monkeypatch, tmp_path, capsys):
     assert conf["output"]["limit"] == 0
 
 
-@pytest.mark.parametrize("section", ["search", "output", "list", "cache"])
-@pytest.mark.parametrize("value", ["1", "true", '"bad"', "[]"])
-def test_scalar_sections_fall_back(section, value, monkeypatch, tmp_path, capsys):
-    path = tmp_path / "invalid.toml"
-    path.write_text(f"{section} = {value}\n")
-    monkeypatch.setenv("BREWQ_CONFIG", str(path))
-    assert cfg_mod.load() == cfg_mod.DEFAULTS
-    assert f"{section}: expected a table" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize("section,key,value", [
-    ("output", "limit", '"ten"'),
-    ("output", "limit", "-1"),
-    ("output", "limit", "true"),
-    ("output", "limit", "1.5"),
-    ("cache", "max_age_seconds", '"3600"'),
-    ("cache", "max_age_seconds", "-1"),
-    ("cache", "max_age_seconds", "false"),
-    ("cache", "max_age_seconds", "inf"),
-    ("search", "sort", "1"),
-    ("search", "sort", '"unknown"'),
-    ("output", "columns", '"name"'),
-    ("output", "columns", "[]"),
-    ("output", "columns", '["name", 1]'),
-    ("output", "columns", '["name", "unknown"]'),
-    ("list", "columns", '["name", {}]'),
-    ("list", "columns", '[""]'),
+@pytest.mark.parametrize("key,value", [
+    ("top", '"ten"'), ("top", "-1"), ("top", "true"), ("top", "1.5"),
+    ("max-age", '"3600"'), ("max-age", "-1"), ("max-age", "false"), ("max-age", "inf"),
+    ("sort", "1"), ("sort", '"unknown"'),
+    ("columns", '"name"'), ("columns", "[]"), ("columns", '["name", 1]'),
+    ("columns", '["name", "unknown"]'), ("installed-columns", '["name", {}]'),
+    ("installed-columns", '[""]'), ("auto-update", "1"), ("reverse", '"true"'),
 ])
-def test_invalid_fields_retain_default(section, key, value, monkeypatch, tmp_path, capsys):
-    path = tmp_path / "invalid.toml"
-    path.write_text(f"[{section}]\n{key} = {value}\n")
-    monkeypatch.setenv("BREWQ_CONFIG", str(path))
+def test_invalid_fields_retain_default(key, value, tmp_path, capsys):
+    (tmp_path / "config.toml").write_text(f"{key} = {value}\n")
     assert cfg_mod.load() == cfg_mod.DEFAULTS
-    assert f"{section}.{key}:" in capsys.readouterr().err
+    assert f"{key}:" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("age", ["invalid", "", "-1", "1.5", "true", "9" * 5000])
 def test_invalid_env_retains_valid_file_value(age, monkeypatch, tmp_path, capsys):
-    path = tmp_path / "config.toml"
-    path.write_text("[cache]\nmax_age_seconds = 300\n")
+    (tmp_path / "config.toml").write_text("max-age = 300\n")
     monkeypatch.setenv("BREWQ_CACHE_MAX_AGE", age)
     assert cfg_mod.load()["cache"]["max_age_seconds"] == 300
-    err = capsys.readouterr().err
-    assert "BREWQ_CACHE_MAX_AGE: expected a nonnegative integer" in err
-    assert "Traceback" not in err
+    assert "BREWQ_CACHE_MAX_AGE: expected a nonnegative integer" in capsys.readouterr().err
 
 
 def test_valid_fields_survive_invalid_neighbor(tmp_path, capsys):
-    (tmp_path / "config.toml").write_text('[output]\nlimit = "ten"\ncolumns = ["url"]\n')
+    (tmp_path / "config.toml").write_text('top = "ten"\ncolumns = ["url"]\n')
     conf = cfg_mod.load()
     assert conf["output"] == {"limit": 0, "columns": ["url"]}
-    assert "output.limit" in capsys.readouterr().err
+    assert "top:" in capsys.readouterr().err
 
 
-def test_zero_ranges_aliases_and_auto_are_valid(tmp_path, capsys):
+def test_all_long_option_keys(tmp_path, capsys):
     (tmp_path / "config.toml").write_text(
-        '[search]\nsort = " YEAR "\n[output]\nlimit = 0\n'
-        'columns = ["n", "90d", "auto"]\n[list]\ncolumns = ["bin"]\n'
-        '[cache]\nmax_age_seconds = 0\n'
+        'sort = "365d"\nreverse = true\ntop = 0\n'
+        'columns = ["name", "90d", "auto"]\ninstalled-columns = ["bin"]\n'
+        'max-age = 0\nauto-update = false\n'
     )
     conf = cfg_mod.load()
-    assert conf["search"]["sort"] == " YEAR "
-    assert conf["output"] == {"limit": 0, "columns": ["n", "90d", "auto"]}
+    assert conf["search"] == {"sort": "365d", "reverse": True}
+    assert conf["output"] == {"limit": 0, "columns": ["name", "90d", "auto"]}
     assert conf["list"]["columns"] == ["bin"]
-    assert conf["cache"]["max_age_seconds"] == 0
+    assert conf["cache"] == {"max_age_seconds": 0, "auto_refresh": False}
     assert capsys.readouterr().err == ""
 
 
-def test_unknown_settings_are_ignored(tmp_path, capsys):
+@pytest.mark.parametrize("section,key,new", [
+    ("search", "sort", "sort"), ("search", "reverse", "reverse"),
+    ("output", "limit", "top"), ("output", "columns", "columns"),
+    ("list", "columns", "installed-columns"),
+    ("cache", "max_age_seconds", "max-age"), ("cache", "auto_refresh", "auto-update"),
+])
+def test_old_config_keys_name_replacements(section, key, new, tmp_path, capsys):
+    (tmp_path / "config.toml").write_text(f"[{section}]\n{key} = 1\n")
+    assert cfg_mod.load() == cfg_mod.DEFAULTS
+    assert f"{section}.{key} was removed; use root key {new!r}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("old,new", [("limit", "top"), ("auto_refresh", "auto-update"),
+                                    ("max_age_seconds", "max-age")])
+def test_old_bare_config_keys_name_replacements(old, new, tmp_path, capsys):
+    (tmp_path / "config.toml").write_text(f"{old} = 1\n")
+    assert cfg_mod.load() == cfg_mod.DEFAULTS
+    assert f"use {new!r}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("key,value,new", [
+    ("columns", '["version"]', "ver"), ("installed-columns", '["description"]', "desc"),
+    ("sort", '"trending"', "trend"), ("sort", '"installs"', "30d"),
+])
+def test_old_field_names_warn_and_retain_defaults(key, value, new, tmp_path, capsys):
+    (tmp_path / "config.toml").write_text(f"{key} = {value}\n")
+    assert cfg_mod.load() == cfg_mod.DEFAULTS
+    assert f"use {new!r}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("setting,typo,expected", [
+    ("colums", '["name"]', "columns"), ("srot", '"name"', "sort"),
+    ("columns", '["trned"]', "trend"), ("sort", '"naem"', "name"),
+])
+def test_typos_suggest_without_resolving(setting, typo, expected, tmp_path, capsys):
+    (tmp_path / "config.toml").write_text(f"{setting} = {typo}\n")
+    assert cfg_mod.load() == cfg_mod.DEFAULTS
+    assert f"Did you mean {expected!r}" in capsys.readouterr().err
+
+
+def test_unknown_settings_warn(tmp_path, capsys):
     (tmp_path / "config.toml").write_text('[unknown]\nx = 1\n[output]\nunknown = 1\n')
     assert cfg_mod.load() == cfg_mod.DEFAULTS
     err = capsys.readouterr().err
-    assert "unknown section" in err
-    assert "unknown setting output.unknown" in err
+    assert "unknown setting 'unknown'" in err
+    assert "unknown setting 'output.unknown'" in err
 
 
 def test_auto_column_is_search_output_only(tmp_path, capsys):
-    (tmp_path / "config.toml").write_text('[list]\ncolumns = ["name", "auto"]\n')
-    assert cfg_mod.load()["list"]["columns"] == cfg_mod.DEFAULTS["list"]["columns"]
-    assert "list.columns" in capsys.readouterr().err
+    (tmp_path / "config.toml").write_text('installed-columns = ["name", "auto"]\n')
+    assert cfg_mod.load() == cfg_mod.DEFAULTS
+    assert "installed-columns:" in capsys.readouterr().err
 
 
 def test_config_read_error_falls_back(monkeypatch, tmp_path, capsys):

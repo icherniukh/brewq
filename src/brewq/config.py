@@ -7,8 +7,8 @@ import tomllib
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
-from brewq import columns
-from brewq.options import parse_sort, sort_choices_text
+from brewq import columns, spell
+from brewq.options import parse_sort
 
 
 class SearchSettings(TypedDict):
@@ -43,17 +43,31 @@ DEFAULTS: Settings = {
         "reverse": False,
     },
     "output": {
-        "columns": ["name", "installs_90d", "trending", "description"],
+        "columns": ["name", "90d", "trend", "desc"],
         "limit": 0,
     },
     "list": {
-        "columns": ["name", "description"],
+        "columns": ["name", "desc"],
     },
     "cache": {
         "max_age_seconds": 86400,
         "auto_refresh": True,
     },
 }
+
+
+# Root TOML keys match long option spellings; internal settings retain their owners.
+_SETTINGS = {
+    "top": ("output", "limit"),
+    "sort": ("search", "sort"),
+    "reverse": ("search", "reverse"),
+    "columns": ("output", "columns"),
+    "installed-columns": ("list", "columns"),
+    "auto-update": ("cache", "auto_refresh"),
+    "max-age": ("cache", "max_age_seconds"),
+}
+_OLD_SETTINGS = {f"{section}.{key}": name for name, (section, key) in _SETTINGS.items()}
+_OLD_SETTINGS.update({"limit": "top", "auto_refresh": "auto-update", "max_age_seconds": "max-age"})
 
 
 def _config_path() -> Path:
@@ -71,17 +85,11 @@ def _validate_value(section: str, key: str, value: Any) -> None:
             not isinstance(item, str) for item in value
         ):
             raise ValueError("expected a nonempty array of column names")
-        try:
-            columns.resolve(value, [], allow_auto=section == "output")
-        except ValueError:
-            raise ValueError("unknown column name") from None
+        columns.resolve(value, [], allow_auto=section == "output")
     elif section == "search" and key == "sort":
         if not isinstance(value, str):
             raise ValueError("expected a sort field string")
-        try:
-            parse_sort(value)
-        except ValueError:
-            raise ValueError(f"expected one of: {sort_choices_text()}") from None
+        parse_sort(value)
     elif key in {"reverse", "auto_refresh"}:
         if type(value) is not bool:
             raise ValueError("expected true or false")
@@ -102,29 +110,36 @@ def load() -> Settings:
         print(f"brewq: config error ({path}): {exc} — using defaults", file=sys.stderr)
         file_cfg = {}
 
-    # Validation is field-local so one typo does not discard other valid settings.
+    def warn(message: str) -> None:
+        print(f"brewq: config error ({path}): {message} — using default", file=sys.stderr)
+
+    # Validation is field-local so a typo does not discard neighboring settings.
     sections = cast(dict[str, dict[str, Any]], cfg)
-    for section, values in file_cfg.items():
-        if section not in sections:
-            print(f"brewq: config error ({path}): unknown section {section!r} — ignored",
-                  file=sys.stderr)
+    for name, value in file_cfg.items():
+        if name not in _SETTINGS:
+            if name in cfg and isinstance(value, dict) and value:
+                for key in value:
+                    old = f"{name}.{key}"
+                    replacement = _OLD_SETTINGS.get(old)
+                    if replacement:
+                        warn(f"{old} was removed; use root key {replacement!r}")
+                    else:
+                        warn(f"unknown setting {old!r}.{spell.suggestion(key, _SETTINGS)}")
+            elif name in _OLD_SETTINGS:
+                warn(f"{name} was removed; use {_OLD_SETTINGS[name]!r}")
+            else:
+                replacements = [new for new, (section, _) in _SETTINGS.items() if section == name]
+                hint = (f" Use root keys: {', '.join(replacements)}." if replacements
+                        else spell.suggestion(name, _SETTINGS))
+                warn(f"unknown setting {name!r}.{hint}")
             continue
-        if not isinstance(values, dict):
-            print(f"brewq: config error ({path}): {section}: expected a table — using defaults",
-                  file=sys.stderr)
+        section, key = _SETTINGS[name]
+        try:
+            _validate_value(section, key, value)
+        except ValueError as exc:
+            warn(f"{name}: {exc}")
             continue
-        for key, value in values.items():
-            if key not in sections[section]:
-                print(f"brewq: config error ({path}): unknown setting {section}.{key} — ignored",
-                      file=sys.stderr)
-                continue
-            try:
-                _validate_value(section, key, value)
-            except ValueError as exc:
-                print(f"brewq: config error ({path}): {section}.{key}: {exc} — using default",
-                      file=sys.stderr)
-                continue
-            sections[section][key] = value
+        sections[section][key] = value
 
     # An invalid environment override leaves the validated file/default value intact.
     raw_age = os.environ.get("BREWQ_CACHE_MAX_AGE")

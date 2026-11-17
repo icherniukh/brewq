@@ -76,10 +76,10 @@ def test_full_help_documents_columns_trending_and_cache(capsys):
 @pytest.mark.parametrize("command", [[], ["+list"]])
 @pytest.mark.parametrize(("argv", "removed", "replacement"), [
     (["-v"], "-v", "-c all"), (["--verbose"], "--verbose", "-c all"),
-    (["--url"], "--url", "-c +url"),
+    (["--url"], "--url", "-c default,url"),
     (["-r"], "-r", "-u/--update"), (["--refresh"], "--refresh", "-u/--update"),
     (["--limit"], "--limit", "-t/--top"), (["--limit=2"], "--limit", "-t/--top"),
-    (["--analytics"], "--analytics", "-c +90d"), (["-Rr"], "-r", "-u/--update"),
+    (["--analytics"], "--analytics", "-c default,90d"), (["-Rr"], "-r", "-u/--update"),
     (["-vt3"], "-v", "-c all"), (["-t3", "-v"], "-v", "-c all"),
     (["json", "-r"], "-r", "-u/--update"),
 ])
@@ -132,25 +132,28 @@ def test_removed_option_after_terminator_remains_a_query(capsys, term):
 
 
 @pytest.mark.parametrize("command", [[], ["+list"]])
-@pytest.mark.parametrize(("columns", "expected"), [
-    (["-c", "-url"], "json\t1.0\tDescription of json\n"),
-    (["-c", "-version"], "json\thttps://example.com\tDescription of json\n"),
-    (["-c", "-desc"], "json\thttps://example.com\t1.0\n"),
-    (["--columns", "-desc"], "json\thttps://example.com\t1.0\n"),
-    (["-c=-url"], "json\t1.0\tDescription of json\n"),
-    (["-c", "-version,+bin"], "json\thttps://example.com\t\tDescription of json\n"),
+@pytest.mark.parametrize("flags,equivalent", [
+    (["-c", "-url"], "name,ver,desc"),
+    (["-c", "-ver"], "name,url,desc"),
+    (["-c", "-desc"], "name,url,ver"),
+    (["--columns", "-desc"], "name,url,ver"),
+    (["-c=-url"], "name,ver,desc"),
+    (["-c", "-ver,+bin"], "name,url,bin,desc"),
 ])
-def test_leading_minus_column_edits(command, columns, expected, tmp_path, capsys):
+def test_leading_minus_columns_reach_migration_error(command, flags, equivalent, tmp_path, capsys):
     (tmp_path / "config.toml").write_text(
-        '[output]\ncolumns = ["name", "url", "version", "description"]\n'
-        '[list]\ncolumns = ["name", "url", "version", "description"]\n'
+        'columns = ["name", "url", "ver", "desc"]\n'
+        'installed-columns = ["name", "url", "ver", "desc"]\n'
     )
-    argv = [*command, *columns, "--tsv"]
+    argv = [*command, *flags, "--tsv"]
     if not command:
         argv.append("json")
-    with patch("brewq.cache.load", return_value=_loaded([_pkg("json", installed=True)])):
-        assert main(argv) == 0
-    assert capsys.readouterr().out == expected
+    with patch("brewq.cache.load", side_effect=AssertionError("loaded cache")):
+        assert main(argv) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert f"use -c {equivalent}" in captured.err
+    assert "was removed; use -u" not in captured.err
 
 
 @pytest.mark.parametrize("option", ["-s", "--sort", "-t", "--top"])
@@ -165,7 +168,7 @@ def test_missing_option_value_does_not_trigger_removed_flag_error(option, capsys
 
 def test_attached_column_value_is_not_checked_as_short_flags(capsys):
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])):
-        assert main(["--tsv", "-cversion", "ripgrep"]) == 0
+        assert main(["--tsv", "-cver", "ripgrep"]) == 0
     assert capsys.readouterr().out == "1.0\n"
 
 
@@ -305,7 +308,7 @@ def test_config_auto_column_picks_available_window_via_top_result(capsys, tmp_pa
     # built-in default no longer uses it now that installs_90d is a literal
     # default column, but a user can still opt into it via config.toml.
     (tmp_path / "config.toml").write_text(
-        '[output]\ncolumns = ["name", "trending", "auto", "description"]\n'
+        'columns = ["name", "trend", "auto", "desc"]\n'
     )
     pkg = Package(
         name="no-recent-data", type="formula", description="", url="", version="1.0",
@@ -322,43 +325,42 @@ def test_config_auto_column_picks_available_window_via_top_result(capsys, tmp_pa
     assert "90d" not in out
 
 
-@pytest.mark.parametrize(
-    ("argv", "expected"),
-    [(["ripgrep", "-c", "+version,bin", "--tsv"], "ripgrep\t\t\t1.0\t\tDescription of ripgrep\n"),
-     (["ripgrep", "-c", "+home,-trend", "--tsv"], "ripgrep\t\thttps://example.com\tDescription of ripgrep\n"),
-     (["+list", "-c", "+90d,trend", "--tsv"], "ripgrep\t\t\tDescription of ripgrep\n")],
-)
-def test_column_edits_search_and_list_tsv(capsys, argv, expected):
+@pytest.mark.parametrize("argv,expected", [
+    (["ripgrep", "-c", "default,ver,bin", "--tsv"], "ripgrep\t\t\tDescription of ripgrep\t1.0\t\n"),
+    (["ripgrep", "-c", "name,90d,url,desc", "--tsv"], "ripgrep\t\thttps://example.com\tDescription of ripgrep\n"),
+    (["+list", "-c", "name,90d,trend,desc", "--tsv"], "ripgrep\t\t\tDescription of ripgrep\n"),
+])
+def test_exact_columns_search_and_list_tsv(capsys, argv, expected):
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep", installed=True)])):
         assert main(argv) == 0
     assert capsys.readouterr().out == expected
 
 
-def test_edits_respect_custom_layout_and_resolve_auto_after_ranking(capsys, tmp_path):
-    (tmp_path / "config.toml").write_text('[output]\ncolumns = ["auto"]\n')
+def test_mixed_default_resolves_config_auto_after_ranking(capsys, tmp_path):
+    (tmp_path / "config.toml").write_text('columns = ["auto"]\n')
     pkg = _pkg("ripgrep")
     pkg.installs_30d = -1
     pkg.installs_365d = 40_000
     with patch("brewq.cache.load", return_value=_loaded([pkg])):
-        assert main(["ripgrep", "-c=-90d", "--tsv"]) == 0
+        assert main(["ripgrep", "-c", "default,365d", "--tsv"]) == 0
     assert capsys.readouterr().out == "40000\n"
 
 
-@pytest.mark.parametrize("spec", ["+bogus", "+auto", "+version,", "name,bogus"])
+@pytest.mark.parametrize("spec", ["+bogus", "+auto", "+ver,", "name,bogus", ""])
 def test_invalid_selection_fails_before_loading_cache(capsys, spec):
     with patch("brewq.cache.load", side_effect=AssertionError("loaded cache")):
         assert main(["ripgrep", "-c", spec]) == 1
     assert "brewq:" in capsys.readouterr().err
 
 
-def test_main_search_columns_short_alias(capsys):
+def test_main_search_short_field_names(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "-c", "name,installs"])
+        rc = main(["ripgrep", "-c", "name,30d"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "ripgrep" in out
-    assert "DESCRIPTION" not in out
+    assert "DESC" not in out
 
 
 def test_main_search_all_columns_shows_all_fields(capsys):
@@ -369,8 +371,8 @@ def test_main_search_all_columns_shows_all_fields(capsys):
     out = capsys.readouterr().out
     assert "ripgrep" in out
     for header in (
-        "TYPE", "VERSION", "INST", "STATUS", "30d", "90d", "365d", "TREND",
-        "BINARIES", "URL",
+        "TYPE", "VER", "30d", "90d", "365d", "TREND",
+        "BIN", "URL",
     ):
         assert header in out
 
@@ -382,10 +384,10 @@ def test_main_search_rejects_explicit_auto_column(capsys):
     assert "only available in search configuration" in capsys.readouterr().err
 
 
-def test_main_search_url_edit_adds_url_column(capsys):
+def test_main_search_default_expansion_adds_url(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "-c", "+url"])
+        rc = main(["ripgrep", "-c", "default,url"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "URL" in out
@@ -432,12 +434,12 @@ def test_flags_between_query_terms_match_other_placements(capsys):
     assert expected.splitlines() == ["tool-00", "tool-01"]
 
 
-def test_intermixed_regex_and_column_edit(capsys):
+def test_intermixed_regex_and_column_list(capsys):
     pkgs = [_pkg("tool-00"), _pkg("other")]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        assert main(["/tool/", "-c", "+version", "-t", "1"]) == 0
+        assert main(["/tool/", "-c", "default,ver", "-t", "1"]) == 0
     out = capsys.readouterr().out
-    assert "tool-00" in out and "other" not in out and "VERSION" in out
+    assert "tool-00" in out and "other" not in out and "VER" in out
 
 
 def test_option_terminator_keeps_dash_terms_out_of_flags(capsys):
@@ -510,24 +512,24 @@ def test_installed_views_default_to_name_and_description(args, capsys):
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep", installed=True)])):
         assert main(args) == 0
     output = capsys.readouterr().out
-    assert "NAME" in output and "DESCRIPTION" in output
-    assert "TYPE" not in output and "VERSION" not in output
+    assert "NAME" in output and "DESC" in output
+    assert "TYPE" not in output and "VER" not in output
     assert "TREND" not in output and "90d" not in output
 
 
 @pytest.mark.parametrize("command", [["-i"], ["+list"]])
 def test_installed_views_honor_list_config_and_explicit_columns(command, tmp_path, capsys):
-    (tmp_path / "config.toml").write_text('[list]\ncolumns = ["name", "version"]\n')
+    (tmp_path / "config.toml").write_text('installed-columns = ["name", "ver"]\n')
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep", installed=True)])):
         assert main(command) == 0
         output = capsys.readouterr().out
-        assert "VERSION" in output and "DESCRIPTION" not in output
+        assert "VER" in output and "DESC" not in output
         assert main([*command, "-c", "name,type"]) == 0
         output = capsys.readouterr().out
-        assert "TYPE" in output and "VERSION" not in output
+        assert "TYPE" in output and "VER" not in output
         assert main([*command, "-c", "all"]) == 0
         output = capsys.readouterr().out
-        assert "TYPE" in output and "VERSION" in output and "TREND" in output
+        assert "TYPE" in output and "VER" in output and "TREND" in output
 
 
 @pytest.mark.parametrize("argv", [["-t", "2", "tool"], ["+list", "-t", "2"]])
@@ -536,7 +538,7 @@ def test_view_cap_discloses_shown_and_eligible_counts(argv, capsys):
     with patch("brewq.cache.load", return_value=_loaded(packages)):
         assert main(argv) == 0
     captured = capsys.readouterr()
-    assert "brewq: showing 2 of 5; raise -t/--top or clear output.limit" in captured.err
+    assert "brewq: showing 2 of 5; raise -t/--top or clear config top" in captured.err
     assert "showing" not in captured.out
 
 
@@ -558,43 +560,43 @@ def test_main_search_discloses_stale_cache(capsys):
     assert "cache: 25h old; update scheduled" in capsys.readouterr().err
 
 
-def test_main_list_columns_short_alias(capsys):
+def test_main_list_short_field_names(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True),
     ])):
-        rc = main(["+list", "-c", "name,version"])
+        rc = main(["+list", "-c", "name,ver"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "ripgrep" in out
-    assert "DESCRIPTION" not in out
+    assert "DESC" not in out
 
 
-def test_main_list_url_edit_adds_url_column(capsys):
+def test_main_list_default_expansion_adds_url(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True),
     ])):
-        rc = main(["+list", "-c", "+url"])
+        rc = main(["+list", "-c", "default,url"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "URL" in out
     assert "https://example.com" in out
 
 
-def test_main_list_metric_edit_inserts_installs_before_description(capsys):
+def test_main_list_exact_metric_order(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True, installs_30d=80_000),
     ])):
-        rc = main(["+list", "-c", "+90d"])
+        rc = main(["+list", "-c", "name,90d,desc"])
     assert rc == 0
     header = next(line for line in capsys.readouterr().out.splitlines() if "NAME" in line)
-    assert header.index("90d") < header.index("DESCRIPTION")
+    assert header.index("90d") < header.index("DESC")
 
 
 def test_main_list_columns_show_multiple_metrics(capsys):
     with patch("brewq.cache.load", return_value=_loaded([
         _pkg("ripgrep", installed=True, installs_30d=80_000),
     ])):
-        rc = main(["+list", "-c", "name,installs_365d,90d,description"])
+        rc = main(["+list", "-c", "name,365d,90d,desc"])
     assert rc == 0
     header = next(line for line in capsys.readouterr().out.splitlines() if "NAME" in line)
     assert "365d" in header
@@ -669,7 +671,7 @@ def test_main_search_does_not_fetch_tapped_cache_misses(capsys):
 def test_main_search_tsv(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "--tsv", "-c", "name,installs,installed"])
+        rc = main(["ripgrep", "--tsv", "-c", "name,30d,inst"])
     assert rc == 0
     assert capsys.readouterr().out == "ripgrep\t80000\tfalse\n"
 
@@ -723,7 +725,7 @@ def test_random_script_runs_generated_search(capsys):
     assert generated.startswith("brewq -t ")
     args = search.call_args.args[0]
     assert args.query
-    assert args.sort in {"trending", "30d", "90d", "365d", "name"}
+    assert args.sort in {"trend", "30d", "90d", "365d", "name"}
     assert not args.tsv
 
 
@@ -880,3 +882,34 @@ def test_main_list_missing_cache_is_empty_and_quick(capsys):
     captured = capsys.readouterr()
     assert "brew not found" not in captured.err
     assert "cache: bundled seed; update scheduled" in captured.err
+
+
+@pytest.mark.parametrize("command", [["ripgrep"], ["-i"], ["+list"]])
+@pytest.mark.parametrize("field", ["inst", "status"])
+def test_tsv_only_fields_rejected_before_cache(command, field, capsys):
+    with patch("brewq.cache.load", side_effect=AssertionError("loaded cache")):
+        assert main([*command, "-c", field]) == 1
+    assert f"Column {field!r} is TSV-only; use --tsv" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("command", [["ripgrep"], ["+list"]])
+def test_all_tsv_includes_installed_state_and_status(command, capsys):
+    pkg = _pkg("ripgrep", installed=True)
+    pkg.disabled = True
+    with patch("brewq.cache.load", return_value=_loaded([pkg])):
+        assert main([*command, "-c", "all", "--tsv"]) == 0
+    from brewq.columns import FULL_COLUMNS
+
+    cells = capsys.readouterr().out.rstrip("\n").split("\t")
+    assert len(cells) == len(FULL_COLUMNS)
+    assert cells[FULL_COLUMNS.index("inst")] == "true"
+    assert cells[FULL_COLUMNS.index("status")] == "disabled"
+
+
+@pytest.mark.parametrize("command", [[], ["+list"]])
+def test_help_has_inline_field_vocabulary(command, capsys):
+    with pytest.raises(SystemExit) as exc:
+        main([*command, "--help"])
+    assert exc.value.code == 0
+    help_text = capsys.readouterr().out
+    assert ",".join(CANONICAL_COLUMNS) in help_text.replace("\n", "").replace(" ", "")

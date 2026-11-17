@@ -40,7 +40,7 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
         else:
             output = "zzverify-hidden\n" if broken == "filter" else "zzverify-installed-a\n"
             if "--tsv" not in args:
-                output = ("NAME  TYPE  VERSION  DESCRIPTION\n" if broken == "layout" else "NAME  DESCRIPTION\n")
+                output = ("NAME  TYPE  VER  DESC\n" if broken == "layout" else "NAME  DESC\n")
                 output += "zzverify-installed-a  useful description\n"
             assert kwargs["cwd"] != str(SCRIPT.parent.parent)
             assert "PYTHONPATH" not in kwargs["env"]
