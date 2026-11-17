@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from dataclasses import dataclass, field
 from typing import Any
 
 from brewq import spell
 from brewq.model import Package
+from brewq.render import terminal_size
 
 SORT_CHOICES = ("90d", "30d", "365d", "trend", "name")
 # Migration diagnostics only; public sort input is exact.
@@ -42,7 +44,6 @@ class SearchOptions:
     limit: int = 0
     tsv_output: bool = False
     installed_only: bool = False
-    show_all: bool = False
     reverse: bool = False
     regex: re.Pattern[str] | None = None
     # Matches before a positive view limit is applied; used for honest counts.
@@ -68,16 +69,26 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
         cfg_sort = cfg["search"].get("sort", "90d")
         sort = parse_sort(cfg_sort)
 
-    # Terminal height sizes the layout, never the result set: a small window
-    # must not silently discard matches.
-    cfg_limit = cfg["output"]["limit"]
-    limit = top or cfg_limit
+    terminal = sys.stdout.isatty() and not getattr(args, "tsv", False)
+    show_all = getattr(args, "all", False)
+    limit = 0
+    if top is not None:
+        limit = top
+    elif terminal and not show_all:
+        cfg_limit = cfg["output"]["limit"]
+        # Four table lines, cap/cache notices, typed command, next prompt.
+        # shortcut: one record minimum; revisit for viewports below nine lines.
+        limit = max(1, terminal_size().lines - 8) if cfg_limit == "auto" else cfg_limit
+
+    reverse = getattr(args, "reverse", None)
+    if reverse is None:
+        reverse = (show_all or cfg["search"].get("reverse", False)) if terminal else False
 
     columns_spec = getattr(args, "columns", None)
     if columns_spec is None:
         columns_spec = "default"
 
-    query = list(args.query) if args.query else []
+    query = [term for term in (args.query or []) if term]
     return SearchOptions(
         query=query,
         regex=_query_regex(query),
@@ -86,8 +97,7 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
         limit=limit,
         tsv_output=getattr(args, "tsv", False),
         installed_only=getattr(args, "installed", False),
-        show_all=getattr(args, "all", False),
-        reverse=resolve_reverse(getattr(args, "reverse", None), cfg),
+        reverse=resolve_reverse(reverse, cfg),
     )
 
 
@@ -198,11 +208,6 @@ def rank(
     spelled = _spell_names(packages, query_terms) if opts.regex is None else set()
     matches = _matcher(query_terms, opts.regex)
     packages = [p for p in packages if matches(p) or (p.type, p.name) in spelled]
-    # Hide deprecated/disabled only when a view limit exists and results would
-    # overflow it. No view limit (piped/non-TTY) means no constraint.
-    if not opts.show_all and 0 < opts.limit < len(packages):
-        packages = [p for p in packages if not p.deprecated and not p.disabled]
-
     # Push disabled/deprecated to the end
     normal = [p for p in packages if not p.disabled and not p.deprecated]
     degraded = [p for p in packages if p.disabled or p.deprecated]
@@ -220,9 +225,8 @@ def rank(
                 return max(p.installs_90d, -1)
             return max(p.installs_30d, -1)
 
-        def sort_key(p: Package) -> tuple[int, float, int, str]:
+        def sort_key(p: Package) -> tuple[float, int, str]:
             return (
-                -_exact_match_score(p, query_terms),
                 -metric_key(p),
                 -_match_score(p, query_terms),
                 p.name.lower(),
@@ -232,6 +236,8 @@ def rank(
         degraded.sort(key=sort_key)
 
     result = normal + degraded
+    # Stable pinning applies across status groups and every sort, before capping.
+    result.sort(key=lambda p: -_exact_match_score(p, query_terms))
     opts.eligible_total = len(result)
     if opts.limit > 0:
         result = result[: opts.limit]

@@ -110,7 +110,7 @@ added. Hidden compatibility flags/actions are removed with usage errors naming
 their replacements (`brewq-remove-hidden`, `brewq-dec-compat-flags`). Offline
 preload is `+update --offline`; the random layout lab lives in
 `scripts/random-layout.py` and runs through normal search with the same layouts.
-Configured caps and the meaning of `--all` are unchanged.
+Configured caps and `-a`/`--all` follow the result-limit decision below.
 
 **Columns and configuration (owner decision 2026-11-17,
 `brewq-dec-column-grammar`, implemented by `brewq-field-names`):** `-c` is an
@@ -132,7 +132,7 @@ remains M2. `default`/`all` can evolve; scripts should list concrete fields.
 or `-i -s name` for alphabetical output. This reverses the separate `+list` view.
 Installed search keeps `installed-columns`, defaulting to name/description,
 and all TSV fields; normal search retains its analytics layout. Sorts, configured
-caps, reverse, and status filtering follow search policy. There were no flags
+caps, reverse, and status ranking follow search policy. There were no flags
 unique to `+list`; its type/name grouping and exemption from configured caps
 are not retained. The owner brought the narrow-output fix forward.
 Bound the name column, favor description context, and retain requested metadata
@@ -155,11 +155,33 @@ keeps the existing partial-refresh policy: fresh metadata with retained counts
 and an incomplete-analytics diagnostic. Background opt-outs do not block an
 explicit foreground update.
 
-**Result-limit policy:** terminal height is a layout input only; it never caps
-the result set. Only explicit `-t`/`--top` or a positive configured
-`top` limits results, and any such cap discloses `showing N of M` on
-stderr while stdout stays machine-clean. This removes silent truncation as a
-source of “brewq missed a package” reports and applies to installed-only search.
+**Result-limit policy (owner decision 2026-11-17, `brewq-dec-result-cap`,
+implemented by `brewq-height-cap`):** reverse the previous policy that height
+never caps results (`08f39e7`). Terminal tables default to `top = "auto"`,
+with `max(1, rows - 8)` single-line records. The eight-line allowance counts
+leading blank, header, rule, trailing blank, cap notice, cache note, typed
+command, and next prompt. Read both dimensions from stdout's terminal fd;
+`LINES`/`COLUMNS` apply only without a TTY. A positive configured `top` sets a
+fixed terminal cap; `0` preserves explicit unlimited configuration. `-t N`
+overrides both config and `-a`. A cap that hides rows reports `showing N of M`
+on stderr, with a hint naming `-a` and `-t`; M counts every match.
+
+`-a`/`--all` now means uncapped, best-last on a TTY; `--no-reverse` restores
+best-first and `BREWQ_NO_REVERSE=1` still wins. This reverses the previous
+“include deprecated/disabled” meaning. Pipes and TSV ignore configured caps
+and reverse, and `-a` is an ordering no-op there; explicit `-t` and `-R` still
+apply. Wrapped-cell viewport work remains M2 (`brewq-35u`).
+
+**Exact matches (owner decision 2026-11-17, `brewq-dec-result-cap`,
+`brewq-exact-match-hidden`):** remove inactive hiding. Exact name/alias matches
+rank first across status and sort, before caps and optional reversal. Other
+inactive rows rank last; cap totals include all matches.
+
+**Catalog browsing (owner decision 2026-11-17, `brewq-49n`):** omitted and
+explicitly empty queries select the whole catalog before filters, sorting,
+and caps. Bare `bq` lists top overall; `bq -s trend` lists top rising within
+the terminal cap. `bq -i` retains installed-only browsing. This replaces the
+empty-root-query help/error path; nonempty search is unchanged.
 
 ### 4. Clean public Git history in an isolated copy
 
@@ -307,8 +329,10 @@ owner choice. Open questions live only in Beads: `bd list --type decision`.
 | Terminal styling | No ANSI styling per stream when non-TTY, nonempty `NO_COLOR`, `TERM=dumb`, or `--no-color`; preserve plain markers and ANSI-free TSV. | owner decision 2026-11-17 (`brewq-term-dumb`) |
 | Flag spellings | `-i`/`--installed` (`-l` retired); `-t`/`--top` only (`--limit` removed); no `-n`. | `brewq-brx`, owner decision 2026-11-17 (`brewq-remove-hidden`) |
 | Compatibility removal | Remove `-v`/`--verbose`, `--url`, `-r`/`--refresh`, `+refresh`, `+update-cache`, `--limit`, and `--analytics`, with usage errors naming replacements. Replace `+preload` with `+update --offline`; move `+random` to `scripts/random-layout.py`. | owner decision 2026-11-17 (`brewq-dec-compat-flags`, `brewq-remove-hidden`) |
-| Result limits | Terminal height never caps results; only explicit or configured caps do, and they report `showing N of M` on stderr. | `brewq-tty-cap`, `brewq-truncation-hint` |
-| Reverse | `-R` reverses already ranked rows and is off unless requested; `BREWQ_NO_REVERSE=1` disables it. | `8fe9190` (Nov 5) |
+| Result limits | Terminal default `top = "auto"` fits `max(1, rows - 8)` single-line records using stdout fd dimensions. Positive config caps apply only to terminal tables; `-a` removes them, `-t` overrides. Every effective cap discloses all-match counts on stderr, even when all fit. Pipes/TSV need explicit `-t` to cap. Reverses height-never-caps policy. | owner decision 2026-11-17 (`brewq-dec-result-cap`, `brewq-height-cap`); supersedes `08f39e7`/`brewq-tty-cap` resolution |
+| Reverse / all | `-a`/`--all` is uncapped and best-last on terminal tables; `--no-reverse` undoes it. Config reverse is terminal-only; pipes/TSV require explicit `-R`. `BREWQ_NO_REVERSE=1` disables all reversal. | owner decision 2026-11-17 (`brewq-dec-result-cap`, `brewq-height-cap`); revises `8fe9190` |
+| Exact matches / status | Keep inactive matches and count them in cap notices. Exact name/alias matches rank first regardless of status or sort, before capping and reversal; other inactive matches rank last. | owner decision 2026-11-17 (`brewq-dec-result-cap`, `brewq-exact-match-hidden`) |
+| Empty query | Omitted or explicitly empty query selects the whole catalog before normal filters, sort, and caps; `-i` retains installed-only selection. | owner decision 2026-11-17 (`brewq-49n`) |
 | Update | `-u`/`--update` forces a refresh before querying; metadata failure preserves the snapshot, reports on stderr, and queries local data with seed fallback. Query success determines the exit code. `+update` updates directly; `+update --offline` installs the bundled catalog. Compatibility aliases are removed. | owner decision 2026-11-17 (`brewq-update-flag`); spelling established by `brewq-remove-hidden` |
 | Shortcut | The package installs `brewq`; `+setup` links `bq` only when free; no `brq`. | `brewq-bqname` |
 | Background refresh | On by default, with config and environment opt-outs. | `brewq-scheduler-optout` |
@@ -322,9 +346,8 @@ rewrite. Private competitive research stays out of README and release copy.
 Historical calibration and rejected popularity/clamp approaches remain in the
 archive.
 
-Still open but not yet filed as `decision` Beads: exact matches versus
-deprecated/disabled hiding (current behavior differs from closed `brewq-1xx.5`),
-formula/cask grouping, retirement of the legacy prototype, and the external
+Still open but not yet filed as `decision` Beads: formula/cask grouping,
+retirement of the legacy prototype, and the external
 dotfiles migration.
 
 ## Historical record

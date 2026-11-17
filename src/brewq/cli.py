@@ -108,7 +108,9 @@ cache:
   `-u`/`--update` forces an update before the query. If it fails, the error goes
   to stderr and the query uses available local data, including the bundled seed.
   `-R` reverses the chosen order after `-t`, so the best row is last.
-  It is off unless `-R` or `reverse` asks for it. `BREWQ_NO_REVERSE=1`
+  `-a` removes the cap and reverses on a TTY; `--no-reverse` undoes that.
+  Configured caps/reverse apply only to terminal tables; pipes/TSV need explicit flags.
+  `BREWQ_NO_REVERSE=1`
   turns it off immediately, even when the flag or config enables it.
   If analytics fail, counts from the previous user snapshot are retained and
   retried later.
@@ -177,8 +179,8 @@ def _build_search_parser() -> argparse.ArgumentParser:
     _add_limit_flag(parser, dest="top")
     parser.add_argument("-i", "--installed", action="store_true",
                         help="search installed packages only")
-    parser.add_argument("--all", action="store_true",
-                        help="include deprecated and disabled packages")
+    parser.add_argument("-a", "--all", action="store_true",
+                        help="show all matches, best last on a TTY (--no-reverse undoes)")
     _add_column_flags(parser)
     _add_update_flag(parser, then="search")
     _add_color_flag(parser)
@@ -336,10 +338,6 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         print(f"brewq: {exc}", file=sys.stderr)
         return 1
 
-    if not opts.query and not opts.installed_only:
-        _build_search_parser().print_help()
-        return 2
-
     default_cols = cfg["list"]["columns"] if opts.installed_only else cfg["output"]["columns"]
     try:
         col_defs = columns_mod.select(opts.columns_spec, default_cols, tsv=opts.tsv_output)
@@ -360,6 +358,7 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
     if not ranked:
         query_str = " ".join(opts.query) if opts.query else "(installed filter)"
         print(f"No results for: {query_str}", file=sys.stderr)
+        _report_view_cap(0, opts.eligible_total, opts.limit)
         _finish_cache_command(loaded, cfg, no_color=args.no_color)
         return 0
 
@@ -386,10 +385,10 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
 
 
 def _report_view_cap(shown: int, total: int, limit: int) -> None:
-    """Disclose a positive explicit/configured cap; stdout stays machine-clean."""
+    """Disclose a cap that hid rows; stdout stays machine-clean."""
     if limit <= 0 or shown >= total:
         return
-    print(f"brewq: showing {shown} of {total}; raise -t/--top or clear config top",
+    print(f"brewq: showing {shown} of {total}; -a for all, -t N for a count",
           file=sys.stderr)
 
 

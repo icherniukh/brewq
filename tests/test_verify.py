@@ -26,6 +26,7 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
             output = f"brewq {version}\n"
         elif args == ["--help"]:
             output = "-c, --columns --full-help --tsv --top -u, --update -R, --reverse"
+            output += " -a, --all --no-reverse"
             if broken != "old-help":
                 output += " -i, --installed"
             if broken != "no-color":
@@ -45,6 +46,8 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
                 output = zsh_script(_build_search_parser(), _build_command_parser())
         else:
             output = "zzverify-hidden\n" if broken == "filter" else "zzverify-installed-a\n"
+            if "-a" in args and broken != "filter":
+                output = "zzverify-hidden\nzzverify-installed-a\nzzverify-installed-b\n"
             if "--tsv" not in args:
                 output = ("NAME  TYPE  VER  DESC\n" if broken == "layout" else "NAME  DESC\n")
                 output += "zzverify-installed-a  useful description\n"

@@ -163,6 +163,8 @@ def _complete_in_zsh(tmp_path: Path, line: str) -> str:
 @pytest.mark.parametrize(("line", "expected"), [
     ("bq --so", "bq --sort"),
     ("bq --no-c", "bq --no-color"),
+    ("bq --al", "bq --all"),
+    ("bq --no-rev", "bq --no-reverse"),
     ("bq --upd", "bq --update"),
     ("bq -i --upd", "bq -i --update"),
     ("bq +update --no-c", "bq +update --no-color"),

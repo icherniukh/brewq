@@ -60,8 +60,17 @@ def _use_color(out: TextIO, *, no_color: bool = False) -> bool:
     return hasattr(out, "isatty") and out.isatty()
 
 
+def terminal_size() -> os.terminal_size:
+    if sys.stdout.isatty():
+        try:
+            return os.get_terminal_size(sys.stdout.fileno())
+        except (OSError, ValueError):
+            return os.terminal_size((100, 24))
+    return shutil.get_terminal_size((100, 24))
+
+
 def _terminal_width() -> int:
-    return shutil.get_terminal_size((100, 24)).columns
+    return terminal_size().columns
 
 
 def _wrap(text: str, width: int) -> list[str]:

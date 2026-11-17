@@ -54,6 +54,13 @@ def test_cases_do_not_invoke_removed_cache_subcommand():
     assert all(case.argv[-2:] != ("cache", "status") for case in bench.CASES)
 
 
+def test_catalog_benchmark_cases_cover_default_and_trend_browsing():
+    bench = _load_benchmark_module()
+    default, trend = bench.select_cases(["catalog_default", "catalog_trend"])
+    assert default.argv[-2:] == ("-m", "brewq.cli")
+    assert trend.argv[-2:] == ("-s", "trend")
+
+
 def test_format_markdown_table_contains_core_columns():
     bench = _load_benchmark_module()
     summaries = [

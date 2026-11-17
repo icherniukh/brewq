@@ -60,6 +60,16 @@ CASES: tuple[Case, ...] = (
         ),
     ),
     Case(
+        "catalog_default",
+        "brewq",
+        _brewq(),
+    ),
+    Case(
+        "catalog_trend",
+        "brewq -s trend",
+        _brewq("-s", "trend"),
+    ),
+    Case(
         "search_table",
         "brewq -t 10 json",
         _brewq("-t", "10", "json"),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 import re
 from unittest.mock import PropertyMock, patch
 
@@ -9,6 +10,24 @@ import pytest
 from brewq.columns import resolve
 from brewq.model import Package
 from brewq.render import render_table, render_tsv
+
+
+@pytest.mark.parametrize("tty", [False, True])
+def test_terminal_size_uses_stdout_fd_before_environment(monkeypatch, tty):
+    from brewq.render import terminal_size
+
+    monkeypatch.setenv("LINES", "10")
+    monkeypatch.setenv("COLUMNS", "140")
+    with patch("brewq.render.sys.stdout") as stdout, \
+         patch("os.get_terminal_size", return_value=os.terminal_size((60, 30))) as size:
+        stdout.isatty.return_value = tty
+        stdout.fileno.return_value = 42
+        actual = terminal_size()
+    assert actual == ((60, 30) if tty else (140, 10))
+    if tty:
+        size.assert_called_once_with(42)
+    else:
+        size.assert_not_called()
 
 
 class TtyStringIO(io.StringIO):

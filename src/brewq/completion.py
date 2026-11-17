@@ -55,9 +55,12 @@ def script_errors(text: str, commands: argparse.ArgumentParser) -> list[str]:
         if name not in text:
             errors.append(f"missing action {name}")
     for marker in ("--_complete", "--sort", "--installed", "--top", "--offline",
-                   "--columns", "--reverse", "--tsv", "--no-color", "--update"):
+                   "--columns", "--reverse", "--no-reverse", "--all", "-a",
+                   "--tsv", "--no-color", "--update"):
         if marker not in text:
             errors.append(f"missing {marker}")
+    if "include deprecated and disabled" in text:
+        errors.append("stale --all meaning")
     if "+list" in text:
         errors.append("prints the removed +list action")
     fields = " ".join((*columns.CANONICAL_COLUMNS, "default", "all"))

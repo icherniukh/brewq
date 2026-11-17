@@ -58,6 +58,8 @@ integration are not provided.
 ## Search and output
 
 ```sh
+brewq                              # top overall; fits the terminal height
+brewq -s trend                     # top rising packages
 brewq terminal multiplexer
 brewq -t 10 json
 brewq -i -t 10 grep
@@ -76,30 +78,40 @@ name normalization applies. For homebrew/core and homebrew/cask, results are a
 superset of `brew search`: its substring and spell-correction (DidYouMean) matches
 are reproduced for formulae and casks, and `/regex/` queries are supported. Packages
 from third-party taps are not in the catalog, so `brew search` can list names brewq
-cannot. `brew search` exits 1 when nothing matches; brewq exits 0.
+cannot. An omitted query or an explicitly empty query (`bq ""`) selects the
+whole catalog before filters, sorting, and caps; `-i` still selects installed
+packages. `brew search` exits 1 when nothing matches; brewq exits 0.
 The default sort is raw 90-day install volume. Exact name/alias matches precede
-other active matches under metric sorts; disabled/deprecated results rank last.
-`-s name` sorts alphabetically within those status groups.
+all other matches under every sort, regardless of status. Other disabled/deprecated
+results rank last and are never filtered out. `-s name` sorts alphabetically
+within those status groups after exact matches.
 
 | Search option | Current behavior |
 | --- | --- |
 | `-s`, `--sort FIELD` | `90d` (built-in default), `30d`, `365d`, `trend`, or `name` |
-| `-R`, `--reverse` | Reverse the chosen order after the cap, so the best row is last. Off by default |
+| `-R`, `--reverse` | Reverse the chosen order after the cap, so the best row is last; `--no-reverse` disables it |
 | `-t`, `--top N` | Positive result cap; overrides configuration |
 | `-i`, `--installed` | Show installed packages, optionally filtered by query |
 | `-u`, `--update` | Force a register refresh, then query; use local data if refresh fails |
-| `--all` | Retain deprecated/disabled matches when the cap would otherwise hide them |
+| `-a`, `--all` | Remove the cap and put the best row last on a TTY; `--no-reverse` restores best-first |
 
-Search cap precedence is `-t`, then positive config `top`, then unlimited.
-Terminal height never limits results; it only affects layout, so a small window
-cannot silently hide matches. This caps records, not wrapped terminal lines.
-When a positive cap hides matches, deprecated/disabled matches are ranked last
-and hidden unless `--all` is given, and a stderr note reports `showing N of M`.
-Machine-readable stdout stays clean.
+For terminal tables, cap precedence is explicit `-t N`, then `-a` (unlimited),
+then configured `top`. The default `top = "auto"` fits the terminal height:
+`max(1, rows - 8)` records. Eight lines cover the leading blank, header, rule,
+trailing blank, `showing N of M` notice, cache note, typed command, and next prompt.
+This budget assumes single-line records and notices; wrapped cells remain future
+work, and terminals below nine rows cannot fit even one record with that framing.
+Both height and width come from stdout's terminal, ignoring stale `LINES`/`COLUMNS`;
+those variables are fallbacks only without a TTY.
+
+A cap that hides rows reports `showing N of M; -a for all, -t N for a count` on
+stderr; M counts every match, inactive ones included. Pipes and TSV ignore
+configured caps and reverse: they are uncapped and best-first unless `-t` or `-R`
+is explicitly given. `-a` does not change their ordering. Machine-readable stdout
+stays clean.
 
 Search, including `-i`, accepts `-t N` / `--top N` as the canonical positive cap;
-`--limit` has been removed. `--all` includes package
-statuses, not unlimited results. The former `-l` installed-filter shorthand is
+`--limit` has been removed. The former `-l` installed-filter shorthand is
 retired; use `-i` or `--installed` instead.
 
 These output options work for search, including `-i`:
@@ -218,7 +230,7 @@ brewq +update            # update the register if stale
 brewq +update --force    # force recovery, including a recently corrupted cache
 brewq +update --offline  # install the bundled catalog as the local cache, offline
 brewq -u ripgrep        # update the register, then search
-brewq -R -i             # all installed matches, best row last
+brewq -a -i             # all installed matches, best row last on a TTY
 brewq +config path
 ```
 
@@ -254,8 +266,8 @@ Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless
 
 ```toml
 sort = "90d"
-reverse = false # -R or true reverses after the cap; BREWQ_NO_REVERSE=1 wins
-top = 0 # unlimited when unset; search default, overridden by -t
+reverse = false # terminal default; -a reverses, --no-reverse undoes; BREWQ_NO_REVERSE=1 wins
+top = "auto" # terminal height; positive integer = fixed cap; 0 = unlimited; -t overrides
 columns = ["name", "90d", "trend", "desc"]
 installed-columns = ["name", "desc"]
 max-age = 86400 # seconds

@@ -70,7 +70,7 @@ def test_corrupt_config_warns_and_uses_defaults(monkeypatch, tmp_path, capsys):
     assert "config error" in err
     assert str(toml) in err
     assert conf["search"]["sort"] == "90d"
-    assert conf["output"]["limit"] == 0
+    assert conf["output"]["limit"] == "auto"
 
 
 @pytest.mark.parametrize("key,value", [
@@ -98,8 +98,15 @@ def test_invalid_env_retains_valid_file_value(age, monkeypatch, tmp_path, capsys
 def test_valid_fields_survive_invalid_neighbor(tmp_path, capsys):
     (tmp_path / "config.toml").write_text('top = "ten"\ncolumns = ["url"]\n')
     conf = cfg_mod.load()
-    assert conf["output"] == {"limit": 0, "columns": ["url"]}
+    assert conf["output"] == {"limit": "auto", "columns": ["url"]}
     assert "top:" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("value,expected", [('"auto"', "auto"), ("12", 12), ("0", 0)])
+def test_top_accepts_auto_fixed_and_legacy_unlimited(tmp_path, capsys, value, expected):
+    (tmp_path / "config.toml").write_text(f"top = {value}\n")
+    assert cfg_mod.load()["output"]["limit"] == expected
+    assert capsys.readouterr().err == ""
 
 
 def test_all_long_option_keys(tmp_path, capsys):

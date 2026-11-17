@@ -106,6 +106,43 @@ def test_preloaded_search_list_cap_and_tsv(tmp_path):
     assert not (tmp_path / "cache" / "refresh-state.json").exists()
 
 
+@pytest.mark.parametrize("top", [1, 8])
+def test_disabled_exact_python_match_survives_cap_and_counts_every_match(tmp_path, top):
+    catalog = _catalog()
+    formulae = []
+    for version in range(6, 15):
+        formulae.append({
+            "name": f"python@3.{version}", "desc": "python@3.9 related version",
+            "installs_90d": version * 1000,
+            "disabled": version == 9, "deprecated": version in {6, 7},
+        })
+    catalog["formulae"], catalog["casks"] = formulae, []
+    materialize(catalog, tmp_path / "cache")
+    proc = _run(tmp_path, "python@3.9", "-t", str(top), "--tsv", "-c", "name")
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.splitlines()[0] == "python@3.9"
+    assert len(proc.stdout.splitlines()) == top
+    assert f"showing {top} of 9" in proc.stderr
+
+
+@pytest.mark.parametrize("query", [[], [""]])
+@pytest.mark.parametrize("tsv", [[], ["--tsv"]])
+def test_empty_query_pipe_selects_catalog_before_filter_sort_and_explicit_cap(tmp_path, query, tsv):
+    _preload(tmp_path)
+    (tmp_path / "config.toml").write_text("top = 1\nreverse = true\n")
+    proc = _run(tmp_path, *query, *tsv, "-c", "name", "-a")
+    assert proc.returncode == 0, proc.stderr
+    names = [line.split()[0] for line in proc.stdout.splitlines() if line.split() and line.split()[0] in {
+        "ripgrep", "bat", "list", "rg-tools", "font-test",
+    }]
+    assert names == ["ripgrep", "bat", "list", "rg-tools", "font-test"]
+    capped = _run(tmp_path, *query, "--tsv", "-c", "name", "-s", "name", "-t", "2")
+    assert capped.stdout.splitlines() == ["bat", "font-test"]
+    assert "showing 2 of 5" in capped.stderr
+    installed = _run(tmp_path, *query, "--tsv", "-c", "name", "-i")
+    assert installed.stdout.splitlines() == ["bat"]
+
+
 def test_flags_between_terms_and_unknown_action(tmp_path):
     _preload(tmp_path)
     found = _run(tmp_path, "rip", "-t", "1", "-c", "name", "--tsv", "grep")

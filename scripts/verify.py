@@ -73,6 +73,9 @@ def check_cli_smoke() -> Result:
         ("help", _brewq("--help"), ["usage"]),
         ("full_help", _brewq("--full-help"), ["columns:", "trending:", "cache:"]),
         ("search_table", _brewq("-t", "5", "json"), ["NAME"]),
+        ("catalog_default", _brewq("-t", "2"), ["NAME", "json-tool", "ripgrep"]),
+        ("catalog_empty", _brewq("", "-t", "2"), ["NAME", "json-tool", "ripgrep"]),
+        ("catalog_trend", _brewq("-s", "trend", "-t", "2"), ["NAME"]),
         ("search_tsv", _brewq("--tsv", "-c", "name,30d", "ripgrep"), []),
         ("list_default", _brewq("-i", "-t", "5"), ["NAME", "DESC"]),
         ("list_metrics", _brewq("-i", "-c", "name,90d", "--top", "5"), []),
@@ -108,6 +111,14 @@ def check_cli_smoke() -> Result:
             for needle in must_contain:
                 if needle not in proc.stdout:
                     failures.append(f"{name}: expected {needle!r} in output")
+        (root / "config.toml").write_text("top = 1\nreverse = true\n")
+        for query in ([], [""]):
+            for flags in ([], ["-a"], ["--all"]):
+                proc = _run(_brewq(*query, *flags, "--tsv", "-c", "name"), env=env)
+                if proc.returncode != 0 or proc.stdout.splitlines() != [
+                    "json-tool", "ripgrep", "zzverify-offline",
+                ] or "showing" in proc.stderr:
+                    failures.append(f"catalog {query!r} {flags!r}: pipe must ignore config cap/reverse")
         removed = _run(_brewq("+list", "--no-color"), env=env)
         if removed.returncode != 2 or "use -i" not in removed.stderr:
             failures.append("+list: expected usage error naming -i")
@@ -179,7 +190,7 @@ def check_installed_shim() -> Result:
 
         for expected in (
             "-c", "--columns", "-i", "--installed", "-u", "--update", "-R", "--reverse",
-            "--top", "--full-help", "--tsv", "--no-color",
+            "--top", "--full-help", "--tsv", "--no-color", "-a", "--all", "--no-reverse",
         ):
             if not advertised(expected):
                 failures.append(f"brewq help: missing {expected!r}")
@@ -189,6 +200,8 @@ def check_installed_shim() -> Result:
                 failures.append(f"brewq help: stale option {removed!r} is still installed")
         if "+list" in help_result.stdout:
             failures.append("brewq help: removed +list action is still installed")
+        if "include deprecated and disabled" in help_result.stdout:
+            failures.append("brewq help: stale --all meaning is still installed")
 
     # Exercise the actual entrypoints, not the checkout's module on PYTHONPATH.
     with tempfile.TemporaryDirectory(prefix="brewq-installed-check-") as directory:
@@ -231,6 +244,16 @@ def check_installed_shim() -> Result:
                 )
                 if proc.returncode != 0 or proc.stdout.splitlines() != ["zzverify-installed-a"]:
                     failures.append(f"{name} {' '.join(args)}: installed behavior mismatch")
+            (root / "config.toml").write_text("top = 1\nreverse = true\n")
+            for query in ([], [""]):
+                proc = subprocess.run(
+                    [path, *query, "-a", "--tsv", "-c", "name"], cwd=directory, env=env,
+                    capture_output=True, text=True, timeout=20.0,
+                )
+                if proc.returncode != 0 or proc.stdout.splitlines() != [
+                    "zzverify-hidden", "zzverify-installed-a", "zzverify-installed-b",
+                ]:
+                    failures.append(f"{name} {query!r}: catalog/pipe cap or reverse mismatch")
             for args in (["-i", "-t", "1"], ["--installed", "-t", "1"]):
                 proc = subprocess.run(
                     [path, *args], cwd=directory, env=env,

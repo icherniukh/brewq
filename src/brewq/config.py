@@ -18,7 +18,7 @@ class SearchSettings(TypedDict):
 
 class OutputSettings(TypedDict):
     columns: list[str]
-    limit: int
+    limit: int | str
 
 
 class ListSettings(TypedDict):
@@ -44,7 +44,7 @@ DEFAULTS: Settings = {
     },
     "output": {
         "columns": ["name", "90d", "trend", "desc"],
-        "limit": 0,
+        "limit": "auto",
     },
     "list": {
         "columns": ["name", "desc"],
@@ -93,6 +93,9 @@ def _validate_value(section: str, key: str, value: Any) -> None:
     elif key in {"reverse", "auto_refresh"}:
         if type(value) is not bool:
             raise ValueError("expected true or false")
+    elif key == "limit":
+        if value != "auto" and (type(value) is not int or value < 0):
+            raise ValueError('expected "auto" or a nonnegative integer')
     elif type(value) is not int or value < 0:
         raise ValueError("expected a nonnegative integer")
 

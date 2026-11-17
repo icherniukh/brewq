@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import runpy
 from pathlib import Path
 from unittest.mock import patch
@@ -47,15 +48,11 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("BREWQ_CONFIG", str(tmp_path / "config.toml"))
 
 
-def test_main_no_args_prints_help(capsys):
-    rc = main([])
-    assert rc == 2
-    out = capsys.readouterr().out
-    assert "actions:" in out
-    assert "+update" in out
-    assert "commands:" not in out
-    assert "examples:" in out
-    assert "-s" in out
+@pytest.mark.parametrize("query", [[], [""]])
+def test_main_empty_query_lists_catalog(capsys, query):
+    with patch("brewq.cache.load", return_value=_loaded([_pkg("bat"), _pkg("ripgrep")])):
+        assert main([*query, "--tsv", "-c", "name"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["bat", "ripgrep"]
 
 
 def test_full_help_documents_columns_trending_and_cache(capsys):
@@ -226,7 +223,7 @@ def test_main_search_non_tty_shows_all_results(capsys):
     assert "git-tool-44" in out
 
 
-def test_main_search_ignores_terminal_height():
+def test_main_search_caps_to_terminal_height():
     import brewq.options as opts_mod
 
     pkgs = [
@@ -243,12 +240,13 @@ def test_main_search_ignores_terminal_height():
 
     with patch("brewq.cache.load", return_value=_loaded(pkgs)), \
          patch("brewq.cli.sys.stdout") as mock_out, \
+         patch("brewq.options.terminal_size", return_value=os.terminal_size((100, 26))), \
          patch("brewq.options.build_search_options", side_effect=spy):
         mock_out.isatty.return_value = True
         main(["git"])
 
     assert captured, "build_search_options was not called"
-    assert captured[0].limit == 0  # terminal height never caps the result set
+    assert captured[0].limit == 18
 
 
 def test_main_search_explicit_top_overrides_default(capsys):
@@ -554,7 +552,7 @@ def test_view_cap_discloses_shown_and_eligible_counts(argv, capsys):
     with patch("brewq.cache.load", return_value=_loaded(packages)):
         assert main(argv) == 0
     captured = capsys.readouterr()
-    assert "brewq: showing 2 of 5; raise -t/--top or clear config top" in captured.err
+    assert "showing 2 of 5; -a for all, -t N for a count" in captured.err
     assert "showing" not in captured.out
 
 
@@ -565,6 +563,17 @@ def test_no_view_cap_prints_no_notice(capsys):
     captured = capsys.readouterr()
     assert len(captured.out.splitlines()) == 5
     assert "showing" not in captured.err
+
+
+@pytest.mark.parametrize("count", [0, 1, 2])
+def test_cap_is_silent_when_every_match_fits(count, capsys):
+    packages = [_pkg(f"tool-{i}") for i in range(count)]
+    with patch("brewq.cache.load", return_value=_loaded(packages)):
+        assert main(["tool", "-t", "2", "--tsv", "-c", "name"]) == 0
+    captured = capsys.readouterr()
+    assert len(captured.out.splitlines()) == count
+    assert "showing" not in captured.err
+    assert "showing" not in captured.out
 
 
 def test_main_search_discloses_stale_cache(capsys):
@@ -635,7 +644,8 @@ def test_main_list_uses_cache_without_brew(capsys):
     assert "cache: 2min old" in captured.err
 
 
-def test_installed_view_uses_configured_cap_and_explicit_override(tmp_path, capsys):
+def test_installed_view_uses_configured_cap_and_explicit_override(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True)
     (tmp_path / "config.toml").write_text('top = 2\n')
     packages = [
         _pkg(f"installed-{i:02d}", installed=True)

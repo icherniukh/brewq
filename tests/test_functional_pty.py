@@ -16,6 +16,7 @@ import os
 import pty
 import re
 import select
+import shlex
 import struct
 import subprocess
 import sys
@@ -139,17 +140,76 @@ def test_pty_table_is_colored_and_installed_marker_keeps_columns_aligned(tmp_pat
     assert short_line.index("202,215") + len("202,215") == long_line.index("84,739") + len("84,739")
 
 
-def test_pty_default_output_caps_by_real_terminal_height(tmp_path):
+@pytest.mark.parametrize("rows,stale_lines", [(16, None), (26, None), (30, "10")])
+@pytest.mark.parametrize("query", [[], [""], ["zzcap"]])
+def test_pty_default_cap_keeps_typed_command_and_next_prompt_visible(tmp_path, rows, stale_lines, query):
     formulae = [_formula(f"zzcap-{i:02d}", installs_30d=10_000 - i) for i in range(40)]
     _write_cache(tmp_path, formulae)
-    rc, output = _run_in_pty(_brewq("zzcap"), _env(tmp_path), rows=20, cols=120)
+    env = _env(tmp_path)
+    if stale_lines:
+        env["LINES"] = stale_lines
+    command = shlex.join(["bq", *query])
+    # Include the shell's typed line and next prompt in the visible viewport.
+    shell = (f"printf '%s\\n' {shlex.quote('$ ' + command)}; "
+             f"{shlex.join(_brewq(*query))}; result=$?; printf '%s' '$ '; exit $result")
+    rc, output = _run_in_pty(["/bin/sh", "-c", shell], env, rows=rows, cols=120)
     assert rc == 0
     matched = [line for line in output.splitlines() if "zzcap-" in line]
-    # A small terminal shrinks the layout, never the result set. Unit tests
-    # cannot see this because they mock sys.stdout and terminal size wholesale.
-    assert len(matched) == 40
-    assert "zzcap-39" in output
-    assert "showing" not in output
+    assert len(matched) == rows - 8
+    assert f"showing {rows - 8} of 40" in output
+    lines = _strip_ansi(output).splitlines()
+    assert len(lines) == rows
+    assert lines[-rows] == "$ " + command
+    assert lines[-1] == "$ "
+
+
+def test_pty_width_ignores_stale_columns(tmp_path):
+    _write_cache(tmp_path, [_formula("zzwidth-long-package-name", desc="A long description " * 8)])
+    env = _env(tmp_path)
+    env["COLUMNS"] = "140"
+    rc, output = _run_in_pty(_brewq("zzwidth"), env, cols=60)
+    assert rc == 0
+    assert all(len(line) <= 60 for line in _strip_ansi(output).splitlines())
+
+
+@pytest.mark.parametrize("flags,expected", [
+    ([], ["zzorder-high", "zzorder-mid"]),
+    (["-a"], ["zzorder-low", "zzorder-mid", "zzorder-high"]),
+    (["--all", "--no-reverse"], ["zzorder-high", "zzorder-mid", "zzorder-low"]),
+    (["-a", "-t", "1"], ["zzorder-high"]),
+    (["-t", "3"], ["zzorder-high", "zzorder-mid", "zzorder-low"]),
+])
+def test_pty_fixed_config_cap_all_and_explicit_override(tmp_path, flags, expected):
+    formulae = []
+    for name, count in [("high", 100), ("mid", 50), ("low", 1)]:
+        entry = _formula(f"zzorder-{name}")
+        entry["installs_90d"] = count
+        formulae.append(entry)
+    _write_cache(tmp_path, formulae)
+    (tmp_path / "config.toml").write_text("top = 2\n")
+    rc, output = _run_in_pty(_brewq(*flags, "-c", "name"), _env(tmp_path))
+    assert rc == 0
+    assert [line for line in _strip_ansi(output).splitlines() if line.startswith("zzorder-")] == expected
+
+
+@pytest.mark.parametrize("query", [[], [""]])
+def test_pty_empty_query_trend_browsing_and_installed_filter(tmp_path, query):
+    popular = _formula("zzbrowse-popular", installed=True)
+    popular.update(installs_90d=900_000, installs_365d=9_000_000)
+    rising = _formula("zzbrowse-rising")
+    rising.update(installs_90d=6000, installs_365d=6500)
+    _write_cache(tmp_path, [popular, rising])
+    for flags, expected, total in [
+        ([], "zzbrowse-popular", 2),
+        (["-s", "trend"], "zzbrowse-rising", 2),
+        (["-i", "-s", "trend"], "zzbrowse-popular", 1),
+    ]:
+        rc, output = _run_in_pty(_brewq(*query, *flags, "-c", "name"), _env(tmp_path), rows=9)
+        assert rc == 0
+        records = [line for line in _strip_ansi(output).splitlines() if line.startswith("zzbrowse-")]
+        assert len(records) == 1 and records[0].split()[0] == expected
+        if total > 1:
+            assert "showing 1 of 2" in output
 
 
 @pytest.mark.parametrize("command", [[], ["-i"]])
