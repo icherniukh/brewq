@@ -208,7 +208,8 @@ def check_installed_shim() -> Result:
         root = Path(directory)
         (root / "brew-all.json").write_text(json.dumps({
             "formulae": [
-                {"name": name, "installed": [{"version": "1.0"}] if installed else [],
+                {"name": name, "desc": "installed check fixture",
+                 "installed": [{"version": "1.0"}] if installed else [],
                  "installs_90d": count}
                 for name, installed, count in [
                     ("zzverify-hidden", False, 100_000),
