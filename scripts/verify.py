@@ -119,9 +119,9 @@ def check_cli_smoke() -> Result:
                     "json-tool", "ripgrep", "zzverify-offline",
                 ] or "showing" in proc.stderr:
                     failures.append(f"catalog {query!r} {flags!r}: pipe must ignore config cap/reverse")
-        removed = _run(_brewq("+list", "--no-color"), env=env)
-        if removed.returncode != 2 or "use -i" not in removed.stderr:
-            failures.append("+list: expected usage error naming -i")
+        unknown = _run(_brewq("+list", "--no-color"), env=env)
+        if unknown.returncode != 2 or "unknown action +list" not in unknown.stderr:
+            failures.append("+list: expected unknown action error")
         before = snapshot.read_bytes(), snapshot.stat().st_mtime_ns
         for flag in ("-u", "--update"):
             proc = _run(_brewq(flag, "zzverify-offline", "--tsv", "-c", "name,90d"), env=env)
@@ -263,12 +263,12 @@ def check_installed_shim() -> Result:
                 header = next((line for line in proc.stdout.splitlines() if line.startswith("NAME")), "")
                 if proc.returncode != 0 or header.split() != ["NAME", "DESC"]:
                     failures.append(f"{name} {' '.join(args)}: installed default layout mismatch")
-            removed = subprocess.run(
+            unknown = subprocess.run(
                 [path, "+list"], cwd=directory, env=env,
                 capture_output=True, text=True, timeout=20.0,
             )
-            if removed.returncode != 2 or "use -i" not in removed.stderr:
-                failures.append(f"{name}: removed +list must report use -i")
+            if unknown.returncode != 2 or "unknown action +list" not in unknown.stderr:
+                failures.append(f"{name}: +list must report unknown action")
             completion = subprocess.run(
                 [path, "+completion", "zsh"], cwd=directory, env=env,
                 capture_output=True, text=True, timeout=20.0,

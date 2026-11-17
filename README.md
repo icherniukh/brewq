@@ -113,10 +113,6 @@ configured caps and reverse: they are uncapped and best-first unless `-t` or `-R
 is explicitly given. `-a` does not change their ordering. Machine-readable stdout
 stays clean.
 
-Search, including `-i`, accepts `-t N` / `--top N` as the canonical positive cap;
-`--limit` has been removed. The former `-l` installed-filter shorthand is
-retired; use `-i` or `--installed` instead.
-
 These output options work for search, including `-i`:
 
 | Output option | Current behavior |
@@ -131,8 +127,7 @@ configuration: `name`, `type`, `ver`, `30d`, `90d`, `365d`, `trend`, `bin`, `url
 `status` are TSV-only; selecting them in table mode fails with guidance to use
 `--tsv`. Search tables show installed state as the name's ✔ marker; `-i` omits
 it because every result is installed. Package status appears as a description
-prefix. Old names and aliases fail with their replacement;
-typos suggest exact names without automatically resolving them.
+prefix. Typos suggest exact names without automatically resolving them.
 
 `-c` always specifies the exact ordered list. `default` expands the current
 view's configured columns, and `all` expands every field available in the output
@@ -206,9 +201,8 @@ brewq -i -t 10
 brewq -i --tsv -c name,type,ver
 ```
 
-`-i [query]` is the only installed view; `+list` is removed and reports a usage
-error pointing to `-i`. The default sort is the search sort (90-day install
-volume unless configured); `-i -s name` sorts alphabetically across formulae
+`-i [query]` is the only installed view. The default sort is the search sort
+(90-day install volume unless configured); `-i -s name` sorts alphabetically across formulae
 and casks, with deprecated/disabled rows last. Configured `top`, explicit caps,
 `--all`, and reverse use the same policies as search; a cap reports
 `showing N of M` on stderr. Select cached
@@ -264,16 +258,6 @@ Normal queries need no network; use `BREWQ_NO_AUTO_REFRESH=1` to suppress
 background refresh attempts while offline. `-u` explicitly requests a refresh
 even with background updates disabled.
 
-Compatibility spellings have been removed and fail with a usage error naming
-their replacement: `-v`/`--verbose` → `-c all`, `--url` → `-c default,url`,
-`-r`/`--refresh` → `-u`/`--update`, `+refresh`/`+update-cache` → `+update`,
-`--limit` → `-t`/`--top`, `--analytics` → `-c default,90d`,
-`+preload` → `+update --offline`, and `+list` → `-i` (`-i -s name` for the
-alphabetical view). The former `+random` layout lab is now
-`scripts/random-layout.py` in the brewq source repository. From a checkout, run
-`uv run python scripts/random-layout.py [--seed N]`; it uses the same layouts
-and normal search path.
-
 ## Configuration
 
 Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless
@@ -297,14 +281,10 @@ The `auto` pseudo-column in search output configuration selects an available raw
 metric from the top result, preferring 90d, then 30d, then 365d. It is rejected
 in `installed-columns` and explicit `-c`; prefer explicit metric columns in scripts.
 
-Config keys are root-level long option names (including `reverse`); tables such
-as `[output]`, `[search]`, `[list]`, and `[cache]` are no longer accepted. For
-example, `output.limit` warns to use `top`, `[list].columns` warns to use
-`installed-columns`, and `cache.auto_refresh` warns to use `auto-update`.
-Old field names also warn with replacements (for example, `version` → `ver`,
-`trending` → `trend`). Typos offer “did you mean” suggestions; only exact names
-are accepted. Column arrays contain concrete names, with `auto` as the existing
-search-only exception; `default`, `all`, and `help` are CLI selection words.
+Config keys are root-level long option names (including `reverse`). Typos offer
+“did you mean” suggestions; only exact names are accepted. Column arrays contain
+concrete names, with `auto` as the search-only exception; `default`, `all`, and
+`help` are CLI selection words.
 
 Invalid keys, types, ranges, sort names, and columns emit a concise
 stderr diagnostic and fall back field-by-field. Invalid `BREWQ_CACHE_MAX_AGE`
@@ -327,4 +307,6 @@ adapts Yuki Nishijima's DidYouMean under MIT. Both notices are in `NOTICE`.
   `--no-color` disable styling on both streams.
 - There is no install, upgrade, uninstall, or service command.
 
-Contributor workflow lives in [AGENTS.md](AGENTS.md).
+Contributor workflow lives in [AGENTS.md](AGENTS.md). The layout lab runs with
+`uv run python scripts/random-layout.py [--seed N]` from a checkout, using the
+same layouts and normal search path.

@@ -47,7 +47,7 @@ def test_help_advertises_public_flags_only(tmp_path):
     assert "+list" not in proc.stdout
     removed = _run(tmp_path, "+list")
     assert removed.returncode == 2
-    assert "use -i; -i -s name for the alphabetical view" in removed.stderr
+    assert "unknown action +list" in removed.stderr
 
 
 def test_full_help_ignores_invalid_operational_config(tmp_path):
@@ -87,14 +87,14 @@ def test_field_help_ignores_config_and_does_not_initialize_cache(tmp_path):
     assert not (tmp_path / "cache").exists()
 
 
-def test_retired_installed_shorthand_is_rejected_before_cache_access(tmp_path):
+def test_unknown_installed_shorthand_is_rejected_before_cache_access(tmp_path):
     proc = _run(tmp_path, "-l", "tool")
     assert proc.returncode == 2
     assert "unrecognized arguments: -l" in proc.stderr
     assert not (tmp_path / "cache").exists()
 
 
-def test_search_and_list_help_share_limit_spellings(tmp_path):
+def test_search_and_installed_help_share_top_spellings(tmp_path):
     for command in [(), ("-i",)]:
         proc = _run(tmp_path, *command, "--help")
         assert proc.returncode == 0

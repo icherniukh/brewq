@@ -102,15 +102,13 @@ declared console script unconditionally, so the package declares `brewq` only.
 function, and `+setup --remove` removes only its own link. It never edits shell
 startup files or overwrites a foreign command. `brq` is not a fallback.
 
-**Settled flag spellings:** installed-only search uses `-i` / `--installed`;
-`-l` is retired rather than kept as an ambiguous shortcut. Search, including `-i`,
-uses `-t` / `--top` for explicit positive caps; `--limit` is removed, reversing
-the earlier alias decision per owner decision 2026-11-17. No `-n` shorthand is
-added. Hidden compatibility flags/actions are removed with usage errors naming
-their replacements (`brewq-remove-hidden`, `brewq-dec-compat-flags`). Offline
-preload is `+update --offline`; the random layout lab lives in
-`scripts/random-layout.py` and runs through normal search with the same layouts.
-Configured caps and `-a`/`--all` follow the result-limit decision below.
+**Settled flag spellings (owner decision 2026-11-17,
+`brewq-no-migration-layer`):** installed-only search uses `-i` / `--installed`;
+search, including `-i`, uses `-t` / `--top` for explicit positive caps.
+The published contract has no compatibility or migration spellings. Unknown
+input uses ordinary errors, with suggestions for close names.
+Offline preload is `+update --offline`. Configured caps and `-a`/`--all`
+follow the result-cap decision below.
 
 **Columns and configuration (owner decision 2026-11-17,
 `brewq-dec-column-grammar`, implemented by `brewq-field-names`):** `-c` is an
@@ -119,22 +117,20 @@ with the equivalent concrete list. `default` expands the view's configured
 columns and duplicates keep their first occurrence. This reverses the earlier
 `brewq-h7m`/`brewq-w5h` alias and additive/subtractive grammar. Fields have one
 short spelling matching their header lowercased, shared by columns, sortable
-fields, and config; old names warn or fail with replacements, and typos suggest
-exact names. `inst`/`status` are TSV-only, since tables already show their marker
-and description prefix. Config keys are root-level long option names: `top`,
-`sort`, `reverse`, `columns`, `installed-columns`, `auto-update`, `max-age`.
-Old sectioned keys warn with their new spelling. `--save` and effective-value
-`+config` remain post-M1 (`brewq-dec-config-write`); display-only discovery work
-remains M2. `default`/`all` can evolve; scripts should list concrete fields.
+fields, and config; typos suggest exact names. `inst`/`status` are TSV-only, since
+tables already show their marker and description prefix. Config keys are root-level
+long option names: `top`, `sort`, `reverse`, `columns`, `installed-columns`,
+`auto-update`, `max-age`.
+`--save` and effective-value `+config` remain post-M1 (`brewq-dec-config-write`);
+display-only discovery work remains M2. `default`/`all` can evolve; scripts should
+list concrete fields.
 
 **Installed view (owner decision 2026-11-17, `brewq-installed-unify`):**
-`-i [query]` is the only installed view; `+list` fails with guidance to use `-i`,
-or `-i -s name` for alphabetical output. This reverses the separate `+list` view.
+`-i [query]` is the only installed view; `-i -s name` sorts alphabetically.
 Installed search keeps `installed-columns`, defaulting to name/description,
 and all TSV fields; normal search retains its analytics layout. Sorts, configured
-caps, reverse, and status ranking follow search policy. There were no flags
-unique to `+list`; its type/name grouping and exemption from configured caps
-are not retained. The owner brought the narrow-output fix forward.
+caps, reverse, and status ranking follow search policy.
+The owner brought the narrow-output fix forward.
 Bound the name column, favor description context, and retain requested metadata
 through explicit columns rather than crowding the default. TSV keeps full
 identifiers and values.
@@ -249,12 +245,12 @@ scenarios belong with the fixes.
 
 ### Alongside correctness: one usable contract
 
-CLI alignment (`brewq-h7m`, refined by `brewq-cqt`) establishes a compact common
-help path and one visible column selector shared by search and list. Extended
-column, trending, and cache reference lives in `--full-help`; legacy output
-shortcuts remain accepted but undiscoverable for compatibility. `auto` is
-configuration-only and ambiguous popularity aliases are rejected. The layout
-lab remains available as the explicitly non-product `random` command.
+At that milestone, CLI alignment (`brewq-h7m`, refined by `brewq-cqt`) established
+a compact common help path and one column selector shared by search and list.
+Extended reference moved to `--full-help`; output shortcuts were temporarily
+accepted but undiscoverable. `auto` became configuration-only, and the layout
+lab was exposed as the non-product `random` command. Section 3 and the settled
+decisions below define the current contract.
 
 Documentation consolidation (`brewq-k1m`) establishes three maintained documents:
 README for the actual CLI, AGENTS for contributor workflow, and this document for
@@ -324,18 +320,18 @@ owner choice. Open questions live only in Beads: `bd list --type decision`.
 | Command shape | Search is the root command. Actions are `+` tokens in first position; bare words are queries. | `c56a603` (Nov 5) |
 | Machine output | TSV is the only machine-readable format. | product boundary, AGENTS.md |
 | Columns | Exact ordered `-c` lists; reserved `default`/`all`/`help`; first occurrence wins. One short name equals its lowercased header across columns, sorts, and config; no aliases. Signed edits error with a concrete replacement list. `inst`/`status` are TSV-only. Reverses the earlier alias/edit grammar. | owner decision 2026-11-17 (`brewq-dec-column-grammar`, `brewq-field-names`); supersedes `brewq-h7m`, `brewq-w5h` |
-| Config | Root long-option keys: `top`, `sort`, `reverse`, `columns`, `installed-columns`, `auto-update`, `max-age`. Old keys/fields warn with replacements; typos suggest exact names. Config-only `auto` remains; `--save` and effective-value `+config` stay post-M1. | owner decision 2026-11-17 (`brewq-field-names`, `brewq-dec-column-grammar`, `brewq-dec-config-write`) |
+| Config | Root long-option keys: `top`, `sort`, `reverse`, `columns`, `installed-columns`, `auto-update`, `max-age`. Unknown keys/fields use ordinary errors; typos suggest exact names. Config-only `auto` remains; `--save` and effective-value `+config` stay post-M1. | owner decision 2026-11-17 (`brewq-field-names`, `brewq-dec-column-grammar`, `brewq-dec-config-write`) |
 | Default sort | Raw 90-day installs. TREND stays in the default table but is not the default sort. | `brewq-253`, `brewq-h7m` |
-| Installed view | `-i [query]` is the only installed view; remove `+list` with replacement guidance. Keep `installed-columns` and TSV fields; `-i -s name` is alphabetical. Search sort/cap/status policies apply. | owner decision 2026-11-17 (`brewq-installed-unify`) |
+| Installed view | `-i [query]` is the only installed view. Keep `installed-columns` and TSV fields; `-i -s name` is alphabetical. Search sort/cap/status policies apply. | owner decision 2026-11-17 (`brewq-installed-unify`) |
 | Terminal styling | No ANSI styling per stream when non-TTY, nonempty `NO_COLOR`, `TERM=dumb`, or `--no-color`; preserve plain markers and ANSI-free TSV. | owner decision 2026-11-17 (`brewq-term-dumb`) |
-| Flag spellings | `-i`/`--installed` (`-l` retired); `-t`/`--top` only (`--limit` removed); no `-n`. | `brewq-brx`, owner decision 2026-11-17 (`brewq-remove-hidden`) |
-| Compatibility removal | Remove `-v`/`--verbose`, `--url`, `-r`/`--refresh`, `+refresh`, `+update-cache`, `--limit`, and `--analytics`, with usage errors naming replacements. Replace `+preload` with `+update --offline`; move `+random` to `scripts/random-layout.py`. | owner decision 2026-11-17 (`brewq-dec-compat-flags`, `brewq-remove-hidden`) |
+| Flag spellings | `-i`/`--installed`; `-t`/`--top` is the single cap name in flags, configuration, and internals. The published contract has no compatibility or migration spellings. | owner decision 2026-11-17 (`brewq-no-migration-layer`); supersedes the spelling guidance in `brewq-remove-hidden` |
+| Compatibility removal | The published contract has no compatibility or migration spellings. Unknown options/actions/fields/settings use ordinary errors, with did-you-mean for close names. | owner decision 2026-11-17 (`brewq-no-migration-layer`); supersedes usage errors naming replacements in `brewq-dec-compat-flags` and `brewq-remove-hidden` |
 | Result limits | Terminal default `top = "auto"` fits `max(1, rows - 8)` table rows using stdout fd dimensions; vertical records count their field lines plus a separator, with at least one record. Positive config caps apply only to terminal tables; `-a` removes them, `-t` overrides. A cap that hides rows discloses `showing N of M` on stderr, counting every match. Pipes/TSV need explicit `-t` to cap. Reverses height-never-caps policy. | owner decision 2026-11-17 (`brewq-dec-result-cap`, `brewq-height-cap`); supersedes `08f39e7`/`brewq-tty-cap` resolution |
 | Reverse / all | `-a`/`--all` is uncapped and best-last on terminal tables; `--no-reverse` undoes it. Config reverse is terminal-only; pipes/TSV require explicit `-R`. `BREWQ_NO_REVERSE=1` disables all reversal. | owner decision 2026-11-17 (`brewq-dec-result-cap`, `brewq-height-cap`); revises `8fe9190` |
 | Exact matches / status | Keep inactive matches and count them in cap notices. Exact name/alias matches rank first regardless of status or sort, before capping and reversal; other inactive matches rank last. | owner decision 2026-11-17 (`brewq-dec-result-cap`, `brewq-exact-match-hidden`) |
 | Install floor | No install-count floor: under install sorts the cap already trims low-volume rows. Any minimum volume for trend ranking belongs to `brewq-trending-outliers`. | owner decision 2026-11-17 (`brewq-dec-install-floor`, accepting the Fable 5.2 review) |
 | Empty query | Omitted or explicitly empty query selects the whole catalog before normal filters, sort, and caps; `-i` retains installed-only selection. | owner decision 2026-11-17 (`brewq-49n`) |
-| Update | `-u`/`--update` forces a refresh before querying; metadata failure preserves the snapshot, reports on stderr, and queries local data with seed fallback. Query success determines the exit code. `+update` updates directly; `+update --offline` installs the bundled catalog. Compatibility aliases are removed. | owner decision 2026-11-17 (`brewq-update-flag`); spelling established by `brewq-remove-hidden` |
+| Update | `-u`/`--update` forces a refresh before querying; metadata failure preserves the snapshot, reports on stderr, and queries local data with seed fallback. Query success determines the exit code. `+update` updates directly; `+update --offline` installs the bundled catalog. | owner decision 2026-11-17 (`brewq-update-flag`); spelling established by `brewq-remove-hidden` |
 | Shortcut | The package installs `brewq`; `+setup` links `bq` only when free; no `brq`. | `brewq-bqname` |
 | Background refresh | On by default, with config and environment opt-outs. | `brewq-scheduler-optout` |
 | License | MIT for original code; Homebrew and DidYouMean notices retained. | `brewq-lic` |

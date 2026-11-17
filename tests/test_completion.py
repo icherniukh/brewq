@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import pty
-import re
 import select
 import shlex
 import shutil
@@ -65,8 +64,6 @@ def test_printed_completion_is_the_current_zsh_script(tmp_path):
     from brewq.completion import script_errors
 
     assert script_errors(proc.stdout, cli._build_command_parser()) == []
-    for removed in (*cli._REMOVED_OPTIONS, *cli._REMOVED_ACTIONS):
-        assert re.search(rf"(?<![\w-]){re.escape(removed)}(?![\w-])", proc.stdout) is None
     path = tmp_path / "completion.zsh"
     path.write_text(proc.stdout)
     syntax = subprocess.run([zsh, "-n", str(path)], capture_output=True, text=True)

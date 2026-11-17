@@ -133,21 +133,11 @@ def selection_help() -> str:
         "  -c url,default       put URL first, then the configured view",
         "  -c all               every field available in the output mode",
         "  -c default           use the configured view",
-        "", "Duplicates keep their first occurrence. +x/-x edits are no longer supported.",
+        "", "Duplicates keep their first occurrence. Signed +x/-x tokens are not accepted.",
         "default and all may change between releases; scripts should list fields.",
     ]) + "\n"
 
 
-# Migration diagnostics only: these spellings are never accepted or resolved.
-REMOVED_NAMES: dict[str, str] = {
-    "n": "name", "t": "type", "v": "ver", "version": "ver",
-    "30": "30d", "i30": "30d", "installs": "30d", "installs_30d": "30d",
-    "90": "90d", "i90": "90d", "installs_90d": "90d",
-    "365": "365d", "i365": "365d", "y": "365d", "year": "365d",
-    "installs_365d": "365d", "trending": "trend", "hot": "trend",
-    "binaries": "bin", "bins": "bin", "description": "desc", "d": "desc",
-    "installed": "inst", "i": "inst", "h": "url", "home": "url", "homepage": "url",
-}
 TSV_ONLY = frozenset({"inst", "status"})
 
 
@@ -193,8 +183,6 @@ def resolve(
             key = representative_metric or "90d"
         col = _COLUMN_REGISTRY.get(key)
         if col is None:
-            if key in REMOVED_NAMES:
-                raise ValueError(f"Column {key!r} was removed; use {REMOVED_NAMES[key]!r}")
             raise ValueError(
                 f"Unknown column {key!r}.{spell.suggestion(key, CANONICAL_COLUMNS)} "
                 f"Valid: {', '.join(CANONICAL_COLUMNS)}. Use '-c help' for fields and examples."
@@ -214,13 +202,13 @@ def select(
     """Expand ordered lists and reserved words, keeping the first occurrence."""
     tokens = spec if isinstance(spec, list) else [token.strip() for token in spec.split(",")]
     if any(token.startswith(("+", "-")) for token in tokens):
-        # Reproduce the retired edits only to print a concrete migration command.
+        # Replay signed tokens only to show the equivalent exact list.
         selected = resolve(default_columns, [], representative_metric)
         operation = "+"
         for token in tokens:
             if token.startswith(("+", "-")):
                 operation, token = token[0], token[1:].strip()
-            col = resolve(REMOVED_NAMES.get(token, token), [], allow_auto=False)[0]
+            col = resolve(token, [], allow_auto=False)[0]
             if operation == "-":
                 selected = [existing for existing in selected if existing.key != col.key]
             elif col not in selected:
@@ -229,7 +217,7 @@ def select(
                 selected.insert(desc_idx, col)
         equivalent = ",".join(col.key for col in selected)
         guidance = f"use -c {equivalent}" if equivalent else "select at least one field with -c"
-        raise ValueError(f"Column +x/-x edits were removed; {guidance}")
+        raise ValueError(f"Signed column +x/-x tokens are not accepted; {guidance}")
 
     selected = []
     for token in tokens:

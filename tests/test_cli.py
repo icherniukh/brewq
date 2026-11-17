@@ -72,16 +72,12 @@ def test_full_help_documents_columns_trending_and_cache(capsys):
 
 
 @pytest.mark.parametrize("command", [[], ["-i"]])
-@pytest.mark.parametrize(("argv", "removed", "replacement"), [
-    (["-v"], "-v", "-c all"), (["--verbose"], "--verbose", "-c all"),
-    (["--url"], "--url", "-c default,url"),
-    (["-r"], "-r", "-u/--update"), (["--refresh"], "--refresh", "-u/--update"),
-    (["--limit"], "--limit", "-t/--top"), (["--limit=2"], "--limit", "-t/--top"),
-    (["--analytics"], "--analytics", "-c default,90d"), (["-Rr"], "-r", "-u/--update"),
-    (["-vt3"], "-v", "-c all"), (["-t3", "-v"], "-v", "-c all"),
-    (["json", "-r"], "-r", "-u/--update"),
+@pytest.mark.parametrize("argv", [
+    ["-l"], ["-v"], ["--verbose"], ["--url"], ["-r"], ["--refresh"],
+    ["--limit"], ["--limit=2"], ["--analytics"], ["-Rr"], ["-vt3"],
+    ["-t3", "-v"], ["json", "-r"],
 ])
-def test_removed_options_name_replacements_before_io(command, argv, removed, replacement, capsys):
+def test_unknown_options_fail_before_io(command, argv, capsys):
     with patch("brewq.config.load", side_effect=AssertionError("loaded config")), \
          patch("brewq.cache.load", side_effect=AssertionError("loaded cache")), \
          patch("brewq.cache.refresh", side_effect=AssertionError("updated cache")), \
@@ -91,16 +87,14 @@ def test_removed_options_name_replacements_before_io(command, argv, removed, rep
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "usage:" in captured.err
-    assert f"{removed} was removed; use {replacement}" in captured.err
+    assert "unrecognized arguments:" in captured.err
+    assert "was removed" not in captured.err
 
 
-@pytest.mark.parametrize(("action", "guidance"), [
-    ("+list", "use -i; -i -s name for the alphabetical view"),
-    ("+refresh", "use +update"), ("+update-cache", "use +update"),
-    ("+preload", "use +update --offline"),
-    ("+random", "the layout lab is now scripts/random-layout.py in the brewq source repository"),
+@pytest.mark.parametrize("action", [
+    "+list", "+refresh", "+update-cache", "+preload", "+random", "+bogus",
 ])
-def test_removed_actions_name_replacements_before_io(action, guidance, capsys):
+def test_unknown_actions_fail_before_io(action, capsys):
     with patch("brewq.config.load", side_effect=AssertionError("loaded config")), \
          patch("brewq.cache.refresh", side_effect=AssertionError("updated cache")), \
          pytest.raises(SystemExit) as exc:
@@ -108,7 +102,16 @@ def test_removed_actions_name_replacements_before_io(action, guidance, capsys):
     assert exc.value.code == 2
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert f"{action} was removed; {guidance}" in captured.err
+    assert f"unknown action {action}" in captured.err
+    assert "was removed" not in captured.err
+
+
+def test_action_typo_suggests_current_action(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["+udpate"])
+    assert exc.value.code == 2
+    assert "Did you mean '+update'?" in capsys.readouterr().err
+
 
 
 def test_parsers_have_no_hidden_flags_or_actions():
@@ -139,7 +142,7 @@ def test_removed_option_after_terminator_remains_a_query(capsys, term):
     (["-c=-url"], "name,ver,desc"),
     (["-c", "-ver,+bin"], "name,url,bin,desc"),
 ])
-def test_leading_minus_columns_reach_migration_error(command, flags, equivalent, tmp_path, capsys):
+def test_leading_minus_columns_show_equivalent_list(command, flags, equivalent, tmp_path, capsys):
     (tmp_path / "config.toml").write_text(
         'columns = ["name", "url", "ver", "desc"]\n'
         'installed-columns = ["name", "url", "ver", "desc"]\n'
@@ -247,7 +250,7 @@ def test_main_search_caps_to_terminal_height():
         main(["git"])
 
     assert captured, "build_search_options was not called"
-    assert captured[0].limit == 18
+    assert captured[0].top == 18
 
 
 def test_main_search_explicit_top_overrides_default(capsys):
@@ -266,7 +269,7 @@ def test_main_search_explicit_top_overrides_default(capsys):
 @pytest.mark.parametrize("command", [[], ["-i"]])
 @pytest.mark.parametrize("flag", ["-t", "--top"])
 @pytest.mark.parametrize("value", ["0", "-1", "nope", "1.5"])
-def test_main_rejects_invalid_row_limits(command, flag, value):
+def test_main_rejects_invalid_top(command, flag, value):
     with pytest.raises(SystemExit) as exc:
         main([*command, flag, value])
     assert exc.value.code == 2
@@ -275,7 +278,7 @@ def test_main_rejects_invalid_row_limits(command, flag, value):
 @pytest.mark.parametrize("command", [[], ["-i"]])
 @pytest.mark.parametrize("flag", ["-t", "--top"])
 @pytest.mark.parametrize("tsv", [False, True])
-def test_main_limit_spellings_cap_search_and_list(command, flag, tsv, capsys):
+def test_main_top_caps_search_and_installed(command, flag, tsv, capsys):
     packages = [_pkg(f"tool-{i}", installed=True) for i in range(5)]
     args = [*command, flag, "2", "-c", "name"]
     if tsv:

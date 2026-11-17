@@ -55,7 +55,7 @@ CASES: tuple[Case, ...] = (
             "-c",
             "from brewq import cache, options; "
             "pkgs=cache.load_packages(); "
-            "opts=options.SearchOptions(query=['json'], sort='30d', limit=10); "
+            "opts=options.SearchOptions(query=['json'], sort='30d', top=10); "
             "print(len(options.rank(pkgs, opts)))",
         ),
     ),

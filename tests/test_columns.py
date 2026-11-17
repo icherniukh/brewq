@@ -156,17 +156,17 @@ def test_pick_representative_metric_handles_none_package():
     assert pick_representative_metric(None) == "90d"
 
 
-@pytest.mark.parametrize("old,new", [
-    ("n", "name"), ("t", "type"), ("v", "ver"), ("version", "ver"),
-    ("30", "30d"), ("i30", "30d"), ("installs", "30d"), ("installs_30d", "30d"),
-    ("90", "90d"), ("i90", "90d"), ("installs_90d", "90d"),
-    ("365", "365d"), ("i365", "365d"), ("y", "365d"), ("year", "365d"),
-    ("installs_365d", "365d"), ("trending", "trend"), ("hot", "trend"),
-    ("binaries", "bin"), ("bins", "bin"), ("description", "desc"), ("d", "desc"),
-    ("installed", "inst"), ("i", "inst"), ("h", "url"), ("home", "url"), ("homepage", "url"),
+@pytest.mark.parametrize("old", [
+    "n", "t", "v", "version",
+    "30", "i30", "installs", "installs_30d",
+    "90", "i90", "installs_90d",
+    "365", "i365", "y", "year",
+    "installs_365d", "trending", "hot",
+    "binaries", "bins", "description", "d",
+    "installed", "i", "h", "home", "homepage",
 ])
-def test_removed_field_names_require_new_spelling(old, new):
-    with pytest.raises(ValueError, match=f"use {new!r}"):
+def test_old_field_names_are_unknown(old):
+    with pytest.raises(ValueError, match="Unknown column"):
         resolve(old, [])
 
 
@@ -219,7 +219,7 @@ def test_tsv_only_fields_rejected_in_table_mode(name):
 @pytest.mark.parametrize("spec,equivalent", [
     ("+url,-trend", "name,90d,url,desc"),
     ("+url", "name,90d,trend,url,desc"),
-    ("+version,bin", "name,90d,trend,ver,bin,desc"),
+    ("+ver,bin", "name,90d,trend,ver,bin,desc"),
     ("-trend,bin", "name,90d,desc"),
     ("-desc", "name,90d,trend"),
     ("name,+url", "name,90d,trend,url,desc"),
@@ -230,7 +230,7 @@ def test_signed_tokens_rejected_with_full_equivalent_list(spec, equivalent):
 
 
 
-@pytest.mark.parametrize("spec", ["+", "-", "+bogus", "+ver,", "name,", "", "help"])
+@pytest.mark.parametrize("spec", ["+", "-", "+bogus", "+version", "-version", "+ver,", "name,", "", "help"])
 def test_invalid_column_lists(spec):
     with pytest.raises(ValueError):
         select(spec, ["name"])

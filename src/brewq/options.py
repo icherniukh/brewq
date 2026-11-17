@@ -11,14 +11,6 @@ from brewq.model import Package
 from brewq.render import terminal_size
 
 SORT_CHOICES = ("90d", "30d", "365d", "trend", "name")
-# Migration diagnostics only; public sort input is exact.
-_REMOVED_SORTS = {
-    "installs_90d": "90d", "90": "90d", "i90": "90d", "default": "90d",
-    "installs_30d": "30d", "installs": "30d", "install": "30d", "30": "30d", "i30": "30d",
-    "installs_365d": "365d", "365": "365d", "i365": "365d", "year": "365d",
-    "y": "365d", "annual": "365d", "trending": "trend", "hot": "trend",
-    "n": "name", "nm": "name", "alpha": "name", "alphabetical": "name", "az": "name", "a-z": "name",
-}
 
 
 def sort_choices_text() -> str:
@@ -27,9 +19,6 @@ def sort_choices_text() -> str:
 
 def parse_sort(raw: str) -> str:
     """Validate the exact public sort field."""
-    replacement = _REMOVED_SORTS.get(raw.strip().lower())
-    if replacement:
-        raise ValueError(f"Sort field {raw!r} was removed; use {replacement!r}")
     if raw not in SORT_CHOICES:
         raise ValueError(f"Unknown sort field {raw!r}.{spell.suggestion(raw, SORT_CHOICES)} "
                          f"Valid: {sort_choices_text()}")
@@ -41,12 +30,12 @@ class SearchOptions:
     query: list[str] = field(default_factory=list)
     sort: str = "90d"
     columns_spec: str | list = "default"
-    limit: int = 0
+    top: int = 0
     tsv_output: bool = False
     installed_only: bool = False
     reverse: bool = False
     regex: re.Pattern[str] | None = None
-    # Matches before a positive view limit is applied; used for honest counts.
+    # Matches before a positive top cap is applied; used for honest counts.
     eligible_total: int = 0
     auto_height: int | None = None
 
@@ -62,7 +51,7 @@ def resolve_reverse(explicit: bool | None, cfg: dict) -> bool:
 
 def build_search_options(args: Any, cfg: dict) -> SearchOptions:
     raw_sort = getattr(args, "sort", None)
-    top = getattr(args, "top", None)
+    explicit_top = getattr(args, "top", None)
 
     if raw_sort is not None:
         sort = parse_sort(raw_sort)  # raises ValueError on unknown input
@@ -72,19 +61,19 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
 
     terminal = sys.stdout.isatty() and not getattr(args, "tsv", False)
     show_all = getattr(args, "all", False)
-    limit = 0
+    top = 0
     auto_height = None
-    if top is not None:
-        limit = top
+    if explicit_top is not None:
+        top = explicit_top
     elif terminal and not show_all:
-        cfg_limit = cfg["output"]["limit"]
+        cfg_top = cfg["output"]["top"]
         # Four table lines, cap/cache notices, typed command, next prompt.
         # shortcut: one record minimum; revisit for viewports below nine lines.
-        if cfg_limit == "auto":
+        if cfg_top == "auto":
             auto_height = terminal_size().lines
-            limit = max(1, auto_height - 8)
+            top = max(1, auto_height - 8)
         else:
-            limit = cfg_limit
+            top = cfg_top
 
     reverse = getattr(args, "reverse", None)
     if reverse is None:
@@ -100,7 +89,7 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
         regex=_query_regex(query),
         sort=sort,
         columns_spec=columns_spec,
-        limit=limit,
+        top=top,
         tsv_output=getattr(args, "tsv", False),
         installed_only=getattr(args, "installed", False),
         reverse=resolve_reverse(reverse, cfg),
@@ -246,8 +235,8 @@ def rank(
     # Stable pinning applies across status groups and every sort, before capping.
     result.sort(key=lambda p: -_exact_match_score(p, query_terms))
     opts.eligible_total = len(result)
-    if opts.limit > 0:
-        result = result[: opts.limit]
+    if opts.top > 0:
+        result = result[: opts.top]
     if opts.reverse:
         result.reverse()
     return result

@@ -18,7 +18,7 @@ class SearchSettings(TypedDict):
 
 class OutputSettings(TypedDict):
     columns: list[str]
-    limit: int | str
+    top: int | str
 
 
 class ListSettings(TypedDict):
@@ -44,7 +44,7 @@ DEFAULTS: Settings = {
     },
     "output": {
         "columns": ["name", "90d", "trend", "desc"],
-        "limit": "auto",
+        "top": "auto",
     },
     "list": {
         "columns": ["name", "desc"],
@@ -58,7 +58,7 @@ DEFAULTS: Settings = {
 
 # Root TOML keys match long option spellings; internal settings retain their owners.
 _SETTINGS = {
-    "top": ("output", "limit"),
+    "top": ("output", "top"),
     "sort": ("search", "sort"),
     "reverse": ("search", "reverse"),
     "columns": ("output", "columns"),
@@ -66,8 +66,6 @@ _SETTINGS = {
     "auto-update": ("cache", "auto_refresh"),
     "max-age": ("cache", "max_age_seconds"),
 }
-_OLD_SETTINGS = {f"{section}.{key}": name for name, (section, key) in _SETTINGS.items()}
-_OLD_SETTINGS.update({"limit": "top", "auto_refresh": "auto-update", "max_age_seconds": "max-age"})
 
 
 def _config_path() -> Path:
@@ -93,11 +91,21 @@ def _validate_value(section: str, key: str, value: Any) -> None:
     elif key in {"reverse", "auto_refresh"}:
         if type(value) is not bool:
             raise ValueError("expected true or false")
-    elif key == "limit":
+    elif key == "top":
         if value != "auto" and (type(value) is not int or value < 0):
             raise ValueError('expected "auto" or a nonnegative integer')
     elif type(value) is not int or value < 0:
         raise ValueError("expected a nonnegative integer")
+
+
+_REPORTED: set[str] = set()
+
+
+def _report(message: str) -> None:
+    """Print a config diagnostic once per process; several modules load settings."""
+    if message not in _REPORTED:
+        _REPORTED.add(message)
+        print(message, file=sys.stderr)
 
 
 def load() -> Settings:
@@ -110,31 +118,18 @@ def load() -> Settings:
     except FileNotFoundError:
         file_cfg = {}
     except (OSError, ValueError) as exc:
-        print(f"brewq: config error ({path}): {exc} — using defaults", file=sys.stderr)
+        _report(f"brewq: config error ({path}): {exc} — using defaults")
         file_cfg = {}
 
     def warn(message: str) -> None:
-        print(f"brewq: config error ({path}): {message} — using default", file=sys.stderr)
+        _report(f"brewq: config error ({path}): {message} — using default")
 
     # Validation is field-local so a typo does not discard neighboring settings.
     sections = cast(dict[str, dict[str, Any]], cfg)
     for name, value in file_cfg.items():
         if name not in _SETTINGS:
-            if name in cfg and isinstance(value, dict) and value:
-                for key in value:
-                    old = f"{name}.{key}"
-                    replacement = _OLD_SETTINGS.get(old)
-                    if replacement:
-                        warn(f"{old} was removed; use root key {replacement!r}")
-                    else:
-                        warn(f"unknown setting {old!r}.{spell.suggestion(key, _SETTINGS)}")
-            elif name in _OLD_SETTINGS:
-                warn(f"{name} was removed; use {_OLD_SETTINGS[name]!r}")
-            else:
-                replacements = [new for new, (section, _) in _SETTINGS.items() if section == name]
-                hint = (f" Use root keys: {', '.join(replacements)}." if replacements
-                        else spell.suggestion(name, _SETTINGS))
-                warn(f"unknown setting {name!r}.{hint}")
+            hint = spell.suggestion(name, _SETTINGS)
+            warn(f"unknown setting {name!r}" + (f".{hint}" if hint else ""))
             continue
         section, key = _SETTINGS[name]
         try:
@@ -151,8 +146,8 @@ def load() -> Settings:
             age = int(raw_age)
             _validate_value("cache", "max_age_seconds", age)
         except ValueError:
-            print("brewq: config error: BREWQ_CACHE_MAX_AGE: expected a nonnegative integer"
-                  " — using configured value", file=sys.stderr)
+            _report("brewq: config error: BREWQ_CACHE_MAX_AGE: expected a nonnegative integer"
+                    " — using configured value")
         else:
             cfg["cache"]["max_age_seconds"] = age
 
@@ -167,8 +162,8 @@ def auto_refresh_enabled(cfg: dict) -> bool:
         if value in {"1", "true", "yes", "on"}:
             return False
         if value not in {"", "0", "false", "no", "off"}:
-            print("brewq: config error: BREWQ_NO_AUTO_REFRESH: expected true or false"
-                  " — using configured value", file=sys.stderr)
+            _report("brewq: config error: BREWQ_NO_AUTO_REFRESH: expected true or false"
+                    " — using configured value")
     return bool(cfg["cache"]["auto_refresh"])
 
 

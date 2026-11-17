@@ -12,19 +12,9 @@ from brewq import options as options_mod
 from brewq import render as render_mod
 from brewq import scheduler as scheduler_mod
 from brewq import seed as seed_mod
+from brewq import spell
 
 _ACTIONS = frozenset({"update", "setup", "config", "completion"})
-_REMOVED_OPTIONS = {
-    "-v": "-c all", "--verbose": "-c all", "--url": "-c default,url",
-    "-r": "-u/--update", "--refresh": "-u/--update",
-    "--limit": "-t/--top", "--analytics": "-c default,90d",
-}
-_REMOVED_ACTIONS = {
-    "+list": "use -i; -i -s name for the alphabetical view",
-    "+refresh": "use +update", "+update-cache": "use +update",
-    "+preload": "use +update --offline",
-    "+random": "the layout lab is now scripts/random-layout.py in the brewq source repository",
-}
 _FORMATTER = argparse.RawDescriptionHelpFormatter
 
 
@@ -137,8 +127,8 @@ def _positive_int(raw: str) -> int:
     return value
 
 
-def _add_limit_flag(parser: argparse.ArgumentParser, *, dest: str) -> None:
-    parser.add_argument("-t", "--top", dest=dest,
+def _add_top_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("-t", "--top",
                         type=_positive_int, metavar="N",
                         help="show at most N packages")
 
@@ -175,7 +165,7 @@ def _build_search_parser() -> argparse.ArgumentParser:
     parser.add_argument("-s", "--sort", metavar="FIELD",
                         help=f"sort by {options_mod.sort_choices_text()} (default: 90d)")
     _add_reverse_flag(parser)
-    _add_limit_flag(parser, dest="top")
+    _add_top_flag(parser)
     parser.add_argument("-i", "--installed", action="store_true",
                         help="search installed packages only")
     parser.add_argument("-a", "--all", action="store_true",
@@ -357,7 +347,7 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
     if not ranked:
         query_str = " ".join(opts.query) if opts.query else "(installed filter)"
         print(f"No results for: {query_str}", file=sys.stderr)
-        _report_view_cap(0, opts.eligible_total, opts.limit)
+        _report_view_cap(0, opts.eligible_total, opts.top)
         _finish_cache_command(loaded, cfg, no_color=args.no_color)
         return 0
 
@@ -388,14 +378,14 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
                 print(f"brewq: no {key} values in these results; column hidden", file=sys.stderr)
         shown = result.shown
     sys.stdout.flush()
-    _report_view_cap(shown, opts.eligible_total, opts.limit)
+    _report_view_cap(shown, opts.eligible_total, opts.top)
     _finish_cache_command(loaded, cfg, no_color=args.no_color)
     return 0
 
 
-def _report_view_cap(shown: int, total: int, limit: int) -> None:
+def _report_view_cap(shown: int, total: int, top: int) -> None:
     """Disclose a cap that hid rows; stdout stays machine-clean."""
-    if limit <= 0 or shown >= total:
+    if top <= 0 or shown >= total:
         return
     print(f"brewq: showing {shown} of {total}; -a for all, -t N for a count",
           file=sys.stderr)
@@ -501,37 +491,10 @@ def _join_column_edits(argv: list[str]) -> list[str]:
     return normalized
 
 
-def _reject_removed_options(argv: list[str], parser: argparse.ArgumentParser) -> None:
-    parser._brewq_argv = argv
-    tokens = iter(argv)
-    for token in tokens:
-        if token == "--":
-            break
-        if not token.startswith("-"):
-            continue
-        flags = ([token.partition("=")[0]] if token.startswith("--")
-                 else [f"-{char}" for char in token[1:]])
-        for position, flag in enumerate(flags):
-            if flag in _REMOVED_OPTIONS:
-                parser.error(f"{flag} was removed; use {_REMOVED_OPTIONS[flag]}")
-            action = parser._option_string_actions.get(flag)
-            if action is None:
-                break
-            if action.nargs != 0:
-                # Attached values stay in this token; separate values are not flags.
-                if token == flag or (not token.startswith("--") and position == len(flags) - 1):
-                    if next(tokens, None) == "--":
-                        return
-                break
-
-
 def _main(argv: Sequence[str] | None = None) -> int:
     raw_argv = _join_column_edits(list(argv) if argv is not None else sys.argv[1:])
     parser = _build_search_parser()
     parser._brewq_argv = raw_argv
-    if raw_argv and raw_argv[0] in _REMOVED_ACTIONS:
-        action = raw_argv[0]
-        parser.error(f"{action} was removed; {_REMOVED_ACTIONS[action]}")
     if raw_argv == ["--_complete"]:
         sys.stdout.write("".join(f"{name}\n" for name in cache_mod.completion_names()))
         return 0
@@ -540,7 +503,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
     # default command even when query terms are named like subcommands.
     if raw_argv and raw_argv[0].startswith("+") and raw_argv[0][1:] in _ACTIONS:
         parser = _build_command_parser()
-        _reject_removed_options(raw_argv, parser._brewq_subcommands[raw_argv[0]])
+        parser._brewq_subcommands[raw_argv[0]]._brewq_argv = raw_argv
         args = parser.parse_args(raw_argv)
         if args.command == "+update":
             return _cmd_update(args)
@@ -555,10 +518,11 @@ def _main(argv: Sequence[str] | None = None) -> int:
             return 0
 
     if raw_argv and raw_argv[0].startswith("+") and raw_argv[0] != "+":
-        parser.error(f"unknown action {raw_argv[0]}")
+        action = raw_argv[0]
+        choices = sorted("+" + name for name in _ACTIONS)
+        parser.error(f"unknown action {action}.{spell.suggestion(action, choices)}")
 
     # Flags may sit between query terms. Actions are +tokens, never bare words.
-    _reject_removed_options(raw_argv, parser)
     args = parser.parse_intermixed_args(raw_argv)
     if args.full_help:
         print(_full_help_text(), end="")

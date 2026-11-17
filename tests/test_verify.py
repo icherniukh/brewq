@@ -35,7 +35,7 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
                 output = output.replace("-c, --columns", "-c COLS, --columns COLS")
         elif args == ["+list"]:
             code, output = (0, "NAME  DESC\n") if broken == "list-action" else (2, "")
-            return subprocess.CompletedProcess(argv, code, output, "use -i" if code == 2 else "")
+            return subprocess.CompletedProcess(argv, code, output, "unknown action +list" if code == 2 else "")
         elif args == ["+completion", "zsh"]:
             if broken == "completion":
                 output = "compdef _brewq brewq bq\n"
