@@ -113,7 +113,7 @@ follow the result-cap decision below.
 **Option surface (owner decision 2026-11-17, `brewq-options-cleanup`):**
 `-h`/`--help` shows search help; `--full-help` includes the field reference.
 `-V`/`--version` prints the version. `--tsv` and `--no-color` are long-only.
-Bare `+config` prints the configuration file path. Environment controls are
+Environment controls are
 `BREWQ_CONFIG`, `BREWQ_CACHE_DIR`, and `BREWQ_NO_AUTO_REFRESH`; cache age is set
 through configured `max-age`. Action and option help uses lowercase labels.
 
@@ -128,9 +128,19 @@ fields, and config; typos suggest exact names. `inst`/`status` are TSV-only, sin
 tables already show their marker and description prefix. Config keys are root-level
 long option names: `top`, `sort`, `reverse`, `columns`, `installed-columns`,
 `auto-update`, `max-age`.
-`--save` and effective-value `+config` remain post-M1 (`brewq-dec-config-write`);
+`--save` remains post-M1 (`brewq-dec-config-write`);
 display-only discovery work remains M2. `default`/`all` can evolve; scripts should
 list concrete fields.
+
+**Config commands (owner decision 2026-11-17, `brewq-config-commands`):**
+Bare `+config` is `+config show`: print the path/existence comment and effective
+root values as TOML with default, file, or environment source comments.
+`+config defaults` prints reusable built-in TOML. `+config edit` uses `$VISUAL`,
+then `$EDITOR`, creates missing directories and a defaults file, and validates
+after the editor exits. Invalid/unknown settings exit 1; editor failures
+retain the editor's exit code. A small writer for known types needs no runtime
+dependency. This supersedes the path-only step in `brewq-options-cleanup`;
+`--save` stays post-M1 under `brewq-dec-config-write`.
 
 **Installed view (owner decision 2026-11-17, `brewq-installed-unify`):**
 `-i [query]` is the only installed view; `-i -s name` sorts alphabetically.
@@ -327,7 +337,8 @@ owner choice. Open questions live only in Beads: `bd list --type decision`.
 | Command shape | Search is the root command. Actions are `+` tokens in first position; bare words are queries. | `c56a603` (Nov 5) |
 | Machine output | TSV is the only machine-readable format. | product boundary, AGENTS.md |
 | Columns | Exact ordered `-c` lists; reserved `default`/`all`; first occurrence wins. One short name equals its lowercased header across columns, sorts, and config; no aliases. Signed edits error with a concrete replacement list. `inst`/`status` are TSV-only. Reverses the earlier alias/edit grammar. | owner decision 2026-11-17 (`brewq-dec-column-grammar`, `brewq-field-names`, `brewq-options-cleanup`); supersedes `brewq-h7m`, `brewq-w5h` |
-| Config | Root long-option keys: `top`, `sort`, `reverse`, `columns`, `installed-columns`, `auto-update`, `max-age`. Unknown keys/fields use ordinary errors; typos suggest exact names. Config-only `auto` remains. Bare `+config` prints the configuration file path; `--save` and effective-value display stay post-M1. Environment controls: `BREWQ_CONFIG`, `BREWQ_CACHE_DIR`, `BREWQ_NO_AUTO_REFRESH`. | owner decision 2026-11-17 (`brewq-field-names`, `brewq-dec-column-grammar`, `brewq-dec-config-write`, `brewq-options-cleanup`) |
+| Config | Root long-option keys: `top`, `sort`, `reverse`, `columns`, `installed-columns`, `auto-update`, `max-age`. Unknown keys/fields use ordinary errors; typos suggest exact names. Config-only `auto` remains. `--save` stays post-M1 under `brewq-dec-config-write`. Environment controls: `BREWQ_CONFIG`, `BREWQ_CACHE_DIR`, `BREWQ_NO_AUTO_REFRESH`. | owner decision 2026-11-17 (`brewq-field-names`, `brewq-dec-column-grammar`, `brewq-dec-config-write`, `brewq-options-cleanup`) |
+| Config commands | Bare `+config` = `show`: path/existence comment and effective TOML values with sources. `defaults` prints built-in TOML; `edit` uses VISUAL then EDITOR, creates a missing defaults file, and validates after the editor exits. No runtime dependency. `--save` remains post-M1 under `brewq-dec-config-write`. | owner decision 2026-11-17 (`brewq-config-commands`); supersedes the path-only `brewq-options-cleanup` step |
 | Help and version | `-h`/`--help` shows search help; `--full-help` includes the field reference; `-V`/`--version` prints the version. `--tsv` and `--no-color` are long-only. Action and option help uses lowercase labels. | owner decision 2026-11-17 (`brewq-options-cleanup`) |
 | Default sort | Raw 90-day installs. TREND stays in the default table but is not the default sort. | `brewq-253`, `brewq-h7m` |
 | Installed view | `-i [query]` is the only installed view. Keep `installed-columns` and TSV fields; `-i -s name` is alphabetical. Search sort/cap/status policies apply. | owner decision 2026-11-17 (`brewq-installed-unify`) |

@@ -84,7 +84,8 @@ def test_help_version_and_config_do_not_create_a_cache(tmp_path):
     assert _run(tmp_path, "--version").stdout.startswith("brewq ")
     config = _run(tmp_path, "+config")
     assert config.returncode == 0
-    assert config.stdout.strip().endswith("config.toml")
+    assert config.stdout.startswith(f"# {tmp_path / 'config.toml'} (not found)\n")
+    assert 'top = "auto" # default' in config.stdout
     assert not (tmp_path / "cache" / "brew-all.json").exists()
 
 

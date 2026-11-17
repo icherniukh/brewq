@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import sys
 import tomllib
@@ -108,9 +109,11 @@ def _report(message: str) -> None:
         print(message, file=sys.stderr)
 
 
-def load() -> Settings:
-    """Load validated settings; invalid file fields retain their built-in default."""
+def validate() -> tuple[Settings, dict[str, str], list[str]]:
+    """Read settings with their sources and diagnostics, without printing."""
     cfg = copy.deepcopy(DEFAULTS)
+    sources = dict.fromkeys(_SETTINGS, "default")
+    diagnostics: list[str] = []
     path = _config_path()
     try:
         with path.open("rb") as fh:
@@ -118,11 +121,11 @@ def load() -> Settings:
     except FileNotFoundError:
         file_cfg = {}
     except (OSError, ValueError) as exc:
-        _report(f"brewq: config error ({path}): {exc} — using defaults")
+        diagnostics.append(f"brewq: config error ({path}): {exc} — using defaults")
         file_cfg = {}
 
     def warn(message: str) -> None:
-        _report(f"brewq: config error ({path}): {message} — using default")
+        diagnostics.append(f"brewq: config error ({path}): {message} — using default")
 
     # Validation is field-local so a typo does not discard neighboring settings.
     sections = cast(dict[str, dict[str, Any]], cfg)
@@ -138,8 +141,35 @@ def load() -> Settings:
             warn(f"{name}: {exc}")
             continue
         sections[section][key] = value
+        sources[name] = "config file"
+
+    return cfg, sources, diagnostics
+
+
+def load() -> Settings:
+    """Load validated settings; invalid file fields retain their built-in default."""
+    cfg, _, diagnostics = validate()
+    for message in diagnostics:
+        _report(message)
 
     return cfg
+
+
+def to_toml(cfg: Settings, sources: dict[str, str] | None = None) -> str:
+    """Serialize known root keys (strings, integers, booleans and string arrays)."""
+    sections = cast(dict[str, dict[str, Any]], cfg)
+    return "".join(
+        f"{name} = {json.dumps(sections[section][key], ensure_ascii=False)}"
+        + (f" # {sources[name]}" if sources is not None else "") + "\n"
+        for name, (section, key) in _SETTINGS.items()
+    )
+
+
+def starter_toml() -> str:
+    """A new config file: built-in defaults commented out, so it changes nothing."""
+    header = ("# brewq configuration. Uncomment a line to override its built-in default;\n"
+              "# keys left commented keep following brewq's defaults.\n")
+    return header + "".join(f"# {line}\n" for line in to_toml(DEFAULTS).splitlines())
 
 
 def auto_refresh_enabled(cfg: dict) -> bool:

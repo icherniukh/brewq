@@ -72,12 +72,14 @@ def test_version_ignores_invalid_operational_config(tmp_path, flag):
     assert proc.stderr == ""
 
 
-def test_config_path_ignores_invalid_operational_config(tmp_path):
+def test_config_show_reports_invalid_config_without_cache_access(tmp_path):
     (tmp_path / "config.toml").write_text("output = []\n")
     proc = _run(tmp_path, "+config")
     assert proc.returncode == 0
-    assert proc.stdout.strip() == str(tmp_path / "config.toml")
-    assert proc.stderr == ""
+    assert proc.stdout.startswith(f"# {tmp_path / 'config.toml'} (exists)\n")
+    assert 'top = "auto" # default' in proc.stdout
+    assert "unknown setting 'output'" in proc.stderr
+    assert not (tmp_path / "cache").exists()
 
 
 def test_field_reference_ignores_config_and_does_not_initialize_cache(tmp_path):
@@ -93,7 +95,7 @@ def test_field_reference_ignores_config_and_does_not_initialize_cache(tmp_path):
 
 
 @pytest.mark.parametrize("args,diagnostic", [
-    (("+config", "path"), "unrecognized arguments: path"),
+    (("+config", "path"), "invalid choice: 'path'"),
     (("--no-reverse",), "unrecognized arguments: --no-reverse"),
 ])
 def test_unknown_arguments_are_usage_errors_without_cache_access(tmp_path, args, diagnostic):

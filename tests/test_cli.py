@@ -117,11 +117,14 @@ def test_action_typo_suggests_current_action(capsys):
 def test_parsers_have_no_hidden_flags_or_actions():
     parsers = [_build_search_parser(), _build_command_parser()]
     while parsers:
-        for action in parsers.pop()._actions:
+        parser = parsers.pop()
+        for action in parser._actions:
             if action.option_strings:
                 assert action.help != argparse.SUPPRESS
             if isinstance(action, argparse._SubParsersAction):
-                assert set(action.choices) == {"+update", "+setup", "+config", "+completion"}
+                expected = ({"show", "defaults", "edit"} if parser.prog.endswith(" +config")
+                            else {"+update", "+setup", "+config", "+completion"})
+                assert set(action.choices) == expected
                 assert all(choice.help != argparse.SUPPRESS for choice in action._choices_actions)
                 parsers.extend(action.choices.values())
 
@@ -829,11 +832,12 @@ def test_update_failure_without_usable_cache_reports_query_failure(capsys):
     assert "register update failed: offline" in captured.err
 
 
-def test_main_config_path(capsys):
+def test_main_config_show(capsys, tmp_path):
     rc = main(["+config"])
     assert rc == 0
     out = capsys.readouterr().out.strip()
-    assert out.endswith("config.toml")
+    assert out.startswith(f"# {tmp_path / 'config.toml'} (not found)\n")
+    assert 'top = "auto" # default' in out
 
 
 def test_seed_search_renders_before_scheduling(capsys):

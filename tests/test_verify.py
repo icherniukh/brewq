@@ -34,7 +34,15 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
             if metavars:
                 output = output.replace("-c, --columns", "-c COLS, --columns COLS")
         elif args == ["+config"]:
-            output = "" if broken == "config-path" else kwargs["env"]["BREWQ_CONFIG"] + "\n"
+            from brewq.config import load, to_toml
+
+            path = Path(kwargs["env"]["BREWQ_CONFIG"])
+            with monkeypatch.context() as context:
+                context.setenv("BREWQ_CONFIG", str(path))
+                output = (f"# {path} ({'exists' if path.exists() else 'not found'})\n"
+                          + to_toml(load()))
+            if broken == "config-path":
+                output = str(path) + "\n"
         elif args == ["+list"]:
             code, output = (0, "NAME  DESC\n") if broken == "list-action" else (2, "")
             return subprocess.CompletedProcess(argv, code, output, "unknown action +list" if code == 2 else "")

@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,7 @@ from pathlib import Path
 from brewq import __version__
 from brewq.cli import _build_command_parser
 from brewq.completion import script_errors
+from brewq.config import DEFAULTS, to_toml
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -102,7 +104,9 @@ def check_cli_smoke() -> Result:
         }))
         env = {"PATH": str(root / "no-brew"), "BREWQ_CACHE_DIR": directory,
                "BREWQ_CONFIG": str(root / "config.toml"), "BREWQ_NO_AUTO_REFRESH": "1"}
-        cases.append(("config_path", _brewq("+config"), [str(root / "config.toml")]))
+        cases.append(("config_show", _brewq("+config"), [
+            f"# {root / 'config.toml'} (not found)", "# BREWQ_NO_AUTO_REFRESH",
+        ]))
         for name, argv, must_contain in cases:
             proc = _run(argv, timeout=20.0, env=env)
             if proc.returncode != 0:
@@ -246,8 +250,18 @@ def check_installed_shim() -> Result:
                 [path, "+config"], cwd=directory, env=env,
                 capture_output=True, text=True, timeout=20.0,
             )
-            if config.returncode != 0 or config.stdout.strip() != str(root / "config.toml"):
-                failures.append(f"{name}: +config must print the config file path")
+            expected = tomllib.loads(to_toml(DEFAULTS))
+            config_path = root / "config.toml"
+            if config_path.exists():
+                expected.update(tomllib.loads(config_path.read_text()))
+            try:
+                valid_config = tomllib.loads(config.stdout) == expected
+            except ValueError:
+                valid_config = False
+            header = f"# {config_path} ({'exists' if config_path.exists() else 'not found'})\n"
+            if (config.returncode != 0 or config.stderr or not valid_config
+                    or not config.stdout.startswith(header)):
+                failures.append(f"{name}: +config must show the path and effective TOML values")
             for args in cases:
                 proc = subprocess.run(
                     [path, *args], cwd=directory, env=env,

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import os
+import shlex
+import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -46,7 +49,7 @@ def _error_label(*, no_color: bool = False) -> str:
         return "Error"
     return "\033[1mError\033[0m"
 _SEARCH_EPILOG = """\
-actions: +update, +setup, +config, +completion zsh
+actions: +update, +setup, +config [show|defaults|edit], +completion zsh
 examples: brewq ripgrep | brewq -i | brewq +update
 """
 
@@ -61,6 +64,9 @@ Examples:
 _CONFIG_EPILOG = """\
 Examples:
   brewq +config
+  brewq +config show
+  brewq +config defaults
+  brewq +config edit
 
 The config file controls default columns and cache freshness.
 """
@@ -101,7 +107,7 @@ cache:
   Configured caps/reverse apply only to terminal tables; pipes/TSV need explicit flags.
   If analytics fail, counts from the previous user snapshot are retained and
   retried later.
-  `brewq +config` prints the configuration file path.
+  `brewq +config` shows effective configuration values and their sources.
 """
 
 
@@ -207,13 +213,22 @@ def _build_command_parser() -> argparse.ArgumentParser:
                          help="remove brewq's own bq shortcut")
 
     # config
-    subparsers.add_parser(
+    config_p = subparsers.add_parser(
         "+config",
-        help="print the config file path",
-        description="Print the path where brewq reads configuration.",
+        help="show, print defaults, or edit configuration",
+        description="Show effective configuration, print defaults, or edit the config file.",
         epilog=_CONFIG_EPILOG,
         formatter_class=_FORMATTER,
     )
+    config_commands = config_p.add_subparsers(dest="config_command", parser_class=_Parser)
+    config_p._brewq_subcommands = config_commands.choices
+    for name, description in (
+        ("show", "show effective values and their sources (default)"),
+        ("defaults", "print built-in defaults as TOML"),
+        ("edit", "edit the config file and validate it"),
+    ):
+        child = config_commands.add_parser(name, help=description, description=description)
+        _add_color_flag(child)
 
     completion_p = subparsers.add_parser(
         "+completion", help="generate shell completion", formatter_class=_FORMATTER,
@@ -311,7 +326,40 @@ def shutil_which(name: str) -> str | None:
 
 
 def _cmd_config(args: argparse.Namespace) -> int:
-    print(config_mod.config_path())
+    if args.config_command == "defaults":
+        print(config_mod.to_toml(config_mod.DEFAULTS), end="")
+        return 0
+
+    path = config_mod.config_path()
+    if args.config_command == "edit":
+        try:
+            editor = shlex.split(os.environ.get("VISUAL") or os.environ.get("EDITOR") or "")
+            if not editor:
+                print("brewq: set VISUAL or EDITOR to edit configuration", file=sys.stderr)
+                return 1
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                with path.open("x", encoding="utf-8") as fh:
+                    fh.write(config_mod.starter_toml())
+            except FileExistsError:
+                pass
+            result = subprocess.run([*editor, str(path)], check=False)
+        except (OSError, ValueError) as exc:
+            print(f"brewq: config edit: {exc}", file=sys.stderr)
+            return 1
+        _, _, diagnostics = config_mod.validate()
+        for message in diagnostics:
+            print(message, file=sys.stderr)
+        return result.returncode or int(bool(diagnostics))
+
+    cfg, sources, diagnostics = config_mod.validate()
+    for message in diagnostics:
+        print(message, file=sys.stderr)
+    cfg["cache"]["auto_refresh"] = config_mod.auto_refresh_enabled(cfg)
+    if os.environ.get("BREWQ_NO_AUTO_REFRESH", "").strip().lower() in {"1", "true", "yes", "on"}:
+        sources["auto-update"] = "BREWQ_NO_AUTO_REFRESH"
+    print(f"# {path} ({'exists' if path.exists() else 'not found'})")
+    print(config_mod.to_toml(cfg, sources), end="")
     return 0
 
 

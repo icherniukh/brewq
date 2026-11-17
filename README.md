@@ -240,7 +240,7 @@ brewq +update --force    # force recovery, including a recently corrupted cache
 brewq +update --offline  # install the bundled catalog as the local cache, offline
 brewq -u ripgrep        # update the register, then search
 brewq -a -i             # all installed matches, best row last on a TTY
-brewq +config           # print the configuration file path
+brewq +config           # show effective configuration and sources
 ```
 
 `+update --offline` replaces the cache with the bundled catalog without contacting
@@ -261,17 +261,36 @@ even with background updates disabled.
 ## Configuration
 
 Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless
-`BREWQ_CONFIG` overrides it. `brewq +config` prints this path without loading
-operational configuration. Built-in defaults:
+`BREWQ_CONFIG` overrides it. Bare `brewq +config` is `brewq +config show`: it
+prints a comment with the path and whether the file exists, then every key's
+effective value as valid TOML. Trailing comments identify each source: `default`,
+`config file`, or `BREWQ_NO_AUTO_REFRESH` when that variable disables updates.
+
+`brewq +config defaults` prints the built-in defaults as TOML, suitable for a
+starter file. `brewq +config edit` opens the file in `$VISUAL`, falling back to
+`$EDITOR`; set one of these variables first. Editor arguments such as `code -w`
+are supported. If the file is missing, brewq creates it with every default commented out, so it
+changes nothing until you uncomment a line; keys left commented keep following
+brewq's defaults. After the editor exits, brewq validates the
+file and exits 1 on invalid or unknown settings; an editor failure returns the
+editor's exit code.
+
+```sh
+brewq +config show
+bq +config defaults > config.toml
+VISUAL="code -w" brewq +config edit
+```
+
+Built-in defaults:
 
 ```toml
+top = "auto" # terminal height; positive integer = fixed cap; 0 = unlimited; -t overrides
 sort = "90d"
 reverse = false # terminal default; true or -a puts the best row last
-top = "auto" # terminal height; positive integer = fixed cap; 0 = unlimited; -t overrides
 columns = ["name", "90d", "trend", "desc"]
 installed-columns = ["name", "desc"]
-max-age = 86400 # seconds
 auto-update = true # false, or BREWQ_NO_AUTO_REFRESH=1, skips background updates
+max-age = 86400 # seconds
 ```
 
 `BREWQ_CACHE_DIR` overrides the cache directory, otherwise
@@ -289,8 +308,9 @@ concrete names, with `auto` as the search-only exception; `default` and `all`
 are CLI selection words.
 
 Invalid keys, types, ranges, sort names, and columns emit a concise
-stderr diagnostic and fall back field-by-field. Help, version, and `+config` do
-not load operational configuration.
+stderr diagnostic and fall back field-by-field. Help, version, and
+`+config defaults` do not load configuration. Config commands do not load the
+package cache. Persisting query options with `--save` remains post-M1.
 
 ## License
 

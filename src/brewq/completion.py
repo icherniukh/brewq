@@ -52,6 +52,8 @@ def script_errors(text: str, commands: argparse.ArgumentParser) -> list[str]:
     for name in action_names(commands):
         if name not in text:
             errors.append(f"missing action {name}")
+    if "'1:config command:(show defaults edit)'" not in text:
+        errors.append("missing config subcommands")
     for marker in ("--_complete", "--sort", "--installed", "--top", "--offline",
                    "--columns", "--reverse", "--all", "-a", "-V", "--version",
                    "--tsv", "--no-color", "--update"):
@@ -72,6 +74,9 @@ def zsh_script(search: argparse.ArgumentParser, commands: argparse.ArgumentParse
     branches = []
     positional = {"+completion": "'1:shell:(zsh)'"}
     for name, parser in subparsers.items():
+        nested = next((a for a in parser._actions if isinstance(a, argparse._SubParsersAction)), None)
+        if nested is not None:
+            positional[name] = shlex.quote(f"1:config command:({' '.join(nested.choices)})")
         branches.append(
             f"      {shlex.quote(name)}) _arguments -s -S {_option_specs(parser)} {positional.get(name, '')} ;;"
         )
