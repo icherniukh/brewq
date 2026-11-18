@@ -17,8 +17,9 @@ bq ripgrep
 
 `uv tool install` installs `brewq` only. `brewq +setup` links `bq` beside it when
 that name is free in the command directory and is not a shell alias or function.
-An existing foreign `bq` is left unchanged. `brq` is not created. Remove the
-shortcut and package with:
+An existing foreign `bq` is left unchanged. `brq` is not created.
+`brewq +setup --dry-run` prints the planned link or removal without changing
+anything. Remove the shortcut and package with:
 
 ```sh
 brewq +setup --remove
@@ -68,8 +69,8 @@ brewq -c name,90d,url ripgrep
 brewq --tsv -c name,90d,url ripgrep
 ```
 
-`brewq --help` shows the common search path. `brewq --full-help` adds the full
-column reference plus concise trending and cache behavior. `-V` / `--version`
+`brewq --help` shows the common search path. `brewq --full-help` (`-f`) adds the full
+column reference plus concise trending and cache behavior. `-v` / `--version`
 prints the version.
 
 Search matches names, formula aliases, and descriptions. Flags may appear
@@ -90,7 +91,7 @@ within those status groups after exact matches.
 | Search option | Current behavior |
 | --- | --- |
 | `-s`, `--sort FIELD` | `90d` (built-in default), `30d`, `365d`, `trend`, or `name` |
-| `-R`, `--reverse` | Reverse the chosen order after the cap, so the best row is last |
+| `-r`, `--reverse` | Reverse the chosen order after the cap, so the best row is last |
 | `-t`, `--top N` | Positive result cap; overrides configuration |
 | `-i`, `--installed` | Show installed packages, optionally filtered by query |
 | `-u`, `--update` | Force a register refresh, then query; use local data if refresh fails |
@@ -98,8 +99,8 @@ within those status groups after exact matches.
 
 For terminal tables, cap precedence is explicit `-t N`, then `-a` (unlimited),
 then configured `top`. The default `top = "auto"` fits the terminal height:
-`max(1, rows - 8)` records. Eight lines cover the leading blank, header, rule,
-trailing blank, `showing N of M` notice, cache note, typed command, and next prompt.
+`max(1, rows - 6)` records. Six lines cover the header, rule,
+`showing N of M` notice, cache note, typed command, and next prompt.
 When the layout falls back to vertical records, auto sizing counts each shown
 field's wrapped lines and the separator after each record, reserving four lines
 for notices, the command, and the prompt. It keeps at least one record, which can
@@ -110,7 +111,7 @@ those variables are fallbacks only without a TTY.
 
 A cap that hides rows reports `showing N of M; -a for all, -t N for a count` on
 stderr; M counts every match, inactive ones included. Pipes and TSV ignore
-configured caps and reverse: they are uncapped and best-first unless `-t` or `-R`
+configured caps and reverse: they are uncapped and best-first unless `-t` or `-r`
 is explicitly given. `-a` does not change their ordering. Machine-readable stdout
 stays clean.
 
@@ -118,24 +119,23 @@ These output options work for search, including `-i`:
 
 | Output option | Current behavior |
 | --- | --- |
-| `-c`, `--columns COLS` | Exact ordered fields; `default` or `all` |
-| `--tsv` | Selected columns as raw tab-separated rows, without a header |
-| `--no-color` | Suppress ANSI styling on stdout and stderr |
+| `-c`, `--columns COLS` | Exact ordered fields; `default` for the configured view |
+| `-m`, `--tsv` | Selected columns as raw tab-separated rows, without a header |
+| `-n`, `--no-color` | Suppress ANSI styling on stdout and stderr |
+| `-q`, `--quiet` | Suppress routine status notes on stderr; errors and data-quality warnings still print |
 
 Fields have one exact name shared by `-c`, `-s` (for sortable fields), and
 configuration: `name`, `type`, `ver`, `30d`, `90d`, `365d`, `trend`, `bin`, `url`,
-`desc`, `inst`, `status`. Each matches its table header lowercased. `inst` and
-`status` are TSV-only; selecting them in table mode fails with guidance to use
-`--tsv`. Search tables show installed state as the name's ✔ marker; `-i` omits
-it because every result is installed. Package status appears as a description
-prefix. Typos suggest exact names without automatically resolving them.
+`desc`. Each matches its table header lowercased. Search tables show installed
+state as the name's ✔ marker; `-i` omits it because every result is installed.
+Package status appears as a description prefix. Typos suggest exact names
+without automatically resolving them.
 
 Use one `-c` with a comma-separated list of fields in the desired order.
-`default` expands the current view's configured columns, and `all` expands every
-field available in the output mode (including `inst` and `status` with `--tsv`).
+`default` expands the current view's configured columns.
 Duplicates keep their first occurrence: `url,default` puts URL first;
-`default,name` leaves the default layout unchanged. `default` and `all` are
-reserved words for column selections.
+`default,name` leaves the default layout unchanged. `default` is a
+reserved word for column selection.
 
 ```sh
 brewq --full-help                    # field reference; no cache needed
@@ -143,13 +143,13 @@ brewq ripgrep -c default,ver,bin      # configured view, then version and binari
 brewq rust -c name,90d,url,desc       # exact selection without trend
 brewq rust -c url,default            # URL first, then the configured view
 brewq -i -c default,90d,trend        # extend the installed-package view
-brewq ripgrep -c all --tsv           # every field, with raw values
+brewq ripgrep -c name,type,ver,30d,90d,365d,trend,bin,url,desc --tsv  # every field, raw
 brewq ripgrep -c name,ver,90d        # exact selection and order
 ```
 
 Signed `+x`/`-x` tokens are rejected with the equivalent full list: for example,
 `-c +url,-trend` says `use -c name,90d,url,desc` with the built-in search layout.
-To omit a field, write the desired list. `default` and `all` can change between
+To omit a field, write the desired list. `default` can change between
 releases; scripts should list concrete fields. The same controls work with `-i`.
 
 Cask binaries come from declared artifacts; formula binaries require local
@@ -162,13 +162,13 @@ shrink to about 20 display columns before names are clipped, with package
 basenames retained where possible. Widths account for wide CJK characters and
 combining marks. Long URL and binary cells can be clipped; short metadata such
 as type, version, and counts keeps its full displayed value. Layouts that cannot
-fit these minimums (including `-c all` on narrower terminals) use labeled vertical
+fit these minimums (including wide selections on narrower terminals) use labeled vertical
 records, showing installed state once and skipping empty fields per record.
 
 Tables omit columns whose shown values are all blank or `-`, even with explicit
 `-c`; NAME is never omitted. Only fields named explicitly in `-c` receive a note
 on stderr when hidden, such as `brewq: no bin values in these results; column hidden`.
-`default` and `all` hide empty columns silently; `-c default,bin` notes only BIN.
+`default` hides empty columns silently; `-c default,bin` notes only BIN.
 Human-readable URLs omit a leading `https://` and a root-path trailing `/`
 (`jsonnet.org/` becomes `jsonnet.org`); `http://` and nonempty paths remain visible.
 TSV always retains the selected columns and full URLs and values.
@@ -313,6 +313,31 @@ stderr diagnostic and fall back field-by-field. Help, version, and
 `+config defaults` do not load configuration. Config commands do not load the
 package cache. Persisting query options with `--save` remains post-M1.
 
+## Exit codes and environment
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success, including empty results and queries served from local data after a refresh failure |
+| `1` | Operational failure: unusable cache, failed update; `+config edit` exits 1 on invalid settings |
+| `2` | Usage error: unknown flags or actions, invalid option values |
+| `130` | Interrupted (`Ctrl-C`); no traceback, no partial cache |
+| `141` | Closed search pipe (`brewq … \| head`); no traceback |
+
+`+config edit` passes through the editor's exit code. `--help` and `--version`
+exit `0` and ignore invalid configuration. Search falls back field-by-field on
+invalid configuration with a diagnostic and still exits `0` unless the query
+itself fails.
+
+| Variable | Effect |
+| --- | --- |
+| `BREWQ_CONFIG` | Config file path; otherwise `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml` |
+| `BREWQ_CACHE_DIR` | Cache directory; otherwise `${XDG_CACHE_HOME:-~/.cache}/brewq` |
+| `BREWQ_NO_AUTO_REFRESH=1` | Disable background updates; wins over configuration (`1`/`true`/`yes`/`on`) |
+| `NO_COLOR` | Nonempty value disables ANSI styling on both streams |
+| `TERM=dumb` | Disables ANSI styling on both streams |
+| `VISUAL`, `EDITOR` | Editor for `+config edit`, in that order |
+| `COLUMNS`, `LINES` | Terminal-size fallback when stdout is not a TTY |
+
 ## License
 
 Original brewq code is MIT, Copyright (c) 2026 Ivan Cherniukh. The bundled
@@ -322,7 +347,7 @@ adapts Yuki Nishijima's DidYouMean under MIT. Both notices are in `NOTICE`.
 ## Known limits
 
 - Explicit result counts and a single oversized vertical record can exceed the
-  terminal height. `-R` puts the best row last when you want it in view.
+  terminal height. `-r` puts the best row last when you want it in view.
 - The catalog is Homebrew core and cask data. Third-party taps are absent.
 - `bq` exists only after `brewq +setup`, and only when that name is free.
 - Colors follow the terminal theme; nonempty `NO_COLOR`, `TERM=dumb`, and
