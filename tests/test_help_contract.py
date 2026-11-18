@@ -107,7 +107,7 @@ def test_every_example_in_help_parses(name):
 
 def test_sort_help_lists_exactly_the_sort_choices():
     sort = next(a for a in _search()._actions if "--sort" in a.option_strings)
-    listed = re.search(r"sort by (.+?) \(default", sort.help or "")
+    listed = re.search(r"sort key: (.+?) \(default", sort.help or "")
     assert listed, "-s help no longer lists its fields"
     assert tuple(listed.group(1).split(", ")) == SORT_CHOICES
 

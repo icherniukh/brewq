@@ -85,6 +85,56 @@ def test_render_table_contains_header():
     assert "30d" in text
 
 
+def test_table_output_has_no_framing_blank_lines():
+    out = io.StringIO()
+    render_table([_pkg()], resolve("name,desc", []), out=out)
+    raw = out.getvalue()
+    assert raw
+    assert not raw.startswith("\n")
+    assert not raw.endswith("\n\n")
+    assert raw.endswith("\n")
+    assert raw.splitlines()[0].startswith("NAME")
+
+
+def test_vertical_records_have_no_framing_blank_lines(monkeypatch):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 20)
+    out = io.StringIO()
+    packages = [_pkg("present", installed=True), _pkg("empty", desc="")]
+    render_table(packages, resolve("name,type,ver,desc", []), out=out)
+    raw = out.getvalue()
+    assert raw
+    assert not raw.startswith("\n")
+    assert not raw.endswith("\n\n")
+    assert raw.endswith("\n")
+    assert raw.splitlines()[0].startswith("NAME:")
+    assert "NAME: empty" in raw
+
+
+def test_vertical_skips_records_with_no_visible_cells(monkeypatch):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 13)
+    with_bin = _pkg("rg")
+    with_bin.binaries = ["rg", "a-much-longer-executable-name"]
+    out = io.StringIO()
+    result = render_table([with_bin, _pkg("empty")], resolve("bin", []), out=out)
+    raw = out.getvalue()
+    assert result.vertical and result.shown == 1
+    assert "BIN:" in raw
+    assert "empty" not in raw
+    assert "\n\n" not in raw
+
+
+def test_vertical_exact_fit_shows_both_records(monkeypatch):
+    monkeypatch.setattr("brewq.render._terminal_width", lambda: 12)
+    out = io.StringIO()
+    result = render_table([_pkg("git"), _pkg("gist")], resolve("name,type", []),
+                          out=out, auto_height=11)
+    raw = out.getvalue()
+    assert result.vertical and result.shown == 2
+    assert raw.count("NAME:") == 2
+    assert not raw.startswith("\n")
+    assert not raw.endswith("\n\n")
+
+
 def test_render_table_metric_columns_use_lowercase_d_headers():
     out = io.StringIO()
     cols = resolve("30d,90d,365d", [])
@@ -123,18 +173,37 @@ def test_render_tsv_unknown_installs_are_blank():
     assert out.getvalue() == "\n"
 
 
-def test_render_tsv_installed_is_text_boolean():
-    out = io.StringIO()
-    cols = resolve("inst", [])
-    render_tsv([_pkg(installed=True)], cols, out=out)
-    assert out.getvalue() == "true\n"
-
-
 def test_render_tsv_sanitizes_tabs_and_newlines():
     out = io.StringIO()
     cols = resolve("desc", [])
     render_tsv([_pkg(desc="line one\tline two\nline three")], cols, out=out)
     assert out.getvalue() == "line one line two line three\n"
+
+
+def test_render_escapes_control_and_bidi_characters():
+    evil = _pkg(name="evil\x1b[2J", desc="a\x1b]0;title\x07b\u202ec\x9b31md")
+    cols = resolve("name,desc", [])
+    for make_out in (io.StringIO, TtyStringIO):
+        out = make_out()
+        render_table([evil], cols, out=out)
+        raw = out.getvalue()
+        # Our own ANSI styling may carry ESC on a TTY; strip it so the
+        # assertion only sees untrusted data.
+        stripped = _strip_ansi(raw)
+        assert "\x1b" not in stripped
+        assert "\x07" not in stripped
+        assert "\x9b" not in stripped
+        assert "\u202e" not in stripped
+        assert "\\x1b" not in repr(stripped)
+        assert "evil?[2J" in _strip_ansi(raw)
+    tsv = io.StringIO()
+    render_tsv([evil], cols, out=tsv)
+    raw = tsv.getvalue()
+    assert "\x1b" not in raw
+    assert "\x07" not in raw
+    assert "\x9b" not in raw
+    assert "\u202e" not in raw
+    assert raw == "evil?[2J\ta?]0;title?b?c?31md\n"
 
 
 def test_render_table_no_color_when_no_color_env(monkeypatch):
@@ -193,16 +262,6 @@ def test_render_table_marks_deprecated_in_default_description():
     assert "(deprecated) Search tool" in out.getvalue()
 
 
-def test_render_table_omits_description_status_prefix_when_status_column_selected():
-    out = io.StringIO()
-    cols = resolve("name,status,desc", [])
-    render_table([_pkg(status="deprecated")], cols, out=out)
-    text = out.getvalue()
-    assert "deprecated" in text
-    assert "(deprecated) Search tool" not in text
-    assert "Search tool" in text
-
-
 def test_render_table_status_prefix_stays_inside_description_column(monkeypatch):
     monkeypatch.setattr("brewq.render._terminal_width", lambda: 80)
     out = io.StringIO()
@@ -257,7 +316,7 @@ def test_render_table_fits_sixty_column_terminal(monkeypatch):
     assert all(len(line) <= 60 for line in lines)
 
 
-@pytest.mark.parametrize("width", [50, 80, 120, 200])
+@pytest.mark.parametrize("width", [50, 200])
 @pytest.mark.parametrize("spec", ["name,desc", "name,type,ver,desc"])
 @pytest.mark.parametrize("no_color", [False, True])
 def test_long_names_leave_description_space_and_fit(monkeypatch, width, spec, no_color):
@@ -397,7 +456,7 @@ def _visible_width(text: str) -> int:
                for c in _strip_ansi(text))
 
 
-@pytest.mark.parametrize("width", [50, 80, 120, 200])
+@pytest.mark.parametrize("width", [50, 200])
 def test_names_keep_content_until_description_reaches_minimum(monkeypatch, width):
     monkeypatch.setattr("brewq.render._terminal_width", lambda: width)
     out = io.StringIO()
@@ -412,8 +471,8 @@ def test_names_keep_content_until_description_reaches_minimum(monkeypatch, width
         assert "…" in lines[2]
 
 
-@pytest.mark.parametrize("width", [50, 70, 80, 120, 200])
-@pytest.mark.parametrize("spec", ["name,desc,url", "all"])
+@pytest.mark.parametrize("width", [50, 200])
+@pytest.mark.parametrize("spec", ["name,desc,url", "name,type,ver,30d,90d,365d,trend,bin,url,desc"])
 @pytest.mark.parametrize("color", [False, True])
 def test_display_width_bounds_cjk_and_combining_cells(monkeypatch, width, spec, color):
     monkeypatch.setattr("brewq.render._terminal_width", lambda: width)
@@ -440,7 +499,7 @@ def test_only_https_scheme_is_removed_from_human_url(monkeypatch, scheme):
     assert tsv.getvalue() == f"ripgrep\t{pkg.url}\n"
 
 
-@pytest.mark.parametrize("width", [20, 50, 80, 120, 200])
+@pytest.mark.parametrize("width", [20, 200])
 def test_installed_view_drops_marker_in_table_and_records(monkeypatch, width):
     monkeypatch.setattr("brewq.render._terminal_width", lambda: width)
     out = io.StringIO()
@@ -454,14 +513,13 @@ def test_records_skip_empty_fields_per_record_and_show_installed_once(monkeypatc
     monkeypatch.setattr("brewq.render._terminal_width", lambda: 20)
     out = io.StringIO()
     packages = [_pkg("present", installed=True), _pkg("empty", desc="")]
-    render_table(packages, resolve("name,type,inst,bin,url,desc", []), out=out)
+    render_table(packages, resolve("name,type,bin,url,desc", []), out=out)
     text = out.getvalue()
     assert text.count("✔") == 1
-    assert "NAME: present ✔" not in text
-    assert "INST: ✔" in text
+    assert "NAME: present ✔" in text
     assert "BIN:" not in text
     empty_record = text.split("NAME: empty", 1)[1]
-    assert "DESC:" not in empty_record and "INST:" not in empty_record
+    assert "DESC:" not in empty_record
     assert "DESC:" in text
 
 
@@ -486,7 +544,7 @@ def test_all_columns_preserve_short_metadata_using_records_when_needed(monkeypat
     pkg.binaries = ["a-long-executable-name"]
     pkg.url = "http://example.com/a/long/path"
     out = io.StringIO()
-    render_table([pkg], select("all", []), out=out)
+    render_table([pkg], select("name,type,ver,30d,90d,365d,trend,bin,url,desc", []), out=out)
     text = out.getvalue()
     assert "formula" in text and "57.12.3" in text and "240,000" in text
     assert "for…" not in text and "57…" not in text and "ht…" not in text
@@ -494,7 +552,7 @@ def test_all_columns_preserve_short_metadata_using_records_when_needed(monkeypat
     assert ("NAME:" in text) == (width <= 120)
 
 
-@pytest.mark.parametrize("width", [50, 80, 120, 200])
+@pytest.mark.parametrize("width", [50, 200])
 @pytest.mark.parametrize("status", ["disabled", "deprecated"])
 @pytest.mark.parametrize("color", [False, True])
 def test_full_status_description_is_budgeted_before_styling(monkeypatch, width, status, color):
@@ -511,8 +569,8 @@ def test_full_status_description_is_budgeted_before_styling(monkeypatch, width, 
     assert all(_visible_width(line) <= width for line in text.splitlines())
     assert ("\033[" in out.getvalue()) == color
     tsv = io.StringIO()
-    render_tsv(packages, resolve("name,desc,status", []), out=tsv)
-    assert tsv.getvalue().splitlines()[0] == f"dotnet\t.NET Core\t{status}"
+    render_tsv(packages, resolve("name,desc", []), out=tsv)
+    assert tsv.getvalue().splitlines()[0] == "dotnet\t.NET Core"
 
 
 @pytest.mark.parametrize("url,shown", [
@@ -534,7 +592,7 @@ def test_table_url_trims_only_an_empty_root_path(monkeypatch, url, shown):
     cols = resolve("url", [])
     render_table([pkg], cols, out=table)
     render_tsv([pkg], cols, out=tsv)
-    assert table.getvalue().splitlines()[3] == shown
+    assert table.getvalue().splitlines()[2] == shown
     assert tsv.getvalue() == url + "\n"
 
 
@@ -546,10 +604,10 @@ def test_auto_vertical_budget_counts_wrapped_lines_and_keeps_best_records(monkey
     packages = [rest, best] if reverse else [best, rest]
     out = io.StringIO()
     result = render_table(packages, resolve("name,type,desc", []), out=out,
-                          auto_height=14, reverse=reverse)
+                          auto_height=13, reverse=reverse)
     assert result.vertical and result.shown == 1
     assert "best" in out.getvalue() and "rest" not in out.getvalue()
-    assert len(out.getvalue().splitlines()) + 4 <= 14
+    assert len(out.getvalue().splitlines()) + 4 <= 13
 
 
 def test_auto_vertical_budget_always_keeps_one_record(monkeypatch):

@@ -22,11 +22,15 @@ def test_installed_gate_checks_behavior_not_just_version(monkeypatch, broken, me
         args = argv[1:]
         calls.append((args, kwargs))
         code, output = 0, ""
-        if args in (["--version"], ["-V"]):
-            output = "" if broken == "short-version" and args == ["-V"] else f"brewq {version}\n"
+        if args in (["--version"], ["-v"]):
+            output = "" if broken == "short-version" and args == ["-v"] else f"brewq {version}\n"
         elif args == ["--help"]:
-            output = "-c, --columns --full-help --tsv --top -u, --update -R, --reverse"
-            output += " -a, --all -V, --version"
+            output = ("-c, --columns -f, --full-help -m, --tsv --top -u, --update -r, --reverse"
+                      " -a, --all -v, --version")
+            if broken != "old-help":
+                output += " -i, --installed"
+            if broken != "no-color":
+                output += " -n, --no-color"
             if broken != "old-help":
                 output += " -i, --installed"
             if broken != "no-color":

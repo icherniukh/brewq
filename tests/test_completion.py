@@ -174,7 +174,7 @@ def _complete_in_zsh(tmp_path: Path, line: str) -> str:
     ("bq -c def", "bq -c default"),
     ("bq -c name,def", "bq -c name,default"),
     ("bq -c default,u", "bq -c default,url"),
-    ("bq -c name,al", "bq -c name,all"),
+    ("bq -c name,al", "bq -c name,al"),
     ("bq -c he", "bq -c he"),
     ("bq -c +ve", "bq -c +ve"),
     ("bq -c name,descr", "bq -c name,descr"),

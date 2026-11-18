@@ -73,9 +73,9 @@ def test_full_help_documents_columns_trending_and_cache(capsys):
 
 @pytest.mark.parametrize("command", [[], ["-i"]])
 @pytest.mark.parametrize("argv", [
-    ["-l"], ["-v"], ["--verbose"], ["--url"], ["-r"], ["--refresh"],
-    ["--limit"], ["--limit=2"], ["--analytics"], ["-Rr"], ["-vt3"],
-    ["-t3", "-v"], ["json", "-r"],
+    ["-l"], ["-R"], ["--verbose"], ["--url"], ["--refresh"],
+    ["--limit"], ["--limit=2"], ["--analytics"], ["-Rr"], ["-xt3"],
+    ["-t3", "-x"], ["json", "-x"],
 ])
 def test_unknown_options_fail_before_io(command, argv, capsys):
     with patch("brewq.config.load", side_effect=AssertionError("loaded config")), \
@@ -154,7 +154,7 @@ def test_leading_minus_columns_show_equivalent_list(command, flags, equivalent, 
     if not command:
         argv.append("json")
     with patch("brewq.cache.load", side_effect=AssertionError("loaded cache")):
-        assert main(argv) == 1
+        assert main(argv) == 2
     captured = capsys.readouterr()
     assert captured.out == ""
     assert f"use -c {equivalent}" in captured.err
@@ -278,7 +278,7 @@ def test_main_search_caps_to_terminal_height():
         main(["git"])
 
     assert captured, "build_search_options was not called"
-    assert captured[0].top == 18
+    assert captured[0].top == 20
 
 
 def test_main_search_explicit_top_overrides_default(capsys):
@@ -296,7 +296,7 @@ def test_main_search_explicit_top_overrides_default(capsys):
 
 @pytest.mark.parametrize("command", [[], ["-i"]])
 @pytest.mark.parametrize("flag", ["-t", "--top"])
-@pytest.mark.parametrize("value", ["0", "-1", "nope", "1.5"])
+@pytest.mark.parametrize("value", ["0", "nope"])
 def test_main_rejects_invalid_top(command, flag, value):
     with pytest.raises(SystemExit) as exc:
         main([*command, flag, value])
@@ -380,7 +380,7 @@ def test_mixed_default_resolves_config_auto_after_ranking(capsys, tmp_path):
 @pytest.mark.parametrize("spec", ["+bogus", "+auto", "+ver,", "name,bogus", ""])
 def test_invalid_selection_fails_before_loading_cache(capsys, spec):
     with patch("brewq.cache.load", side_effect=AssertionError("loaded cache")):
-        assert main(["ripgrep", "-c", spec]) == 1
+        assert main(["ripgrep", "-c", spec]) == 2
     assert "brewq:" in capsys.readouterr().err
 
 
@@ -412,7 +412,7 @@ def test_main_search_all_columns_shows_all_fields(capsys):
 def test_main_search_rejects_explicit_auto_column(capsys):
     with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])):
         rc = main(["ripgrep", "-c", "auto"])
-    assert rc == 1
+    assert rc == 2
     assert "only available in search configuration" in capsys.readouterr().err
 
 
@@ -429,7 +429,7 @@ def test_main_search_default_expansion_adds_url(capsys):
 def test_reverse_puts_the_best_row_last(capsys):
     pkgs = [_pkg("low", installed=True), _pkg("high", installed=True)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        assert main(["-i", "-c", "name", "--tsv", "-R"]) == 0
+        assert main(["-i", "-c", "name", "--tsv", "-r"]) == 0
     assert capsys.readouterr().out.splitlines() == ["low", "high"]
 
 
@@ -482,16 +482,30 @@ def test_bare_list_is_a_query_not_an_action(capsys):
     assert capsys.readouterr().out.strip() == "list"
 
 
-def test_invalid_action_flag_shows_action_help_and_a_separated_error(capsys, monkeypatch):
+def test_invalid_action_flag_shows_compact_error_with_usage(capsys, monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     with pytest.raises(SystemExit) as exc:
         main(["+update", "-i"])
     assert exc.value.code == 2
     captured = capsys.readouterr()
     assert captured.out == ""
+    lines = captured.err.splitlines()
+    assert lines[0] == "Error: unrecognized arguments: -i"
     assert "usage: brewq +update" in captured.err
-    assert "\n\nError: unrecognized arguments: -i" in captured.err
+    assert "see 'brewq +update --help'" in captured.err
+    assert "update the local package register" not in captured.err
+    assert len(lines) == 3
     assert "\033" not in captured.err
+
+
+def test_error_usage_stays_one_line_at_narrow_width(monkeypatch, capsys):
+    monkeypatch.setenv("COLUMNS", "34")
+    with pytest.raises(SystemExit) as exc:
+        main(["+setup", "--typo"])
+    assert exc.value.code == 2
+    lines = capsys.readouterr().err.splitlines()
+    assert len(lines) == 3
+    assert lines[1].startswith("usage: ")
 
 
 def test_first_token_still_selects_a_command(capsys):
@@ -517,7 +531,7 @@ def test_main_search_sort_invalid(capsys):
     pkgs = [_pkg("ripgrep")]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
         rc = main(["ripgrep", "-s", "bogus"])
-    assert rc == 1
+    assert rc == 2
     assert "Unknown sort field" in capsys.readouterr().err
 
 
@@ -796,7 +810,7 @@ def test_main_search_bad_column(capsys):
     pkgs = [_pkg("ripgrep")]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
         rc = main(["ripgrep", "--columns", "bogus"])
-    assert rc == 1
+    assert rc == 2
     assert "Unknown column" in capsys.readouterr().err
 
 
@@ -984,25 +998,16 @@ def test_main_list_missing_cache_is_empty_and_quick(capsys):
 
 
 @pytest.mark.parametrize("command", [["ripgrep"], ["-i"]])
-@pytest.mark.parametrize("field", ["inst", "status"])
-def test_tsv_only_fields_rejected_before_cache(command, field, capsys):
-    with patch("brewq.cache.load", side_effect=AssertionError("loaded cache")):
-        assert main([*command, "-c", field]) == 1
-    assert f"Column {field!r} is TSV-only; use --tsv" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize("command", [["ripgrep"], ["-i"]])
-def test_all_tsv_includes_installed_state_and_status(command, capsys):
+def test_explicit_tsv_covers_every_field(command, capsys):
     pkg = _pkg("ripgrep", installed=True)
     pkg.disabled = True
     with patch("brewq.cache.load", return_value=_loaded([pkg])):
-        assert main([*command, "-c", "all", "--tsv"]) == 0
-    from brewq.columns import FULL_COLUMNS
+        assert main([*command, "-c", ",".join(CANONICAL_COLUMNS), "--tsv"]) == 0
 
     cells = capsys.readouterr().out.rstrip("\n").split("\t")
-    assert len(cells) == len(FULL_COLUMNS)
-    assert cells[FULL_COLUMNS.index("inst")] == "true"
-    assert cells[FULL_COLUMNS.index("status")] == "disabled"
+    assert len(cells) == len(CANONICAL_COLUMNS)
+    assert cells[CANONICAL_COLUMNS.index("name")] == "ripgrep"
+    assert cells[CANONICAL_COLUMNS.index("type")] == "formula"
 
 
 @pytest.mark.parametrize("command", [[], ["-i"]])

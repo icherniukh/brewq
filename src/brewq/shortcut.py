@@ -58,25 +58,31 @@ def shutil_which(name: str) -> str | None:
     return which(name)
 
 
-def path_block(found: str | None, brewq: Path, state: Path) -> str | None:
+def _unchanged(reason: str, dry_run: bool) -> str:
+    verb = "would leave bq unchanged" if dry_run else "bq left unchanged"
+    return f"{verb}: {reason}"
+
+
+def path_block(found: str | None, brewq: Path, state: Path, *, dry_run: bool = False) -> str | None:
     """A foreign bq earlier on PATH must hide nothing and must not be replaced."""
     if not found:
         return None
     path = Path(found)
     if owned(path, brewq, _read(state)):
         return None
-    return f"bq left unchanged: {path} is not brewq's shortcut"
+    return _unchanged(f"{path} is not brewq's shortcut", dry_run)
 
 
-def ensure(brewq: Path, bindir: Path, state: Path, claim: str) -> str:
+def ensure(brewq: Path, bindir: Path, state: Path, claim: str, *, dry_run: bool = False) -> str:
     """Link bq beside brewq, or explain why not. Does not create brq."""
     path = bindir / SHORTCUT
     record = _read(state)
     if claim in {"alias", "function", "reserved", "builtin", "unknown"}:
-        return f"bq left unchanged: shell {claim}; use brewq"
-    if path.exists() or path.is_symlink():
-        if not owned(path, brewq, record):
-            return f"bq left unchanged: {path} is not brewq's shortcut"
+        return _unchanged(f"shell {claim}; use brewq", dry_run)
+    if (path.exists() or path.is_symlink()) and not owned(path, brewq, record):
+        return _unchanged(f"{path} is not brewq's shortcut", dry_run)
+    if dry_run:
+        return f"would link bq -> {brewq}"
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_symlink() or path.exists():
         path.unlink()
@@ -85,14 +91,20 @@ def ensure(brewq: Path, bindir: Path, state: Path, claim: str) -> str:
     return f"bq -> {brewq}"
 
 
-def remove(brewq: Path, bindir: Path, state: Path) -> str:
+def remove(brewq: Path, bindir: Path, state: Path, *, dry_run: bool = False) -> str:
     path = bindir / SHORTCUT
     record = _read(state)
     if not path.is_symlink() and not path.exists():
+        if dry_run:
+            if state.exists():
+                return "would remove bq shortcut state"
+            return "bq shortcut absent"
         state.unlink(missing_ok=True)
         return "bq shortcut absent"
     if not owned(path, brewq, record):
-        return f"bq left unchanged: {path} is not brewq's shortcut"
+        return _unchanged(f"{path} is not brewq's shortcut", dry_run)
+    if dry_run:
+        return "would remove bq shortcut"
     path.unlink()
     state.unlink(missing_ok=True)
     return "bq shortcut removed"

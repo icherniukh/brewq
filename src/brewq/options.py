@@ -57,11 +57,11 @@ def build_search_options(args: Any, cfg: dict) -> SearchOptions:
         top = explicit_top
     elif terminal and not show_all:
         cfg_top = cfg["output"]["top"]
-        # Four table lines, cap/cache notices, typed command, next prompt.
-        # shortcut: one record minimum; revisit for viewports below nine lines.
+        # Two table lines (header, rule), cap/cache notices, typed command, next prompt.
+        # shortcut: one record minimum; revisit for viewports below seven lines.
         if cfg_top == "auto":
             auto_height = terminal_size().lines
-            top = max(1, auto_height - 8)
+            top = max(1, auto_height - 6)
         else:
             top = cfg_top
 

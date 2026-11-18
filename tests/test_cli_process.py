@@ -39,9 +39,11 @@ def test_help_advertises_public_flags_only(tmp_path):
     proc = _run(tmp_path, "--help")
     assert proc.returncode == 0
     assert "-c, --columns" in proc.stdout
-    assert "--full-help" in proc.stdout
+    assert "-f, --full-help" in proc.stdout
     assert "-u, --update" in proc.stdout
-    assert "-R, --reverse" in proc.stdout
+    assert "-r, --reverse" in proc.stdout
+    assert "-m, --tsv" in proc.stdout
+    assert "-n, --no-color" in proc.stdout
     for hidden in ("--url", "--verbose", "--limit", "--refresh"):
         assert hidden not in proc.stdout
 
@@ -63,7 +65,7 @@ def test_full_help_ignores_invalid_operational_config(tmp_path):
     assert proc.stderr == ""
 
 
-@pytest.mark.parametrize("flag", ["-V", "--version"])
+@pytest.mark.parametrize("flag", ["-v", "--version"])
 def test_version_ignores_invalid_operational_config(tmp_path, flag):
     (tmp_path / "config.toml").write_text("output = []\n")
     proc = _run(tmp_path, flag)
@@ -89,7 +91,7 @@ def test_field_reference_ignores_config_and_does_not_initialize_cache(tmp_path):
         assert proc.returncode == 0
         assert "columns:" in proc.stdout
         assert "90d" in proc.stdout and "url" in proc.stdout
-        assert "default,url" in proc.stdout and "-c all" in proc.stdout
+        assert "default,url" in proc.stdout and "Signed +x/-x edits are rejected" in proc.stdout
         assert proc.stderr == ""
     assert not (tmp_path / "cache").exists()
 
@@ -109,7 +111,7 @@ def test_unknown_arguments_are_usage_errors_without_cache_access(tmp_path, args,
 @pytest.mark.parametrize("args", [("-c", "help"), ("-i", "-c", "help")])
 def test_help_is_an_unknown_column_without_cache_access(tmp_path, args):
     proc = _run(tmp_path, *args)
-    assert proc.returncode == 1
+    assert proc.returncode == 2
     assert proc.stdout == ""
     assert "Unknown column 'help'." in proc.stderr
     assert "--full-help" in proc.stderr

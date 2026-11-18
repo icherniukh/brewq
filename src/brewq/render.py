@@ -25,6 +25,21 @@ _COLOR_CASK = "\033[35m"     # magenta
 _COLOR_DEPRECATED = "\033[33m"  # yellow
 _COLOR_DISABLED = "\033[31m"    # red
 _NON_ASCII = re.compile(r"[^\x00-\x7f]")
+# Control, C1, and bidi-override characters from untrusted package metadata must
+# never reach the terminal verbatim (CWE-150): ESC/C1 can inject terminal
+# sequences and bidi controls can reorder displayed text. Tab/CR/LF become a
+# space (matching TSV); everything else dangerous becomes a visible "?".
+_DANGEROUS = re.compile(
+    "[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f"
+    "\u202a-\u202e\u2066-\u2069\u061c\u200e\u200f\u2028\u2029]"
+)
+
+
+def _sanitize_cell(text: object) -> str:
+    cell = "" if text is None else str(text)
+    if "\t" in cell or "\r" in cell or "\n" in cell:
+        cell = cell.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+    return _DANGEROUS.sub("?", cell)
 
 
 @lru_cache(maxsize=256)
@@ -201,7 +216,7 @@ def render_table(
     for pkg in packages:
         row = []
         for i, col in enumerate(columns):
-            cell = col.getter(pkg)
+            cell = _sanitize_cell(col.getter(pkg))
             if col.key == "trend" and cell != "-":
                 cell += f" {_trend_emphasis(cell)[0]:<2}"
             elif col.key == "url":
@@ -243,11 +258,15 @@ def render_table(
     # Preserve short metadata in full; use records when sensible minimums cannot fit.
     if not table_fits(minimums, term_width):
         if auto_height is None:
-            out.write("\n")
+            blocks = []
             for pkg, row in zip(packages, rows, strict=True):
                 lines = _record_lines(pkg, columns, headers, row, term_width, show_installed_marker)
-                out.write("\n".join(lines) + "\n")
-            return TableResult(hidden, len(packages), vertical=True)
+                block = "\n".join(lines[:-1] if lines and lines[-1] == "" else lines)
+                if block.strip():
+                    blocks.append(block)
+            if blocks:
+                out.write("\n\n".join(blocks) + "\n")
+            return TableResult(hidden, len(blocks), vertical=True)
         # Vertical records include their own separator. Reserve cap/cache notes,
         # the typed command and the next prompt, without table framing blanks.
         named = named_columns or set()
@@ -259,23 +278,28 @@ def render_table(
         used = 0
         for pkg, row in candidates:
             lines = _record_lines(pkg, columns, headers, row, term_width, show_installed_marker)
+            content = lines[:-1] if lines and lines[-1] == "" else lines
+            if not any(line.strip() for line in content):
+                continue
             if selected:
                 extra_notes = sum(
                     col.key in named and row[i].strip() in {"", "-"}
                     and all(previous[i].strip() in {"", "-"} for previous, _ in selected)
                     for i, col in enumerate(columns) if col.key != "name"
                 )
-                if used + len(lines) + extra_notes > budget:
+                if used + 1 + len(content) + extra_notes > budget:
                     break
-            selected.append((row, lines))
-            used += len(lines)
+                used += 1
+            selected.append((row, content))
+            used += len(content)
         if reverse:
             selected.reverse()
         hidden.extend(col.key for i, col in enumerate(columns) if col.key != "name"
                       and all(row[i].strip() in {"", "-"} for row, _ in selected))
-        for _, lines in selected:
-            out.write("\n".join(lines) + "\n")
-        return TableResult(hidden, len(selected), vertical=True)
+        blocks = ["\n".join(lines) for _, lines in selected]
+        if blocks:
+            out.write("\n\n".join(blocks) + "\n")
+        return TableResult(hidden, len(blocks), vertical=True)
 
     # Spend description space first, then long metadata, and clip names last.
     shrink_order = ([desc_idx] if desc_idx is not None else []) + sorted(
@@ -290,7 +314,7 @@ def render_table(
 
     header = "  ".join(_fit(text, w, col.align)
                        for text, w, col in zip(headers, widths, columns, strict=True))
-    out.write("\n" + (_BOLD + header + _RESET if color else header) + "\n")
+    out.write((_BOLD + header + _RESET if color else header) + "\n")
     out.write("─" * (sum(widths) + gaps) + "\n")
 
     for pkg, row in zip(packages, rows, strict=True):
@@ -317,20 +341,17 @@ def render_table(
                     status_color = _COLOR_DISABLED if pkg.disabled else _COLOR_DEPRECATED
                     end = min(len(prefix), len(cell.rstrip()))
                     cell = status_color + cell[:end] + _RESET + cell[end:]
-            elif color and col.key == "status" and pkg.status:
-                status_color = _COLOR_DISABLED if pkg.disabled else _COLOR_DEPRECATED
-                cell = status_color + cell + _RESET
             elif color and col.key == "trend":
                 cell = _trend_emphasis(row[i])[1] + cell + _RESET
             parts.append(cell)
         out.write("  ".join(parts).rstrip() + "\n")
-    out.write("\n")
     return TableResult(hidden, len(packages))
 
 
 def _tsv_cell(value: object) -> str:
     text = "" if value is None else str(value)
-    return text.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+    text = text.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+    return _DANGEROUS.sub("?", text)
 
 
 def render_tsv(

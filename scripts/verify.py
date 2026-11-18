@@ -75,7 +75,7 @@ def check_cli_smoke() -> Result:
         ("help", _brewq("--help"), ["usage"]),
         ("full_help", _brewq("--full-help"), ["columns:", "trending:", "cache:"]),
         ("version", _brewq("--version"), [f"brewq {__version__}"]),
-        ("short_version", _brewq("-V"), [f"brewq {__version__}"]),
+        ("short_version", _brewq("-v"), [f"brewq {__version__}"]),
         ("search_table", _brewq("-t", "5", "json"), ["NAME"]),
         ("catalog_default", _brewq("-t", "2"), ["NAME", "json-tool", "ripgrep"]),
         ("catalog_empty", _brewq("", "-t", "2"), ["NAME", "json-tool", "ripgrep"]),
@@ -176,7 +176,7 @@ def check_installed_shim() -> Result:
             missing = "shortcut missing; run brewq +setup" if name == "bq" else "entry point missing from PATH"
             failures.append(f"{name}: {missing}")
             continue
-        for flag in ("-V", "--version"):
+        for flag in ("-v", "--version"):
             version = subprocess.run(
                 [path, flag], capture_output=True, text=True, timeout=20.0
             )
@@ -197,12 +197,13 @@ def check_installed_shim() -> Result:
             ) is not None
 
         for expected in (
-            "-c", "--columns", "-i", "--installed", "-u", "--update", "-R", "--reverse",
-            "--top", "--full-help", "--tsv", "--no-color", "-a", "--all", "-V", "--version",
+            "-c", "--columns", "-i", "--installed", "-u", "--update", "-r", "--reverse",
+            "--top", "-f", "--full-help", "-m", "--tsv", "-n", "--no-color", "-a", "--all",
+            "-v", "--version",
         ):
             if not advertised(expected):
                 failures.append(f"brewq help: missing {expected!r}")
-        for removed in ("-l", "--url", "-v", "--verbose", "-r", "--refresh", "--limit",
+        for removed in ("-l", "--url", "--verbose", "--refresh", "--limit",
                         "--analytics", "--preset", "--colors"):
             if advertised(removed):
                 failures.append(f"brewq help: stale option {removed!r} is still installed")

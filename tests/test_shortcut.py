@@ -74,3 +74,48 @@ def test_uv_managed_sibling_is_ours_and_replaced(tmp_path):
     assert owned(shim, brewq, None)
     assert ensure(brewq, shim_dir, tmp_path / "state.json", "command").endswith(str(brewq))
     assert shim.resolve() == brewq.resolve()
+
+
+def test_dry_run_reports_link_without_creating_anything(tmp_path):
+    brewq = tmp_path / "bin" / "brewq"
+    brewq.parent.mkdir()
+    brewq.write_text("#!/bin/sh\n")
+    state = tmp_path / "state.json"
+    assert ensure(brewq, brewq.parent, state, "absent", dry_run=True) == f"would link bq -> {brewq}"
+    assert not (brewq.parent / "bq").exists()
+    assert not state.exists()
+
+
+def test_dry_run_preserves_everything_it_reports(tmp_path):
+    brewq = tmp_path / "brewq"
+    brewq.write_text("brewq")
+    foreign = tmp_path / "bq"
+    foreign.write_text("foreign")
+    state = tmp_path / "state.json"
+    assert ensure(brewq, tmp_path, state, "absent", dry_run=True).startswith(
+        "would leave bq unchanged")
+    assert foreign.read_text() == "foreign"
+    assert not state.exists()
+    assert remove(brewq, tmp_path, state, dry_run=True).startswith("would leave bq unchanged")
+    assert foreign.read_text() == "foreign"
+    owned_dir = tmp_path / "owned"
+    owned_dir.mkdir()
+    owned_brewq = owned_dir / "brewq"
+    owned_brewq.write_text("brewq")
+    assert ensure(owned_brewq, owned_dir, state, "absent") == f"bq -> {owned_brewq}"
+    assert remove(owned_brewq, owned_dir, state, dry_run=True) == "would remove bq shortcut"
+    assert (owned_dir / "bq").is_symlink()
+    assert state.exists()
+    assert path_block(str(foreign), brewq, state, dry_run=True).startswith(
+        "would leave bq unchanged")
+
+
+def test_dry_run_remove_reports_stale_state_without_deleting(tmp_path):
+    brewq = tmp_path / "brewq"
+    brewq.write_text("brewq")
+    state = tmp_path / "state.json"
+    state.write_text('{"path": "x", "target": "y"}')
+    assert remove(brewq, tmp_path, state, dry_run=True) == "would remove bq shortcut state"
+    assert state.exists()
+    assert remove(brewq, tmp_path, state) == "bq shortcut absent"
+    assert not state.exists()

@@ -155,8 +155,8 @@ def test_pty_default_cap_keeps_typed_command_and_next_prompt_visible(tmp_path, r
     rc, output = _run_in_pty(["/bin/sh", "-c", shell], env, rows=rows, cols=120)
     assert rc == 0
     matched = [line for line in output.splitlines() if "zzcap-" in line]
-    assert len(matched) == rows - 8
-    assert f"showing {rows - 8} of 40" in output
+    assert len(matched) == rows - 6
+    assert f"showing {rows - 6} of 40" in output
     lines = _strip_ansi(output).splitlines()
     assert len(lines) == rows
     assert lines[-rows] == "$ " + command
@@ -204,7 +204,7 @@ def test_pty_empty_query_trend_browsing_and_installed_filter(tmp_path, query):
         (["-s", "trend"], "zzbrowse-rising", 2),
         (["-i", "-s", "trend"], "zzbrowse-popular", 1),
     ]:
-        rc, output = _run_in_pty(_brewq(*query, *flags, "-c", "name"), _env(tmp_path), rows=9)
+        rc, output = _run_in_pty(_brewq(*query, *flags, "-c", "name"), _env(tmp_path), rows=7)
         assert rc == 0
         records = [line for line in _strip_ansi(output).splitlines() if line.startswith("zzbrowse-")]
         assert len(records) == 1 and records[0].split()[0] == expected
@@ -308,7 +308,7 @@ def test_pty_color_policy_for_each_stream(tmp_path, tty_stream, mode):
 
 
 @pytest.mark.parametrize("mode", ["normal", "no-color-env", "dumb", "flag"])
-@pytest.mark.parametrize("args", [["--bogus"], ["+update", "--bogus"], ["+list"], ["-v"]])
+@pytest.mark.parametrize("args", [["--bogus"], ["+update", "--bogus"], ["+list"], ["-x"]])
 def test_pty_error_label_obeys_color_policy(tmp_path, mode, args):
     env = _env(tmp_path)
     if mode == "no-color-env":
@@ -326,16 +326,16 @@ def test_pty_error_label_obeys_color_policy(tmp_path, mode, args):
 def test_pty_tsv_stdout_is_plain_even_on_color_terminal(tmp_path):
     _write_cache(tmp_path, [_formula("zztsv-tool", installed=True)])
     rc, output = _run_in_pty(
-        _brewq("zztsv", "--tsv", "-c", "name,inst"), _env(tmp_path), tty_stream="stdout",
+        _brewq("zztsv", "--tsv", "-c", "name,ver"), _env(tmp_path), tty_stream="stdout",
     )
     assert rc == 0
-    assert output.splitlines() == ["zztsv-tool\ttrue"]
+    assert output.splitlines() == ["zztsv-tool\t1.0"]
     assert "\x1b[" not in output
 
 
 @pytest.mark.parametrize("flags,top,expected", [
     ([], '"auto"', 1),
-    (["-R"], '"auto"', 1),
+    (["-r"], '"auto"', 1),
     (["-t", "2"], '"auto"', 2),
     (["-a"], '"auto"', 6),
     ([], "2", 2),
@@ -350,7 +350,7 @@ def test_pty_vertical_records_respect_auto_height_and_explicit_caps(tmp_path, fl
         formulae.append(entry)
     _write_cache(tmp_path, formulae)
     (tmp_path / "config.toml").write_text(f"top = {top}\n")
-    args = ["-c", "all", "json", *flags]
+    args = ["-c", "name,type,ver,30d,90d,365d,trend,bin,url,desc", "json", *flags]
     command = shlex.join(["brewq", *args])
     shell = (f"printf '%s\\n' {shlex.quote('$ ' + command)}; "
              f"{shlex.join(_brewq(*args))}; result=$?; printf '%s' '$ '; exit $result")
@@ -359,8 +359,8 @@ def test_pty_vertical_records_respect_auto_height_and_explicit_caps(tmp_path, fl
     lines = _strip_ansi(output).splitlines()
     names = [line for line in lines if line.startswith("NAME:")]
     assert len(names) == expected
-    assert "json-tool-0" in names[-1 if "-R" in flags or "-a" in flags else 0]
-    assert "column hidden" not in output
+    assert "json-tool-0" in names[-1 if "-r" in flags or "-a" in flags else 0]
+    assert "no bin values in these results; column hidden" in output
     if expected < 6:
         assert f"showing {expected} of 6" in output
     else:

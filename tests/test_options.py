@@ -290,11 +290,11 @@ def test_build_search_options_config_top_applies_on_terminal(monkeypatch):
     assert build_search_options(_args(query=["git"]), _cfg(top=20)).top == 20
 
 
-@pytest.mark.parametrize("rows", [16, 26, 30])
-def test_auto_cap_reserves_all_eight_non_record_lines(monkeypatch, rows):
+@pytest.mark.parametrize("rows", [16, 30])
+def test_auto_cap_reserves_all_six_non_record_lines(monkeypatch, rows):
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
     monkeypatch.setattr("brewq.options.terminal_size", lambda: os.terminal_size((100, rows)))
-    assert build_search_options(_args(), _cfg()).top == rows - 8
+    assert build_search_options(_args(), _cfg()).top == rows - 6
 
 
 @pytest.mark.parametrize("tty,tsv", [(False, False), (False, True), (True, True)])

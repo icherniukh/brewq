@@ -55,13 +55,13 @@ def script_errors(text: str, commands: argparse.ArgumentParser) -> list[str]:
     if "'1:config command:(show defaults edit)'" not in text:
         errors.append("missing config subcommands")
     for marker in ("--_complete", "--sort", "--installed", "--top", "--offline",
-                   "--columns", "--reverse", "--all", "-a", "-V", "--version",
-                   "--tsv", "--no-color", "--update"):
+                   "--columns", "--reverse", "-r", "--all", "-a", "-v", "--version",
+                   "-m", "--tsv", "-n", "--no-color", "-f", "--full-help", "--update"):
         if marker not in text:
             errors.append(f"missing {marker}")
     if "include deprecated and disabled" in text:
         errors.append("stale --all meaning")
-    fields = " ".join((*columns.CANONICAL_COLUMNS, "default", "all"))
+    fields = " ".join((*columns.CANONICAL_COLUMNS, "default"))
     if f"local -a fields=({fields})" not in text:
         errors.append("stale column vocabulary")
     return errors
@@ -82,7 +82,7 @@ def zsh_script(search: argparse.ArgumentParser, commands: argparse.ArgumentParse
         )
     # Bind to the generating environment, not a possibly older executable on PATH.
     backend = shlex.join([sys.executable, "-I", "-m", "brewq.cli", "--_complete"])
-    fields = " ".join((*columns.CANONICAL_COLUMNS, "default", "all"))
+    fields = " ".join((*columns.CANONICAL_COLUMNS, "default"))
     names = action_names(commands)
     command_names = " ".join(shlex.quote(name) for name in names)
     command_pattern = "|".join(shlex.quote(name) for name in names)

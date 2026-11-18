@@ -22,7 +22,7 @@ _FORMATTER = argparse.RawDescriptionHelpFormatter
 
 
 class _Parser(argparse.ArgumentParser):
-    """Help first, then a visually separated error. No cache or network."""
+    """Error first, then one usage line and a pointer to --help. No cache or network."""
 
     def parse_args(self, args=None, namespace=None):
         self._brewq_argv = list(sys.argv[1:] if args is None else args)
@@ -32,10 +32,12 @@ class _Parser(argparse.ArgumentParser):
         subs = getattr(self, "_brewq_subcommands", {})
         argv = getattr(self, "_brewq_argv", [])
         target = subs.get(argv[0], self) if argv else self
-        target.print_help(sys.stderr)
-        print(file=sys.stderr)
         option_argv = argv[:argv.index("--")] if "--" in argv else argv
         print(f"{_error_label(no_color='--no-color' in option_argv)}: {message}", file=sys.stderr)
+        usage = " ".join(target.format_usage().split())
+        if usage:
+            print(usage, file=sys.stderr)
+        print(f"see '{target.prog} --help'", file=sys.stderr)
         self.exit(2)
 
 
@@ -48,9 +50,11 @@ def _error_label(*, no_color: bool = False) -> str:
     if not render_mod._use_color(sys.stderr, no_color=no_color):
         return "Error"
     return "\033[1mError\033[0m"
-_SEARCH_EPILOG = """\
+def _search_epilog() -> str:
+    prog = _prog()
+    return f"""\
 actions: +update, +setup, +config [show|defaults|edit], +completion zsh
-examples: brewq ripgrep | brewq -i | brewq +update
+examples: {prog} ripgrep | {prog} -i | {prog} +update
 """
 
 _UPDATE_EPILOG = """\
@@ -103,8 +107,8 @@ cache:
   `brewq +update` updates stale data; `brewq +update --force` updates now.
   `-u`/`--update` forces an update before the query. If it fails, the error goes
   to stderr and the query uses available local data, including the bundled seed.
-  `-R` reverses the chosen order after `-t`, so the best row is last.
-  `-a` removes the cap and puts the best row last on a TTY.
+  `-r` reverses the chosen order after `-t`, so the best row is last.
+  `-a` removes the cap on terminal tables and puts the best row last, unless `-t` is given.
   Configured caps/reverse apply only to terminal tables; pipes/TSV need explicit flags.
   If analytics fail, counts from the previous user snapshot are retained and
   retried later.
@@ -150,8 +154,8 @@ def _add_column_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_reverse_flag(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("-R", "--reverse", action="store_true",
-                        help="reverse sort order so the best rows are last")
+    parser.add_argument("-r", "--reverse", action="store_true",
+                        help="put the best rows last")
 
 
 def _add_update_flag(parser: argparse.ArgumentParser, *, then: str) -> None:
@@ -160,35 +164,42 @@ def _add_update_flag(parser: argparse.ArgumentParser, *, then: str) -> None:
 
 
 def _add_color_flag(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--no-color", action="store_true",
+    parser.add_argument("-n", "--no-color", action="store_true",
                         help="disable ANSI styling on stdout and stderr")
+
+
+def _add_quiet_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("-q", "--quiet", action="store_true",
+                        help="suppress routine status notes on stderr")
 
 
 def _build_search_parser() -> argparse.ArgumentParser:
     parser = _Parser(
         prog=_prog(),
         usage=f"{_prog()} [options] [query ...]",
-        description="Fast, read-only Homebrew package search.",
-        epilog=_SEARCH_EPILOG,
+        description="Search the local Homebrew catalog: compare install counts and trends, "
+                    "inspect installed packages.",
+        epilog=_search_epilog(),
         formatter_class=_FORMATTER,
     )
     parser.add_argument("query", nargs="*", help=argparse.SUPPRESS)
+    parser.add_argument("-i", "--installed", action="store_true",
+                        help="installed packages only; default columns name,desc")
     parser.add_argument("-s", "--sort", metavar="FIELD",
-                        help=f"sort by {options_mod.sort_choices_text()} (default: 90d)")
+                        help=f"sort key: {options_mod.sort_choices_text()} (default: 90d)")
     _add_reverse_flag(parser)
     _add_top_flag(parser)
-    parser.add_argument("-i", "--installed", action="store_true",
-                        help="search installed packages only")
     parser.add_argument("-a", "--all", action="store_true",
-                        help="show all matches, best last on a TTY")
+                        help="show all matches, best rows last on a TTY")
     _add_column_flags(parser)
-    _add_update_flag(parser, then="search")
-    _add_color_flag(parser)
-    parser.add_argument("--tsv", action="store_true",
+    parser.add_argument("-m", "--tsv", action="store_true",
                         help="tab-separated rows without a header")
-    parser.add_argument("--full-help", action="store_true",
+    _add_color_flag(parser)
+    _add_quiet_flag(parser)
+    _add_update_flag(parser, then="search")
+    parser.add_argument("-f", "--full-help", action="store_true",
                         help="show columns, trending, and cache behavior")
-    parser.add_argument("-V", "--version", action=_VersionAction,
+    parser.add_argument("-v", "--version", action=_VersionAction,
                         help="show program's version number and exit")
     return parser
 
@@ -219,6 +230,8 @@ def _build_command_parser() -> argparse.ArgumentParser:
     )
     setup_p.add_argument("--remove", action="store_true",
                          help="remove brewq's own bq shortcut")
+    setup_p.add_argument("--dry-run", action="store_true",
+                         help="print the planned link or removal without changing anything")
 
     # config
     config_p = subparsers.add_parser(
@@ -254,17 +267,20 @@ def _full_help_text() -> str:
     return f"{_build_search_parser().format_help().rstrip()}\n\n{details.rstrip()}\n"
 
 
-def _update_register(*, force: bool) -> int:
+def _update_register(*, force: bool, quiet: bool = False) -> int:
     """Refresh before a query; report failures without preventing local reads."""
-    print("Updating register...", file=sys.stderr)
+    if not quiet:
+        print("Updating register...", file=sys.stderr)
     try:
         result = cache_mod.refresh(force=force)
     except Exception as exc:
         print(f"brewq: register update failed: {exc}", file=sys.stderr)
         return 1
     if result.outcome is cache_mod.RefreshOutcome.LOCKED:
-        print("register: update already in progress; using available data", file=sys.stderr)
+        if not quiet:
+            print("register: update already in progress; using available data", file=sys.stderr)
     elif result.outcome is cache_mod.RefreshOutcome.METADATA_ONLY:
+        # A result-quality warning, not progress: quiet must not hide it.
         print(
             f"register: metadata updated; analytics incomplete ({result.analytics_error})",
             file=sys.stderr,
@@ -321,10 +337,12 @@ def _cmd_setup(args: argparse.Namespace) -> int:
         brewq = Path(found)
     state = config_mod.cache_dir() / "shortcut.json"
     if args.remove:
-        print(shortcut.remove(brewq, brewq.parent, state))
+        print(shortcut.remove(brewq, brewq.parent, state, dry_run=args.dry_run))
         return 0
-    block = shortcut.path_block(shutil_which("bq"), brewq, state)
-    print(block or shortcut.ensure(brewq, brewq.parent, state, shortcut.shell_claim("bq")))
+    block = shortcut.path_block(shutil_which("bq"), brewq, state, dry_run=args.dry_run)
+    print(block or shortcut.ensure(
+        brewq, brewq.parent, state, shortcut.shell_claim("bq"), dry_run=args.dry_run,
+    ))
     return 0
 
 
@@ -376,17 +394,17 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
         opts = options_mod.build_search_options(args, cfg)
     except ValueError as exc:
         print(f"brewq: {exc}", file=sys.stderr)
-        return 1
+        return 2
 
     default_cols = cfg["list"]["columns"] if opts.installed_only else cfg["output"]["columns"]
     try:
         col_defs = columns_mod.select(opts.columns_spec, default_cols, tsv=opts.tsv_output)
     except ValueError as exc:
         print(f"brewq: {exc}", file=sys.stderr)
-        return 1
+        return 2
 
     if args.update:
-        _update_register(force=True)
+        _update_register(force=True, quiet=args.quiet)
 
     loaded = _load_cache()
     if loaded is None:
@@ -397,9 +415,10 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
 
     if not ranked:
         query_str = " ".join(opts.query) if opts.query else "(installed filter)"
-        print(f"No results for: {query_str}", file=sys.stderr)
-        _report_view_cap(0, opts.eligible_total, opts.top)
-        _finish_cache_command(loaded, cfg, no_color=args.no_color)
+        if not args.quiet:
+            print(f"No results for: {query_str}", file=sys.stderr)
+        _report_view_cap(0, opts.eligible_total, opts.top, quiet=args.quiet)
+        _finish_cache_command(loaded, cfg, no_color=args.no_color, quiet=args.quiet)
         return 0
 
     # Config-only auto expands after ranking, including inside a mixed default list.
@@ -424,19 +443,20 @@ def _cmd_search(args: argparse.Namespace, cfg: dict) -> int:
             reverse=opts.reverse,
             named_columns=named_columns,
         )
-        for key in result.hidden:
-            if key in named_columns:
-                print(f"brewq: no {key} values in these results; column hidden", file=sys.stderr)
+        if not args.quiet:
+            for key in result.hidden:
+                if key in named_columns:
+                    print(f"brewq: no {key} values in these results; column hidden", file=sys.stderr)
         shown = result.shown
     sys.stdout.flush()
-    _report_view_cap(shown, opts.eligible_total, opts.top)
-    _finish_cache_command(loaded, cfg, no_color=args.no_color)
+    _report_view_cap(shown, opts.eligible_total, opts.top, quiet=args.quiet)
+    _finish_cache_command(loaded, cfg, no_color=args.no_color, quiet=args.quiet)
     return 0
 
 
-def _report_view_cap(shown: int, total: int, top: int) -> None:
+def _report_view_cap(shown: int, total: int, top: int, *, quiet: bool = False) -> None:
     """Disclose a cap that hid rows; stdout stays machine-clean."""
-    if top <= 0 or shown >= total:
+    if quiet or top <= 0 or shown >= total:
         return
     print(f"brewq: showing {shown} of {total}; -a for all, -t N for a count",
           file=sys.stderr)
@@ -454,7 +474,9 @@ def _load_cache() -> cache_mod.CacheLoad | None:
             return None
 
 
-def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict, *, no_color: bool = False) -> None:
+def _finish_cache_command(
+    loaded: cache_mod.CacheLoad, cfg: dict, *, no_color: bool = False, quiet: bool = False,
+) -> None:
     max_age = int(cfg["cache"]["max_age_seconds"])
     failure_detail = "unknown scheduler error"
     scheduler_state = "disabled"
@@ -464,6 +486,14 @@ def _finish_cache_command(loaded: cache_mod.CacheLoad, cfg: dict, *, no_color: b
         except Exception as exc:
             scheduler_state = "failed"
             failure_detail = " ".join(str(exc).splitlines())[:120]
+    if quiet:
+        if not loaded.analytics_complete and loaded.source != "seed":
+            render_mod.render_cache_note(
+                f"cache: metadata {_format_age(loaded.age_seconds)} old; analytics incomplete",
+                sys.stderr,
+                no_color=no_color,
+            )
+        return
 
     suffixes = {
         "scheduled": "update scheduled",
