@@ -189,6 +189,84 @@ def test_repeated_columns_fail_before_io(second, capsys):
     assert "specify columns once as a comma-separated list" in captured.err
 
 
+@pytest.mark.parametrize("argv,diagnostic", [
+    (["-s", "9od"], "Unknown sort field"),
+    (["-c", "inst"], "Unknown column 'inst'"),
+])
+def test_invalid_flag_values_are_usage_errors(argv, diagnostic, capsys):
+    with patch("brewq.cache.load", side_effect=AssertionError("loaded cache")):
+        assert main([*argv, "ripgrep"]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert diagnostic in captured.err
+
+
+def test_unknown_flag_prints_compact_error_not_full_help(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--sortt", "x"])
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    lines = captured.err.splitlines()
+    assert lines[0].startswith("Error: unrecognized arguments: --sortt")
+    assert "usage: brewq" in captured.err
+    assert "see 'brewq --help'" in captured.err
+    assert "actions:" not in captured.err
+    assert "read-only Homebrew package search" not in captured.err
+
+
+def test_setup_dry_run_reports_plan_without_linking(tmp_path, monkeypatch, capsys):
+    from brewq import config as config_mod
+
+    brewq = tmp_path / "bin" / "brewq"
+    brewq.parent.mkdir(parents=True)
+    brewq.write_text("#!/bin/sh\n")
+    monkeypatch.setattr("brewq.cli.shutil_which",
+                        lambda name: str(brewq) if name == "brewq" else None)
+    monkeypatch.setattr("brewq.shortcut.shell_claim", lambda name: "absent")
+    monkeypatch.setattr(config_mod, "cache_dir", lambda: tmp_path / "cache")
+    assert main(["+setup", "--dry-run"]) == 0
+    assert f"would link bq -> {brewq}" in capsys.readouterr().out
+    assert not (brewq.parent / "bq").exists()
+    assert not (tmp_path / "cache" / "shortcut.json").exists()
+
+
+def test_quiet_suppresses_status_notes_but_keeps_rows(capsys):
+    pkgs = [_pkg("ripgrep", installs_30d=80_000), _pkg("bat", installs_30d=1)]
+    with patch("brewq.cache.load", return_value=_loaded(pkgs, age=3600)):
+        assert main(["-t", "1", "--tsv", "-c", "name"]) == 0
+    noisy = capsys.readouterr()
+    assert noisy.err != ""
+    with patch("brewq.cache.load", return_value=_loaded(pkgs, age=3600)):
+        assert main(["-q", "-t", "1", "--tsv", "-c", "name"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == noisy.out
+    assert captured.err == ""
+
+
+def test_quiet_keeps_errors_but_silences_empty_results(capsys):
+    with patch("brewq.cache.load", side_effect=AssertionError("loaded cache")):
+        assert main(["-q", "-s", "bogus", "ripgrep"]) == 2
+    assert "Unknown sort field" in capsys.readouterr().err
+    with patch("brewq.cache.load", return_value=_loaded([_pkg("ripgrep")])):
+        assert main(["-q", "nosuchpackage"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_quiet_update_keeps_analytics_warning(capsys):
+    pkgs = [_pkg("ripgrep")]
+    result = RefreshResult(RefreshOutcome.METADATA_ONLY, Path("/cache/brew-all.json"),
+                           analytics_error="offline")
+    with patch("brewq.cache.refresh", return_value=result), \
+         patch("brewq.cache.load", return_value=_loaded(pkgs)):
+        assert main(["-q", "-u", "ripgrep"]) == 0
+    captured = capsys.readouterr()
+    assert "ripgrep" in captured.out
+    assert "analytics incomplete" in captured.err
+
+
 def test_update_offline_bypasses_refresh_and_operational_config(capsys):
     with patch("brewq.cache.preload_bundled", return_value=(Path("/cache"), 2, 3)) as preload, \
          patch("brewq.cache.refresh", side_effect=AssertionError("updated cache")), \
@@ -394,11 +472,11 @@ def test_main_search_short_field_names(capsys):
     assert "DESC" not in out
 
 
-def test_main_search_all_columns_shows_all_fields(capsys):
+def test_main_search_explicit_field_list_shows_all_fields(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000, installs_90d=240_000, installs_365d=600_000)]
     pkgs[0].binaries = ["rg"]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "-c", "all"])
+        rc = main(["ripgrep", "-c", ",".join(CANONICAL_COLUMNS)])
     assert rc == 0
     out = capsys.readouterr().out
     assert "ripgrep" in out
@@ -584,7 +662,7 @@ def test_installed_views_honor_list_config_and_explicit_columns(command, tmp_pat
         assert main([*command, "-c", "name,type"]) == 0
         output = capsys.readouterr().out
         assert "TYPE" in output and "VER" not in output
-        assert main([*command, "-c", "all"]) == 0
+        assert main([*command, "-c", ",".join(CANONICAL_COLUMNS)]) == 0
         output = capsys.readouterr().out
         assert "TYPE" in output and "VER" in output and "30d" in output
         assert "TREND" not in output  # This fixture has no historical counts.
@@ -747,9 +825,9 @@ def test_main_search_does_not_fetch_tapped_cache_misses(capsys):
 def test_main_search_tsv(capsys):
     pkgs = [_pkg("ripgrep", installs_30d=80_000)]
     with patch("brewq.cache.load", return_value=_loaded(pkgs)):
-        rc = main(["ripgrep", "--tsv", "-c", "name,30d,inst"])
+        rc = main(["ripgrep", "--tsv", "-c", "name,30d,ver"])
     assert rc == 0
-    assert capsys.readouterr().out == "ripgrep\t80000\tfalse\n"
+    assert capsys.readouterr().out == "ripgrep\t80000\t1.0\n"
 
 
 def test_main_tsv_url_edit_adds_url_field(capsys):
@@ -1017,14 +1095,12 @@ def test_help_has_inline_field_vocabulary(command, capsys):
     assert exc.value.code == 0
     help_text = capsys.readouterr().out
     flat = " ".join(help_text.split())
-    table_fields = [c for c in CANONICAL_COLUMNS if c not in ("inst", "status")]
+    table_fields = list(CANONICAL_COLUMNS)
     assert ",".join(table_fields) + ";" in flat
-    assert "--tsv also takes inst, status" in flat
 
 
 @pytest.mark.parametrize("argv,hidden,notes", [
     (["-c", "name,bin,desc", "json"], "bin", 1),
-    (["-c", "all", "json"], "bin", 0),
     (["-c", "default", "font"], "desc", 0),
     (["-c", "default,bin", "json"], "bin", 1),
     (["-c", "default, bin", "font"], "desc", 0),
@@ -1045,7 +1121,7 @@ def test_table_omits_empty_columns_with_note_only_for_explicit_selection(capsys,
     if argv[1:2] == ["default, bin"]:
         assert captured.err.count("column hidden") == 1
         assert "no bin values" in captured.err
-    elif argv[1:2] in (["default"], ["all"]):
+    elif argv[1:2] == ["default"]:
         assert "column hidden" not in captured.err
 
 

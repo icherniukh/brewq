@@ -55,6 +55,7 @@ def _search_epilog() -> str:
     return f"""\
 actions: +update, +setup, +config [show|defaults|edit], +completion zsh
 examples: {prog} ripgrep | {prog} -i | {prog} +update
+alias: `brewq +setup` links the `bq` shorthand when the name is free
 """
 
 _UPDATE_EPILOG = """\
@@ -75,9 +76,7 @@ Examples:
 The config file controls default columns and cache freshness.
 """
 
-_COLUMN_HELP = (",".join(c for c in columns_mod.CANONICAL_COLUMNS if c not in columns_mod.TSV_ONLY)
-                + "; default, all; --tsv also takes "
-                + ", ".join(sorted(columns_mod.TSV_ONLY)))
+_COLUMN_HELP = ",".join(columns_mod.CANONICAL_COLUMNS) + "; default"
 
 _FULL_HELP_DETAILS = """\
 columns:
@@ -88,9 +87,8 @@ columns:
   Use one -c with a comma-separated list.
   Exact names only; duplicates keep their first occurrence.
   -c default,url appends URL to the configured view; -c url,default puts it first.
-  -c all shows all fields available in the output mode; inst/status are TSV-only.
   Signed +x/-x edits are rejected.
-  default/all can change between releases; scripts should list fields.
+  default can change between releases; scripts should list fields.
 
 trending:
   TREND compares a package's recent monthly install rate with its own earlier
@@ -139,7 +137,7 @@ def _positive_int(raw: str) -> int:
 def _add_top_flag(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-t", "--top",
                         type=_positive_int, metavar="N",
-                        help="show at most N packages")
+                        help="show at most N rows, even with -a")
 
 
 class _ColumnsAction(argparse.Action):

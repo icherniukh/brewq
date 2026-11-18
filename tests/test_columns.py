@@ -4,7 +4,6 @@ import pytest
 
 from brewq.columns import (
     CANONICAL_COLUMNS,
-    FULL_COLUMNS,
     pick_representative_metric,
     resolve,
     select,
@@ -199,20 +198,12 @@ def test_default_expands_configured_view():
 
 
 
-@pytest.mark.parametrize("tsv", [False, True])
-def test_all_is_mode_aware(tsv):
-    expected = FULL_COLUMNS if tsv else [key for key in FULL_COLUMNS if key not in {"inst", "status"}]
-    assert [c.key for c in select("all", ["name"], tsv=tsv)] == expected
-
-
-
-@pytest.mark.parametrize("name", ["inst", "status"])
-def test_tsv_only_fields_rejected_in_table_mode(name):
-    with pytest.raises(ValueError, match=f"{name!r} is TSV-only; use --tsv"):
+@pytest.mark.parametrize("name", ["inst", "status", "all"])
+def test_removed_fields_are_unknown_columns(name):
+    with pytest.raises(ValueError, match=f"Unknown column {name!r}"):
         select(name, ["name"])
-    assert select(name, [], tsv=True)[0].key == name
-    with pytest.raises(ValueError, match="TSV-only"):
-        select("default", ["name", name])
+    with pytest.raises(ValueError, match=f"Unknown column {name!r}"):
+        select(name, [], tsv=True)
 
 
 

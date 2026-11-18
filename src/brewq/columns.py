@@ -99,16 +99,6 @@ _COLUMN_REGISTRY: dict[str, ColumnDef] = {
         lambda p: p.description or "",
         description="package description",
     ),
-    "inst": ColumnDef(
-        "inst", "INST", "left",
-        lambda p: "✔" if p.installed else "",
-        lambda p: "true" if p.installed else "false",
-        description="whether the package is installed",
-    ),
-    "status": ColumnDef(
-        "status", "STATUS", "left", lambda p: p.status, lambda p: p.status,
-        description="deprecated or disabled state",
-    ),
 }
 
 CANONICAL_COLUMNS: tuple[str, ...] = tuple(_COLUMN_REGISTRY)
@@ -123,17 +113,7 @@ def reference_lines() -> tuple[str, ...]:
     )
 
 
-TSV_ONLY = frozenset({"inst", "status"})
-
-
-# Column keys shown by -c all: every useful package field.
-FULL_COLUMNS: list[str] = [
-    "name", "type", "ver", "inst", "status",
-    "30d", "90d", "365d", "trend",
-    "bin", "url", "desc",
-]
-
-
+# Raw install-count windows, most recent first.
 _RAW_METRIC_KEYS = ("90d", "30d", "365d")
 
 
@@ -208,18 +188,11 @@ def select(
     for token in tokens:
         if token == "default":
             expanded = resolve(default_columns, [], representative_metric)
-        elif token == "all":
-            expanded = resolve([key for key in FULL_COLUMNS if tsv or key not in TSV_ONLY], [])
         elif not token:
             raise ValueError("Empty column name in -c; separate fields with single commas.")
         else:
             expanded = resolve(token, [], allow_auto=False)
         for col in expanded:
-            if not tsv and col.key in TSV_ONLY:
-                shown = ("as the ✔ after the name" if col.key == "inst"
-                         else "as the desc prefix")
-                raise ValueError(f"Column {col.key!r} is TSV-only; use --tsv -c {col.key}. "
-                                 f"Tables show it {shown}.")
             if col not in selected:
                 selected.append(col)
     if not selected:
