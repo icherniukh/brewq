@@ -6,9 +6,18 @@ Pre-1.0 (`0.x`, [changelog](CHANGELOG.md)) · local wheel distribution · MIT ([
 
 ## Install & quick start
 
-Requires Python 3.12+, `uv`, and Homebrew (for local installed inventory and register updates).
+Requires Homebrew (for local installed inventory and register updates).
 
-Install from a local wheel (replace the path with your `.whl` file) and run your first search:
+Install from the tap and run your first search:
+
+```zsh
+brew install icherniukh/tap/brewq
+brewq +setup   # optional: link the `bq` shorthand
+bq ripgrep
+```
+
+Or install a local wheel with `uv` (needs Python 3.12+; replace the path with
+your `.whl` file):
 
 ```zsh
 uv tool install path/to/brewq-*.whl
