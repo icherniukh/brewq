@@ -166,7 +166,7 @@ def _add_column_flags(parser: argparse.ArgumentParser) -> None:
 
 def _add_reverse_flag(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-r", "--reverse", action="store_true",
-                        help="put the best rows last")
+                        help="reverse the sort order")
 
 
 def _add_update_flag(parser: argparse.ArgumentParser, *, then: str) -> None:
@@ -201,7 +201,7 @@ def _build_search_parser() -> argparse.ArgumentParser:
     _add_reverse_flag(parser)
     _add_top_flag(parser)
     parser.add_argument("-a", "--all", action="store_true",
-                        help="show all matches, best rows last on a TTY")
+                        help="show all matches")
     _add_column_flags(parser)
     parser.add_argument("-m", "--tsv", action="store_true",
                         help="tab-separated rows without a header")

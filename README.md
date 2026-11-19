@@ -102,11 +102,11 @@ ripme	35	https://github.com/RipMeApp/ripme
 | Search option | Current behavior |
 | --- | --- |
 | `-s`, `--sort FIELD` | `90d` (built-in default), `30d`, `365d`, `trend`, or `name` |
-| `-r`, `--reverse` | Put the best rows last |
+| `-r`, `--reverse` | Reverse the sort order |
 | `-t`, `--top N` | Positive result cap; overrides configuration |
 | `-i`, `--installed` | Show installed packages, optionally filtered by query |
 | `-u`, `--update` | Attempt a forced register refresh, then query available data |
-| `-a`, `--all` | Remove the cap and put the best row last on a TTY |
+| `-a`, `--all` | Show all matches |
 
 | Output option | Current behavior |
 | --- | --- |
