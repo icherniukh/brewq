@@ -1,123 +1,112 @@
-# brewq
+![brewq — Read-only Homebrew query CLI showing ranked grep results](assets/readme/hero.svg)
 
-`brewq` is a read-only Homebrew query and analytics tool: find packages, compare
-install counts, and inspect installed formulae and casks. It does not install,
-upgrade, uninstall, manage services, or manage Brewfiles.
+`brewq` is a compact, read-only Homebrew query tool: search formulae and casks by name, formula alias, or description, compare 90-day installs and momentum cues, and inspect installed packages from a local cache. It never installs, upgrades, manages services, or manages Brewfiles.
 
-![brewq demo](demo.gif)
+Pre-1.0 (`0.x`, [changelog](CHANGELOG.md)) · local wheel distribution · MIT ([LICENSE](LICENSE), [NOTICE](NOTICE))
 
-## Install and run
+## Install & quick start
 
-Requires Python 3.12+ and Homebrew for local inventory and refresh operations.
+Requires Python 3.12+, `uv`, and Homebrew (for local installed inventory and register updates).
 
-```sh
-uv tool install <wheel>
-brewq +setup
+Install from a local wheel (replace the path with your `.whl` file) and run your first search:
+
+```bash
+uv tool install path/to/brewq-*.whl
 brewq ripgrep
+```
+
+In a checkout, run source directly without installing, and compare `brewq --version` with `uv run brewq --version` if checking for version drift:
+
+```bash
+uv run brewq ripgrep
+```
+
+Optionally link the `bq` shorthand beside `brewq`:
+
+```bash
+brewq +setup --dry-run   # preview the link without changing anything
+brewq +setup             # link `bq` beside `brewq` when free
 bq ripgrep
 ```
 
-`uv tool install` installs `brewq` only. `brewq +setup` links `bq` beside it when
-that name is free in the command directory and is not a shell alias or function.
-An existing foreign `bq` is left unchanged. `brq` is not created.
-`brewq +setup --dry-run` prints the planned link or removal without changing
-anything. Remove the shortcut and package with:
+`uv tool install` installs `brewq` only. `+setup` links `bq` beside it only when that name is free and is not a shell alias or function; a foreign `bq` is left unchanged, and `brq` is not created.
 
-```sh
-brewq +setup --remove
-uv tool uninstall brewq
-```
+![brewq demo](demo.gif)
 
-That leaves cache and config in place. To remove those too:
+## Workflows
 
-```sh
-rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/brewq" "${XDG_CONFIG_HOME:-$HOME/.config}/brewq"
-```
+**Search and compare:**
 
-Use `uv run brewq` in a checkout to run its source rather than an older
-user-level installation. After verifying an updated build, `uv tool install
---force <wheel>` replaces the installed copy, then run `brewq +setup` again.
-Compare `brewq --version` with `uv run brewq --version` when diagnosing drift.
-
-### Zsh completion
-
-After zsh's completion system is initialized (`autoload -Uz compinit; compinit`,
-if your shell setup does not already do this), load completion for both commands:
-
-```zsh
-source <(brewq +completion zsh)
-```
-
-Put that line after completion initialization in your zsh configuration to keep
-it enabled. For a checkout, use `source <(uv run brewq +completion zsh)` instead.
-Tab completes commands, flags, sort fields, comma-separated columns, and cached
-formula/cask names. Package suggestions use the existing user cache even when
-stale; a missing, unreadable, or invalid cache yields no package suggestions.
-Completion never initializes the seed, scans installed packages, refreshes data,
-or schedules work. It binds to the generating Python environment, so regenerate
-it after moving or recreating that environment. Bash/fish and `brew` completion
-integration are not provided.
-
-## Search and output
-
-```sh
+```bash
 brewq                              # top overall; fits the terminal height
 brewq -s trend                     # top rising packages
-brewq terminal multiplexer
-brewq -t 10 json
-brewq -i -t 10 grep
-brewq -s 365d rust
-brewq -c name,90d,url ripgrep
-brewq --tsv -c name,90d,url ripgrep
+brewq terminal multiplexer         # multi-term search across names and descriptions
+brewq -t 10 json                   # cap to top 10 matches
+brewq -u ripgrep                   # attempt a forced refresh, then search
 ```
 
-`brewq --help` shows the common search path. `brewq --full-help` (`-f`) adds the full
-column reference plus concise trending and cache behavior. `-v` / `--version`
-prints the version.
+Example output (counts vary by snapshot):
 
-Search matches names, formula aliases, and descriptions. Flags may appear
-before, between, or after query terms. A `+action` is recognized only as the
-first token; bare words are always query terms. All query terms must match;
-name normalization applies. For homebrew/core and homebrew/cask, results are a
-superset of `brew search`: its substring and spell-correction (DidYouMean) matches
-are reproduced for formulae and casks, and `/regex/` queries are supported. Packages
-from third-party taps are not in the catalog, so `brew search` can list names brewq
-cannot. An omitted query or an explicitly empty query (`bq ""`) selects the
-whole catalog before filters, sorting, and caps; `-i` still selects installed
-packages. `brew search` exits 1 when nothing matches; brewq exits 0.
-The default sort is raw 90-day install volume. Exact name/alias matches precede
-all other matches under every sort, regardless of status. Other disabled/deprecated
-results rank last and are never filtered out. `-s name` sorts alphabetically
-within those status groups after exact matches.
+```console
+$ brewq -t 6 grep
+NAME         90d ↓    TREND  DESC
+────────────────────────────────────────────────────────────────────────────────
+grep         6,100  0.7x ↓   GNU grep, egrep and fgrep
+ripgrep ✔   97,845  0.7x ↓   Search tool like grep and The Silver Searcher
+ast-grep ✔  32,016  1.5x ↑   Code searching, linting, rewriting
+semgrep     19,788  1.1x ·   Easily detect and prevent bugs and anti-patterns i…
+ugrep        8,316  0.7x ↓   Ultra fast grep with query UI, fuzzy search, archi…
+ack ✔        1,566  0.4x ↓   Search tool like grep, but optimized for programme…
+brewq: showing 6 of 36; -a for all, -t N for a count
+cache: 5h old
+```
+
+Install counts are a comparison signal, not proof of quality; queries run locally against cached metadata and analytics.
+
+**Installed packages (`-i`):**
+
+```bash
+brewq -i                           # installed formulae and casks (capped to terminal height)
+brewq -i -a                        # all installed packages, best rows last on a TTY
+brewq -i grep                      # filter installed packages by query
+brewq -i -s name                   # sort installed packages by name (inactive rows last)
+brewq -i -c default,90d,trend      # add cached analytics columns
+```
+
+`-i [query]` is the only installed view, following the same sorting, caps, `-a`, `-r`, and status ranking as search. Analytics come from the local cache and are never fetched on demand; `VER` displays the installed version separately from the catalog version.
+
+**Columns and TSV scripting (`-c`, `--tsv`):**
+
+```bash
+brewq ripgrep -c default,ver,bin      # configured view, then version and binaries
+brewq rust -c name,90d,url,desc       # exact selection without trend
+brewq ripgrep -c name,90d,url --tsv   # raw tab-separated rows, no header
+brewq -i --tsv -c name,type,ver       # installed inventory for scripts
+```
+
+Example TSV output (ready for `awk`, `cut`, or shell loops):
+
+```console
+$ brewq ripgrep -c name,90d,url --tsv
+ripgrep	97845	https://github.com/BurntSushi/ripgrep
+ripgrep-all	887	https://github.com/phiresky/ripgrep-all
+ripme	35	https://github.com/RipMeApp/ripme
+```
+
+## Reference
+
+`brewq --help` shows the common path; `-f` (`--full-help`) adds the column reference, trending, and cache behavior; `-v` (`--version`) prints the version. Flags may appear before, between, or after query terms; `+action` dispatch applies only to the first token.
+
+### Options
 
 | Search option | Current behavior |
 | --- | --- |
 | `-s`, `--sort FIELD` | `90d` (built-in default), `30d`, `365d`, `trend`, or `name` |
-| `-r`, `--reverse` | Reverse the chosen order after the cap, so the best row is last |
+| `-r`, `--reverse` | Put the best rows last |
 | `-t`, `--top N` | Positive result cap; overrides configuration |
 | `-i`, `--installed` | Show installed packages, optionally filtered by query |
-| `-u`, `--update` | Force a register refresh, then query; use local data if refresh fails |
+| `-u`, `--update` | Attempt a forced register refresh, then query available data |
 | `-a`, `--all` | Remove the cap and put the best row last on a TTY |
-
-For terminal tables, cap precedence is explicit `-t N`, then `-a` (unlimited),
-then configured `top`. The default `top = "auto"` fits the terminal height:
-`max(1, rows - 6)` records. Six lines cover the header, rule,
-`showing N of M` notice, cache note, typed command, and next prompt.
-When the layout falls back to vertical records, auto sizing counts each shown
-field's wrapped lines and the separator after each record, reserving four lines
-for notices, the command, and the prompt. It keeps at least one record, which can
-still overflow a very short terminal. Fixed configured counts and explicit `-t`
-are never reduced for vertical output. Wrapped notices remain future work.
-Both height and width come from stdout's terminal, ignoring stale `LINES`/`COLUMNS`;
-those variables are fallbacks only without a TTY.
-
-A cap that hides rows reports `showing N of M; -a for all, -t N for a count` on
-stderr; M counts every match, inactive ones included. Pipes and TSV ignore
-configured caps and reverse: they are uncapped and best-first unless `-t` or `-r`
-is explicitly given. `-a` does not change their ordering. Machine-readable stdout
-stays clean.
-
-These output options work for search, including `-i`:
 
 | Output option | Current behavior |
 | --- | --- |
@@ -126,159 +115,57 @@ These output options work for search, including `-i`:
 | `-n`, `--no-color` | Suppress ANSI styling on stdout and stderr |
 | `-q`, `--quiet` | Suppress routine status notes on stderr; errors and data-quality warnings still print |
 
-Fields have one exact name shared by `-c`, `-s` (for sortable fields), and
-configuration: `name`, `type`, `ver`, `30d`, `90d`, `365d`, `trend`, `bin`, `url`,
-`desc`. Each matches its table header lowercased. Search tables show installed
-state as the name's ✔ marker; `-i` omits it because every result is installed.
-Package status appears as a description prefix. Typos suggest exact names
-without automatically resolving them.
+### Columns & trend
 
-Use one `-c` with a comma-separated list of fields in the desired order.
-`default` expands the current view's configured columns.
-Duplicates keep their first occurrence: `url,default` puts URL first;
-`default,name` leaves the default layout unchanged. `default` is a
-reserved word for column selection.
+| Field | Header | Meaning |
+| --- | --- | --- |
+| `name` | `NAME` | Package name |
+| `type` | `TYPE` | `formula` or `cask` |
+| `ver` | `VER` | Installed version when present; otherwise catalog version |
+| `30d` | `30d` | Installs in the last 30 days (formula installs on request; cask-install feed) |
+| `90d` | `90d` | Installs in the last 90 days (formula installs on request; cask-install feed) |
+| `365d` | `365d` | Installs in the last 365 days (formula installs on request; cask-install feed) |
+| `trend` | `TREND` | Smoothed recent rate relative to the package's earlier rate |
+| `bin` | `BIN` | Executable names (declared cask binary artifacts when present; formulae require local installed data) |
+| `url` | `URL` | Homepage URL |
+| `desc` | `DESC` | Package description |
 
-```sh
-brewq --full-help                    # field reference; no cache needed
-brewq ripgrep -c default,ver,bin      # configured view, then version and binaries
-brewq rust -c name,90d,url,desc       # exact selection without trend
-brewq rust -c url,default            # URL first, then the configured view
-brewq -i -c default,90d,trend        # extend the installed-package view
-brewq ripgrep -c name,type,ver,30d,90d,365d,trend,bin,url,desc --tsv  # every field, raw
-brewq ripgrep -c name,ver,90d        # exact selection and order
-```
+Fields have one exact name shared by `-c`, `-s` (for sortable fields), and configuration; typos suggest exact names without resolving them. Pass one `-c` with a comma-separated list: `default` expands the configured view (`name,90d,trend,desc` for search; `name,desc` for `-i`) and duplicates keep their first occurrence. Signed `+x`/`-x` tokens are rejected with the equivalent list. `default` can change between releases, so scripts should list concrete fields.
 
-Signed `+x`/`-x` tokens are rejected with the equivalent full list: for example,
-`-c +url,-trend` says `use -c name,90d,url,desc` with the built-in search layout.
-To omit a field, write the desired list. `default` can change between
-releases; scripts should list concrete fields. The same controls work with `-i`.
+Search tables mark installed rows with `✔` (`-i` omits it) and prefix `DESC` with package status (`(deprecated)` or `(disabled)`). Selections that cannot fit fall back to labeled vertical records. Tables omit all-blank columns (never `NAME`), noting only explicitly named hidden fields on stderr. Human-readable URLs drop a leading `https://` and a root-path trailing `/`. `--tsv` is the sole machine-readable format: headerless, sanitized cells, retaining every selected column (with empty cells for unknown counts) and full raw values.
 
-Cask binaries come from declared artifacts; formula binaries require local
-installed data.
+`trend` is a smoothed recent-to-historical rate multiplier, shown by default (`TREND`) but never the default sort. Momentum cues (`↑↑` ≥ 2x, `↑` ≥ 1.2x, `·`, `↓` < 0.8x) evaluate the displayed one-decimal ratio; cues, `✔`, and raw TSV multipliers all survive without color. Styling follows the terminal theme per stream on TTYs only; nonempty `NO_COLOR`, `TERM=dumb`, or `-n` disables styling on stdout and stderr, and pipes and TSV stay ANSI-free.
 
-Ordinary search defaults to `name,90d,trend,desc`. Installed-only
-search (`-i`) uses `installed-columns`, defaulting to `name,desc`;
-explicit `-c` overrides that layout. Names use their content width: descriptions
-shrink to about 20 display columns before names are clipped, with package
-basenames retained where possible. Widths account for wide CJK characters and
-combining marks. Long URL and binary cells can be clipped; short metadata such
-as type, version, and counts keeps its full displayed value. Layouts that cannot
-fit these minimums (including wide selections on narrower terminals) use labeled vertical
-records, showing installed state once and skipping empty fields per record.
+### Matching, ordering & limits
 
-Tables omit columns whose shown values are all blank or `-`, even with explicit
-`-c`; NAME is never omitted. Only fields named explicitly in `-c` receive a note
-on stderr when hidden, such as `brewq: no bin values in these results; column hidden`.
-`default` hides empty columns silently; `-c default,bin` notes only BIN.
-Human-readable URLs omit a leading `https://` and a root-path trailing `/`
-(`jsonnet.org/` becomes `jsonnet.org`); `http://` and nonempty paths remain visible.
-TSV always retains the selected columns and full URLs and values.
-`trend` is a smoothed recent-to-historical
-installation-rate multiplier, not absolute popularity. It is currently visible
-by default but is not the default sort.
+Ordinary search matches normalized names, formula aliases, and descriptions; every term must match. Substring matching, DidYouMean spelling corrections (which can add results), and Python `/regex/` patterns are supported. An omitted or empty query selects the whole catalog (`-i` selects installed packages), and empty results exit `0`.
 
-TREND adds compact momentum cues: `↑↑` at 2.0× or above, `↑` at 1.2× or
-above, `·` near baseline, and `↓` below 0.8×. Rising values are green on a
-color terminal, with bold emphasis at 2.0×; steady, cooling, and missing values
-are subdued. Bands use the displayed one-decimal multiplier, not statistical
-significance thresholds.
-Markers remain visible without color; TSV keeps the raw multiplier.
+Exact name/alias matches rank first under every sort even when inactive; other disabled/deprecated rows rank last and are never filtered out. Caps and optional reversal apply after ranking.
 
-`--tsv` is the only machine-readable format. Cells sanitize tabs and newlines;
-unknown install counts become empty cells. Table colors follow the terminal
-theme and are enabled independently for each stream only when it is a TTY.
-A nonempty `NO_COLOR`, `TERM=dumb`, or `--no-color` suppresses all ANSI styling
-on stdout and stderr, including cache footers and usage errors. Installed and
-trend markers (`✔` outside `-i`, `↑↑`) remain visible without color. Pipes and TSV stay
-ANSI-free.
+Terminal cap precedence is `-t N`, then `-a` (unlimited, best row last on a TTY), then configured `top`. Default `top = "auto"` fits `max(1, rows - 6)` table rows, reserving six lines for chrome and the next prompt. When narrow output switches to vertical records, auto-fit reserves four lines plus any hidden-column notices and counts wrapped field lines plus separators, keeping at least one record. Explicit `-t N` skips height adjustment, and either explicit counts or a single oversized vertical record can exceed terminal height (`-r` puts the best row last). Dimensions come from stdout's terminal (`LINES`/`COLUMNS` apply only without a TTY). Hidden rows report `showing N of M; -a for all, -t N for a count` on stderr. Pipes and TSV ignore configured caps and `reverse`: they stay uncapped and best-first unless `-t` or `-r` is given, and `-a` does not change their ordering.
 
-## Installed packages
+## Cache & updates
 
-```sh
-brewq -i
-brewq -i grep
-brewq -i -s name
-brewq -i -c name,type,ver,90d,desc
-brewq -i -t 10
-brewq -i --tsv -c name,type,ver
-```
-
-`-i [query]` is the only installed view. The default sort is the search sort
-(90-day install volume unless configured); `-i -s name` sorts alphabetically across formulae
-and casks, with deprecated/disabled rows last. Configured `top`, explicit caps,
-`--all`, and reverse use the same policies as search; a cap reports
-`showing N of M` on stderr. Select cached
-analytics through the same `-c` column interface used by search; this never
-fetches analytics on demand. VER displays the installed version for installed
-rows; the catalog's available version remains separate internally.
-
-## Cache and recovery
-
-The cache footer uses subdued neutral text on a color terminal. Age, incomplete
-analytics, and background update scheduling remain visible without red freshness accents.
-
-Releases bundle a seed catalog, with builder-local home paths and installed
-state removed during seed generation. Loads validate the user snapshot before using it,
-fall back to the seed after corruption, and reconcile installed state from local
-Homebrew roots. A successful empty inventory clears stale installed markers;
-missing or unreadable roots preserve the last known state. Stale, seed, and
-incomplete snapshots can start a detached background update after a five-minute
-delay, and only when the system is not busy. That process is on by default and
-can use the network. Set `auto-update = false` or
-`BREWQ_NO_AUTO_REFRESH=1` to render the same rows without starting it or writing
-scheduler state. The environment value wins over configuration; an invalid value
-warns and leaves the configured setting. `brewq +update` still runs in the
-foreground when you ask for it. Cache information goes to stderr after rows are
-flushed.
-
-Snapshots record analytics completeness independently of file age. If metadata
-refresh succeeds while analytics is unavailable, brewq retains usable counts
-from the previous snapshot, marks the new snapshot for repair, and retries after
-the scheduler cooldown. JSON, pickle, and scheduler state use atomic replacement.
-
-```sh
+```bash
 brewq +update            # update the register if stale
 brewq +update --force    # force recovery, including a recently corrupted cache
 brewq +update --offline  # install the bundled catalog as the local cache, offline
-brewq -u ripgrep        # update the register, then search
-brewq -a -i             # all installed matches, best row last on a TTY
-brewq +config           # show effective configuration and sources
+brewq -u ripgrep         # attempt a forced refresh, then search
 ```
 
-`+update --offline` replaces the cache with the bundled catalog without contacting
-Homebrew. It cannot be combined with `--force`.
+Releases bundle a sanitized seed catalog containing `homebrew/core` and `homebrew/cask` (builder-local paths and installed state removed). Loads validate the user snapshot, fall back to the seed after corruption, and reconcile installed state from local Homebrew roots. Local inventory overlays installed formulae (including installed third-party formulae) into search and `-i`; a successful empty inventory clears stale markers, while missing or unreadable roots preserve the last known state. Live refreshes pull the records returned by Homebrew's trusted-tap enumeration.
 
-`-u` / `--update` forces the same foreground refresh used by `+update --force`,
-then runs the query (including `-i`). If metadata refresh fails, brewq reports
-the failure on stderr, preserves the previous snapshot, and queries that data.
-The query exits successfully if local data can be loaded; refresh failure alone
-does not make it fail. Without a usable user snapshot, the bundled seed is the
-offline fallback. If neither local source is usable and bootstrap also fails,
-the query fails. An analytics-only failure retains previous usable counts in a
-new metadata snapshot, reports incomplete analytics, and still queries it.
-Normal queries need no network; use `BREWQ_NO_AUTO_REFRESH=1` to suppress
-background refresh attempts while offline. `-u` explicitly requests a refresh
-even with background updates disabled.
+Stale, seed, and incomplete snapshots can schedule a detached background refresh that waits five minutes, checks system load, and may use the network. Opt out with `auto-update = false` or `BREWQ_NO_AUTO_REFRESH=1` (the environment value wins; an invalid value warns and keeps configuration). `brewq +update` runs in the foreground on request; cache notes print to stderr after rows flush. Snapshots record analytics completeness independently of file age: if metadata refreshes while analytics are unavailable, previous usable counts are retained, the snapshot is marked for repair, and the scheduler retries later.
+
+`+update --offline` replaces the cache with the bundled catalog without contacting Homebrew and cannot combine with `--force`. `-u` attempts a forced refresh first, then queries available data — whether the refresh succeeds, another update is already in progress, or refresh fails (reported on stderr with fallback to local data or the bundled seed). The query's success sets the exit code. `BREWQ_NO_AUTO_REFRESH=1` suppresses background attempts only, not `-u`.
 
 ## Configuration
 
-Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless
-`BREWQ_CONFIG` overrides it. Bare `brewq +config` is `brewq +config show`: it
-prints a comment with the path and whether the file exists, then every key's
-effective value as valid TOML. Trailing comments identify each source: `default`,
-`config file`, or `BREWQ_NO_AUTO_REFRESH` when that variable disables updates.
+Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless `BREWQ_CONFIG` overrides it. Bare `brewq +config` is `+config show`: every key's effective value as TOML with its source in a trailing comment.
 
-`brewq +config defaults` prints the built-in defaults as TOML, suitable for a
-starter file. `brewq +config edit` opens the file in `$VISUAL`, falling back to
-`$EDITOR`; set one of these variables first. Editor arguments such as `code -w`
-are supported. If the file is missing, brewq creates it with every default commented out, so it
-changes nothing until you uncomment a line; keys left commented keep following
-brewq's defaults. After the editor exits, brewq validates the
-file and exits 1 on invalid or unknown settings; an editor failure returns the
-editor's exit code.
+`+config defaults` prints starter TOML. `+config edit` opens `$VISUAL` or `$EDITOR` (arguments like `code -w` work), creating a commented-out file if missing; invalid settings exit `1` after the editor exits, and editor failures pass through its code.
 
-```sh
+```bash
 brewq +config show
 bq +config defaults > config.toml
 VISUAL="code -w" brewq +config edit
@@ -296,39 +183,25 @@ auto-update = true # false, or BREWQ_NO_AUTO_REFRESH=1, skips background updates
 max-age = 86400 # seconds
 ```
 
-`BREWQ_CACHE_DIR` overrides the cache directory, otherwise
-`${XDG_CACHE_HOME:-~/.cache}/brewq` is used. Set `max-age` in configuration to
-control cache age in seconds. There are no preset-management commands or named
-column presets.
+`BREWQ_CACHE_DIR` overrides the cache directory. The config-only `auto` pseudo-column resolves to `90d`, `30d`, or `365d` from the top result. Keys are root-level long option names with typo suggestions. Column arrays take concrete names, plus `auto` for search; `default` is reserved for `-c`. Invalid settings emit a concise diagnostic and fall back field-by-field. `--help`, `--version`, and `+config defaults` do not load configuration. Persisting CLI flags via `--save` is not implemented.
 
-The `auto` pseudo-column in search output configuration selects an available raw
-metric from the top result, preferring 90d, then 30d, then 365d. It is rejected
-in `installed-columns` and explicit `-c`; prefer explicit metric columns in scripts.
+## Shell completion & environment
 
-Config keys are root-level long option names (including `reverse`). Typos offer
-“did you mean” suggestions; only exact names are accepted. Column arrays contain
-concrete names, with `auto` as the search-only exception; `default` and `all`
-are CLI selection words.
+```zsh
+source <(brewq +completion zsh)   # after compinit; in a checkout, uv run brewq +completion zsh
+```
 
-Invalid keys, types, ranges, sort names, and columns emit a concise
-stderr diagnostic and fall back field-by-field. Help, version, and
-`+config defaults` do not load configuration. Config commands do not load the
-package cache. Persisting query options with `--save` remains post-M1.
-
-## Exit codes and environment
+Tab completes commands, flags, sort fields, comma-separated columns, and cached package names. Package suggestions read the existing user snapshot even when stale; an absent, unreadable, or invalid snapshot yields no package suggestions, and completion never initializes the seed, scans inventory, or refreshes data. Regenerate completion after moving or recreating the Python environment that generated it. Bash and fish are not supported.
 
 | Code | Meaning |
 | --- | --- |
 | `0` | Success, including empty results and queries served from local data after a refresh failure |
-| `1` | Operational failure: unusable cache, failed update; `+config edit` exits 1 on invalid settings |
+| `1` | Operational failure: unusable cache, failed update; `+config edit` exits `1` on invalid settings |
 | `2` | Usage error: unknown flags or actions, invalid option values |
 | `130` | Interrupted (`Ctrl-C`); no traceback, no partial cache |
 | `141` | Closed search pipe (`brewq … \| head`); no traceback |
 
-`+config edit` passes through the editor's exit code. `--help` and `--version`
-exit `0` and ignore invalid configuration. Search falls back field-by-field on
-invalid configuration with a diagnostic and still exits `0` unless the query
-itself fails.
+`+config edit` passes through the editor's exit code. `--help` and `--version` exit `0` and ignore invalid configuration.
 
 | Variable | Effect |
 | --- | --- |
@@ -340,22 +213,21 @@ itself fails.
 | `VISUAL`, `EDITOR` | Editor for `+config edit`, in that order |
 | `COLUMNS`, `LINES` | Terminal-size fallback when stdout is not a TTY |
 
-## License
+## Uninstall
 
-Original brewq code is MIT, Copyright (c) 2026 Ivan Cherniukh. The bundled
-catalog is Homebrew data under the BSD-2-Clause license, and spell correction
-adapts Yuki Nishijima's DidYouMean under MIT. Both notices are in `NOTICE`.
+```bash
+brewq +setup --remove
+uv tool uninstall brewq
+```
 
-## Known limits
+Cache and config stay behind; to remove those too:
 
-- Explicit result counts and a single oversized vertical record can exceed the
-  terminal height. `-r` puts the best row last when you want it in view.
-- The catalog is Homebrew core and cask data. Third-party taps are absent.
-- `bq` exists only after `brewq +setup`, and only when that name is free.
-- Colors follow the terminal theme; nonempty `NO_COLOR`, `TERM=dumb`, and
-  `--no-color` disable styling on both streams.
-- There is no install, upgrade, uninstall, or service command.
+```bash
+rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/brewq" "${XDG_CONFIG_HOME:-$HOME/.config}/brewq"
+```
 
-Contributor workflow lives in [AGENTS.md](AGENTS.md). The layout lab runs with
-`uv run python scripts/random-layout.py [--seed N]` from a checkout, using the
-same layouts and normal search path.
+## License & development
+
+Original `brewq` code is MIT, Copyright (c) 2026 Ivan Cherniukh ([LICENSE](LICENSE)). The bundled catalog is Homebrew data under the BSD-2-Clause license, and spell correction adapts Yuki Nishijima's DidYouMean under MIT; both notices are in [NOTICE](NOTICE).
+
+Contributor workflow lives in [AGENTS.md](AGENTS.md). The layout lab runs with `uv run python scripts/random-layout.py [--seed N]` from a checkout, using the same layouts and normal search path.
