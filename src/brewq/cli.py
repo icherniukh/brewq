@@ -18,7 +18,20 @@ from brewq import seed as seed_mod
 from brewq import spell
 
 _ACTIONS = frozenset({"update", "setup", "config", "completion"})
-_FORMATTER = argparse.RawDescriptionHelpFormatter
+
+
+class _HelpFormatter(argparse.RawDescriptionHelpFormatter):
+    """Format `-c, --columns COLS` once on Python 3.12 as well as 3.13+."""
+
+    def _format_action_invocation(self, action: argparse.Action) -> str:
+        if not action.option_strings or action.nargs == 0:
+            return super()._format_action_invocation(action)
+        default = self._get_default_metavar_for_optional(action)
+        args_string = self._format_args(action, default)
+        return f"{', '.join(action.option_strings)} {args_string}"
+
+
+_FORMATTER = _HelpFormatter
 
 
 class _Parser(argparse.ArgumentParser):

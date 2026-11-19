@@ -4,41 +4,92 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: "3.12"
+          enable-cache: true
       - run: uv sync --frozen --extra dev
       - run: uv run ruff check .
 
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: ubuntu-latest
+            python-version: "3.14"
+          - os: macos-latest
+            python-version: "3.12"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install zsh for the completion contract
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
       - run: uv sync --frozen --extra dev
       - run: BREWQ_REQUIRE_ZSH=1 uv run pytest -q
 
   package:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: "3.12"
-      - run: uv build --wheel
+          enable-cache: true
+      - run: uv build
       - run: uvx twine check dist/*
-      - name: Install the built wheel in isolation and smoke-test it
+      - name: Verify bundled seed is packaged in wheel and sdist
         run: |
-          python -m venv /tmp/wheelcheck
-          /tmp/wheelcheck/bin/pip install --offline dist/*.whl
-          /tmp/wheelcheck/bin/brewq --version
-          BREWQ_NO_AUTO_REFRESH=1 /tmp/wheelcheck/bin/brewq --tsv -c name ripgrep
+          uv run --no-project python - <<'PY'
+          import pathlib, tarfile, zipfile
+
+          wheels = list(pathlib.Path("dist").glob("*.whl"))
+          sdists = list(pathlib.Path("dist").glob("*.tar.gz"))
+          assert len(wheels) == 1, f"expected 1 wheel, got {wheels}"
+          assert len(sdists) == 1, f"expected 1 sdist, got {sdists}"
+
+          with zipfile.ZipFile(wheels[0]) as zf:
+              assert any(n.endswith("brewq/data/brew-all.json.gz") for n in zf.namelist()), "seed missing from wheel"
+          with tarfile.open(sdists[0], "r:gz") as tf:
+              assert any(n.endswith("brewq/data/brew-all.json.gz") for n in tf.getnames()), "seed missing from sdist"
+          PY
+      - name: Install built wheel offline and smoke-test outside the checkout
+        run: |
+          WHEEL="$(realpath dist/*.whl)"
+          mkdir -p /tmp/wheelcheck-state
+          export UV_TOOL_DIR=/tmp/wheelcheck-tools
+          export UV_TOOL_BIN_DIR=/tmp/wheelcheck-bin
+          export BREWQ_CACHE_DIR=/tmp/wheelcheck-state/cache
+          export BREWQ_CONFIG=/tmp/wheelcheck-state/config.toml
+          export BREWQ_NO_AUTO_REFRESH=1
+          uv tool install --offline --no-index "$WHEEL"
+          cd /tmp
+          /tmp/wheelcheck-bin/brewq --version
+          /tmp/wheelcheck-bin/brewq --help > /dev/null
+          /tmp/wheelcheck-bin/brewq +setup --dry-run
+          /tmp/wheelcheck-bin/brewq +completion zsh > /dev/null
+          out="$(/tmp/wheelcheck-bin/brewq --tsv -c name ripgrep)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -qx "ripgrep"
