@@ -81,13 +81,6 @@ def test_every_flag_mentioned_in_help_exists(name):
     assert mentioned - known == set(), f"{name} help names unknown options"
 
 
-def test_actions_line_matches_registered_actions():
-    epilog = _search().epilog or ""
-    line = next(line for line in epilog.splitlines() if line.startswith("actions:"))
-    advertised = {item.split()[0] for item in line.removeprefix("actions:").split(",")}
-    assert advertised == set(_actions())
-
-
 @pytest.mark.parametrize("name", list(_help_texts()))
 def test_every_example_in_help_parses(name):
     examples = [

@@ -63,14 +63,6 @@ def _error_label(*, no_color: bool = False) -> str:
     if not render_mod._use_color(sys.stderr, no_color=no_color):
         return "Error"
     return "\033[1mError\033[0m"
-def _search_epilog() -> str:
-    prog = _prog()
-    return f"""\
-actions: +update, +setup, +config [show|defaults|edit], +completion zsh
-examples: {prog} ripgrep | {prog} -i | {prog} +update
-alias: `brewq +setup` links the `bq` shorthand when the name is free
-"""
-
 _UPDATE_EPILOG = """\
 Examples:
   brewq +update
@@ -190,7 +182,6 @@ def _build_search_parser() -> argparse.ArgumentParser:
         usage=f"{_prog()} [options] [query ...]",
         description="Search the local Homebrew catalog: compare install counts and trends, "
                     "inspect installed packages.",
-        epilog=_search_epilog(),
         formatter_class=_FORMATTER,
     )
     parser.add_argument("query", nargs="*", help=argparse.SUPPRESS)
