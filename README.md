@@ -10,20 +10,20 @@ Requires Python 3.12+, `uv`, and Homebrew (for local installed inventory and reg
 
 Install from a local wheel (replace the path with your `.whl` file) and run your first search:
 
-```bash
+```zsh
 uv tool install path/to/brewq-*.whl
 brewq ripgrep
 ```
 
 In a checkout, run source directly without installing, and compare `brewq --version` with `uv run brewq --version` if checking for version drift:
 
-```bash
+```zsh
 uv run brewq ripgrep
 ```
 
 Optionally link the `bq` shorthand beside `brewq`:
 
-```bash
+```zsh
 brewq +setup --dry-run   # preview the link without changing anything
 brewq +setup             # link `bq` beside `brewq` when free
 bq ripgrep
@@ -39,7 +39,7 @@ bq ripgrep
 
 **Search and compare:**
 
-```bash
+```zsh
 brewq                              # top overall; fits the terminal height
 brewq -s trend                     # top rising packages
 brewq terminal multiplexer         # multi-term search across names and descriptions
@@ -67,7 +67,7 @@ Install counts are a comparison signal, not proof of quality; queries run locall
 
 **Installed packages (`-i`):**
 
-```bash
+```zsh
 brewq -i                           # installed formulae and casks (capped to terminal height)
 brewq -i -a                        # all installed packages, best rows last on a TTY
 brewq -i grep                      # filter installed packages by query
@@ -79,7 +79,7 @@ brewq -i -c default,90d,trend      # add cached analytics columns
 
 **Columns and TSV scripting (`-c`, `--tsv`):**
 
-```bash
+```zsh
 brewq ripgrep -c default,ver,bin      # configured view, then version and binaries
 brewq rust -c name,90d,url,desc       # exact selection without trend
 brewq ripgrep -c name,90d,url --tsv   # raw tab-separated rows, no header
@@ -148,7 +148,7 @@ Terminal cap precedence is `-t N`, then `-a` (unlimited, best row last on a TTY)
 
 ## Cache & updates
 
-```bash
+```zsh
 brewq +update            # update the register if stale
 brewq +update --force    # force recovery, including a recently corrupted cache
 brewq +update --offline  # install the bundled catalog as the local cache, offline
@@ -167,7 +167,7 @@ Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless
 
 `+config defaults` prints starter TOML. `+config edit` opens `$VISUAL` or `$EDITOR` (arguments like `code -w` work), creating a commented-out file if missing; invalid settings exit `1` after the editor exits, and editor failures pass through its code.
 
-```bash
+```zsh
 brewq +config show
 bq +config defaults > config.toml
 VISUAL="code -w" brewq +config edit
@@ -217,14 +217,14 @@ Tab completes commands, flags, sort fields, comma-separated columns, and cached 
 
 ## Uninstall
 
-```bash
+```zsh
 brewq +setup --remove
 uv tool uninstall brewq
 ```
 
 Cache and config stay behind; to remove those too:
 
-```bash
+```zsh
 rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/brewq" "${XDG_CONFIG_HOME:-$HOME/.config}/brewq"
 ```
 
