@@ -1,6 +1,10 @@
-Brew client for the working class. Don't ask you nothing, speaks primarily digits: installations and trends in your face just as you like it. Read-only; works locally from cache.
+# brewq
 
-Pre-1.0 (`0.x`, [changelog](CHANGELOG.md)) · Homebrew tap or wheel · MIT ([LICENSE](LICENSE), [NOTICE](NOTICE))
+Brew client for the working class. Don't ask you nothing, speaks primarily digits: installations and trends in your face just as you like it. Read-only. Runs locally on cache.
+
+<p align="center">
+  <img src="demo.gif" alt="brewq searching the local Homebrew catalog from the terminal" width="720">
+</p>
 
 ## Install
 
@@ -20,10 +24,6 @@ uv run brewq ripgrep   # in a checkout; compare `brewq --version` with `uv run b
 ```
 
 `+setup` links `bq` beside `brewq` only when that name is free and is not a shell alias or function; a foreign `bq` is left unchanged. `+setup --dry-run` previews the link.
-
-<p align="center">
-  <img src="demo.gif" alt="brewq searching the local Homebrew catalog from the terminal" width="720">
-</p>
 
 ## Usage
 
@@ -179,3 +179,7 @@ rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/brewq" "${XDG_CONFIG_HOME:-$HOME/.config
 ## License & development
 
 Original `brewq` code is MIT, Copyright (c) 2026 Ivan Cherniukh ([LICENSE](LICENSE)). The bundled catalog is Homebrew data under BSD-2-Clause, and spell correction adapts Yuki Nishijima's DidYouMean under MIT; both notices are in [NOTICE](NOTICE). Contributor workflow lives in [AGENTS.md](AGENTS.md); from a checkout, `uv run python scripts/random-layout.py [--seed N]` runs the layout lab through the normal search path.
+
+---
+
+Pre-1.0 (`0.x`, [changelog](CHANGELOG.md)) · Homebrew tap or wheel · MIT ([LICENSE](LICENSE), [NOTICE](NOTICE))
