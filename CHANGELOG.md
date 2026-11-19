@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.21.0
+
+Audit-driven behavior pass and help-surface rework. Usage errors print
+error plus one usage line and exit 2; new `-q` suppresses routine
+stderr notes while keeping data-quality warnings; terminal output
+sanitizes control characters and drops blank framing lines;
+`+setup` gains `--dry-run`. Help is one flat list with lowercase
+shorts (`-r`/`-v`/`-m`/`-f`/`-n`); `inst`/`status` columns and
+`-c all` are gone. CI runs lint, tests, and an isolated wheel
+install smoke on every push and pull request.
+
 ## 0.12.0
 
 Actions are explicit `+` tokens. `brewq list` searches for list; `brewq +list`
