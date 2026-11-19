@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.22.0
+
+Help output drops the search epilog; `-r`/`--reverse` reads as a reverse/bottom-up sort and `-a`/`--all` as uncapped matches, with the TTY best-last behavior noted where it applies. README is shorter and bq-first, documents the trend formula, and embeds the install GIF up top. The legacy `bsx-prototype.zsh` is retired.
+
 ## 0.21.0
 
 Audit-driven behavior pass and help-surface rework. Usage errors print
