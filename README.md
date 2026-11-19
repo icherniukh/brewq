@@ -31,7 +31,9 @@ bq ripgrep
 
 `uv tool install` installs `brewq` only. `+setup` links `bq` beside it only when that name is free and is not a shell alias or function; a foreign `bq` is left unchanged, and `brq` is not created.
 
-![brewq demo](demo.gif)
+<p align="center">
+  <img src="demo.gif" alt="brewq searching the local Homebrew catalog from the terminal" width="720">
+</p>
 
 ## Workflows
 
