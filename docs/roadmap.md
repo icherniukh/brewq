@@ -365,9 +365,9 @@ rewrite. Private competitive research stays out of README and release copy.
 Historical calibration and rejected popularity/clamp approaches remain in the
 archive.
 
-Still open but not yet filed as `decision` Beads: formula/cask grouping,
-retirement of the legacy prototype, and the external
-dotfiles migration.
+Still open but not yet filed as `decision` Beads: formula/cask grouping and
+the external dotfiles migration. The legacy prototype was retired by the owner
+on 2026-11-19.
 
 ## Historical record
 

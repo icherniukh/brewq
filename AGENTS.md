@@ -29,8 +29,9 @@ When one closes, record the outcome in the settled-decision table in
 Agent tooling decisions belong in the dotfiles `DECISIONS.md`, not here.
 
 Keep competitive analysis in historical/internal design material, not public
-README or release copy. Preserve `legacy/bsx-prototype.zsh` until replacement
-behavior and the separate dotfiles migration are verified.
+README or release copy. The `legacy/bsx-prototype.zsh` prototype was retired
+by the owner on 2026-11-19 after verifying the replacement behavior; the
+separate dotfiles migration stays outside this repo.
 
 ## Work tracking and commits
 
