@@ -40,17 +40,17 @@ bq ripgrep
 **Search and compare:**
 
 ```zsh
-brewq                              # top overall; fits the terminal height
-brewq -s trend                     # top rising packages
-brewq terminal multiplexer         # multi-term search across names and descriptions
-brewq -t 10 json                   # cap to top 10 matches
-brewq -u ripgrep                   # attempt a forced refresh, then search
+bq                              # top overall; fits the terminal height
+bq -s trend                     # top rising packages
+bq terminal multiplexer         # multi-term search across names and descriptions
+bq -t 10 json                   # cap to top 10 matches
+bq -u ripgrep                   # attempt a forced refresh, then search
 ```
 
 Example output (counts vary by snapshot):
 
 ```console
-$ brewq -t 6 grep
+$ bq -t 6 grep
 NAME         90d ↓    TREND  DESC
 ────────────────────────────────────────────────────────────────────────────────
 grep         6,100  0.7x ↓   GNU grep, egrep and fgrep
@@ -68,11 +68,11 @@ Install counts are a comparison signal, not proof of quality; queries run locall
 **Installed packages (`-i`):**
 
 ```zsh
-brewq -i                           # installed formulae and casks (capped to terminal height)
-brewq -i -a                        # all installed packages, best rows last on a TTY
-brewq -i grep                      # filter installed packages by query
-brewq -i -s name                   # sort installed packages by name (inactive rows last)
-brewq -i -c default,90d,trend      # add cached analytics columns
+bq -i                           # installed formulae and casks (capped to terminal height)
+bq -i -a                        # all installed packages, best rows last on a TTY
+bq -i grep                      # filter installed packages by query
+bq -i -s name                   # sort installed packages by name (inactive rows last)
+bq -i -c default,90d,trend      # add cached analytics columns
 ```
 
 `-i [query]` is the only installed view, following the same sorting, caps, `-a`, `-r`, and status ranking as search. Analytics come from the local cache and are never fetched on demand; `VER` displays the installed version separately from the catalog version.
@@ -80,16 +80,16 @@ brewq -i -c default,90d,trend      # add cached analytics columns
 **Columns and TSV scripting (`-c`, `--tsv`):**
 
 ```zsh
-brewq ripgrep -c default,ver,bin      # configured view, then version and binaries
-brewq rust -c name,90d,url,desc       # exact selection without trend
-brewq ripgrep -c name,90d,url --tsv   # raw tab-separated rows, no header
-brewq -i --tsv -c name,type,ver       # installed inventory for scripts
+bq ripgrep -c default,ver,bin      # configured view, then version and binaries
+bq rust -c name,90d,url,desc       # exact selection without trend
+bq ripgrep -c name,90d,url --tsv   # raw tab-separated rows, no header
+bq -i --tsv -c name,type,ver       # installed inventory for scripts
 ```
 
 Example TSV output (ready for `awk`, `cut`, or shell loops):
 
 ```console
-$ brewq ripgrep -c name,90d,url --tsv
+$ bq ripgrep -c name,90d,url --tsv
 ripgrep	97845	https://github.com/BurntSushi/ripgrep
 ripgrep-all	887	https://github.com/phiresky/ripgrep-all
 ripme	35	https://github.com/RipMeApp/ripme
@@ -97,7 +97,7 @@ ripme	35	https://github.com/RipMeApp/ripme
 
 ## Reference
 
-`brewq --help` shows the common path; `-f` (`--full-help`) adds the column reference, trending, and cache behavior; `-v` (`--version`) prints the version. Flags may appear before, between, or after query terms; `+action` dispatch applies only to the first token.
+`bq --help` shows the common path; `-f` (`--full-help`) adds the column reference, trending, and cache behavior; `-v` (`--version`) prints the version. Flags may appear before, between, or after query terms; `+action` dispatch applies only to the first token.
 
 ### Options
 
@@ -149,28 +149,28 @@ Terminal cap precedence is `-t N`, then `-a` (unlimited, best row last on a TTY)
 ## Cache & updates
 
 ```zsh
-brewq +update            # update the register if stale
-brewq +update --force    # force recovery, including a recently corrupted cache
-brewq +update --offline  # install the bundled catalog as the local cache, offline
-brewq -u ripgrep         # attempt a forced refresh, then search
+bq +update            # update the register if stale
+bq +update --force    # force recovery, including a recently corrupted cache
+bq +update --offline  # install the bundled catalog as the local cache, offline
+bq -u ripgrep         # attempt a forced refresh, then search
 ```
 
 Releases bundle a sanitized seed catalog containing `homebrew/core` and `homebrew/cask` (builder-local paths and installed state removed). Loads validate the user snapshot, fall back to the seed after corruption, and reconcile installed state from local Homebrew roots. Local inventory overlays installed formulae (including installed third-party formulae) into search and `-i`; a successful empty inventory clears stale markers, while missing or unreadable roots preserve the last known state. Live refreshes pull the records returned by Homebrew's trusted-tap enumeration.
 
-Stale, seed, and incomplete snapshots can schedule a detached background refresh that waits five minutes, checks system load, and may use the network. Opt out with `auto-update = false` or `BREWQ_NO_AUTO_REFRESH=1` (the environment value wins; an invalid value warns and keeps configuration). `brewq +update` runs in the foreground on request; cache notes print to stderr after rows flush. Snapshots record analytics completeness independently of file age: if metadata refreshes while analytics are unavailable, previous usable counts are retained, the snapshot is marked for repair, and the scheduler retries later.
+Stale, seed, and incomplete snapshots can schedule a detached background refresh that waits five minutes, checks system load, and may use the network. Opt out with `auto-update = false` or `BREWQ_NO_AUTO_REFRESH=1` (the environment value wins; an invalid value warns and keeps configuration). `bq +update` runs in the foreground on request; cache notes print to stderr after rows flush. Snapshots record analytics completeness independently of file age: if metadata refreshes while analytics are unavailable, previous usable counts are retained, the snapshot is marked for repair, and the scheduler retries later.
 
 `+update --offline` replaces the cache with the bundled catalog without contacting Homebrew and cannot combine with `--force`. `-u` attempts a forced refresh first, then queries available data — whether the refresh succeeds, another update is already in progress, or refresh fails (reported on stderr with fallback to local data or the bundled seed). The query's success sets the exit code. `BREWQ_NO_AUTO_REFRESH=1` suppresses background attempts only, not `-u`.
 
 ## Configuration
 
-Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless `BREWQ_CONFIG` overrides it. Bare `brewq +config` is `+config show`: every key's effective value as TOML with its source in a trailing comment.
+Configuration lives at `${XDG_CONFIG_HOME:-~/.config}/brewq/config.toml`, unless `BREWQ_CONFIG` overrides it. Bare `bq +config` is `+config show`: every key's effective value as TOML with its source in a trailing comment.
 
 `+config defaults` prints starter TOML. `+config edit` opens `$VISUAL` or `$EDITOR` (arguments like `code -w` work), creating a commented-out file if missing; invalid settings exit `1` after the editor exits, and editor failures pass through its code.
 
 ```zsh
-brewq +config show
+bq +config show
 bq +config defaults > config.toml
-VISUAL="code -w" brewq +config edit
+VISUAL="code -w" bq +config edit
 ```
 
 Built-in defaults:
@@ -201,7 +201,7 @@ Tab completes commands, flags, sort fields, comma-separated columns, and cached 
 | `1` | Operational failure: unusable cache, failed update; `+config edit` exits `1` on invalid settings |
 | `2` | Usage error: unknown flags or actions, invalid option values |
 | `130` | Interrupted (`Ctrl-C`); no traceback, no partial cache |
-| `141` | Closed search pipe (`brewq … \| head`); no traceback |
+| `141` | Closed search pipe (`bq … \| head`); no traceback |
 
 `+config edit` passes through the editor's exit code. `--help` and `--version` exit `0` and ignore invalid configuration.
 
