@@ -4,6 +4,8 @@
 install counts, and inspect installed formulae and casks. It does not install,
 upgrade, uninstall, manage services, or manage Brewfiles.
 
+![brewq demo](demo.gif)
+
 ## Install and run
 
 Requires Python 3.12+ and Homebrew for local inventory and refresh operations.
