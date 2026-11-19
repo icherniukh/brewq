@@ -158,7 +158,7 @@ def _add_column_flags(parser: argparse.ArgumentParser) -> None:
 
 def _add_reverse_flag(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-r", "--reverse", action="store_true",
-                        help="reverse the sort order")
+                        help="reverse/bottom-up sort (redundant with -a on a TTY)")
 
 
 def _add_update_flag(parser: argparse.ArgumentParser, *, then: str) -> None:
