@@ -55,18 +55,17 @@ review/tooling; P3 is post-stability enhancement; P4 is exploratory backlog.
 Dependencies gate feedback and final artifact checks.
 
 Preserve unrelated tracked and untracked work. Commit only reviewed changes.
-Keep issue completion and evidence with the completing repository commit:
+Record issue completion and evidence in live Beads:
 
 ```sh
 bd close <completed-id> --reason '<verified outcome>'
-bd export -o .beads/issues.jsonl
 ```
 
-Stage the exported issue snapshot alongside the corresponding code/docs/tests.
-The export is a portable issue snapshot, not the live database or a full Dolt
-backup. Re-export after changing priorities or dependencies. Do not push or touch
-remotes unless explicitly asked. Machine-local agent settings and runtime locks
-are ignored and must not become product configuration.
+`.beads/` is local stealth state excluded via `.git/info/exclude` and synced
+out-of-band through the configured Dolt remote; never stage or commit `.beads/`
+files in Git. Do not push Git or Dolt remotes unless explicitly asked.
+Machine-local agent settings and runtime locks are ignored and must not become
+product configuration.
 
 ## Runtime and verification
 

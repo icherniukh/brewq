@@ -204,7 +204,8 @@ Execute `brewq-history-scrub` after the sanitized seed and M1 candidate/docs are
 ready. Review and approve the exact redaction/removal map and branches/tags to be
 published. Use a disposable rewrite copy, not this dirty working checkout. Keep
 private research and the original data in the private recovery backup; do not
-blanket-delete archives, Beads, contributor guidance, or the legacy prototype.
+blanket-delete archives, Beads, contributor guidance, or the legacy prototype (`.beads/`
+is local stealth state synced via Dolt and excluded from public Git history).
 Preserve required licensing and provenance, and review affected local feature
 branches so later merges cannot reintroduce old private blobs.
 

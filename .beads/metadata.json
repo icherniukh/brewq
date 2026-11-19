@@ -1,7 +1,0 @@
-{
-  "database": "dolt",
-  "backend": "dolt",
-  "dolt_mode": "embedded",
-  "dolt_database": "brewq",
-  "project_id": "8cf1bab1-db74-4654-99ec-1fe3283b343e"
-}
